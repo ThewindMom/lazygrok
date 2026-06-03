@@ -20,7 +20,7 @@ ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PLUGIN_ROOT="${GROK_PLUGIN_ROOT:-$ROOT}"
 
 # Subcommands implemented in Go (grow as migration proceeds).
-GO_SUBCOMMANDS="session-start pre-tool-use"
+GO_SUBCOMMANDS="session-start pre-tool-use post-tool-read"
 
 legacy_script() {
   case "$1" in
