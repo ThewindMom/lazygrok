@@ -24,6 +24,10 @@ Hooks deny `Write` / `StrReplace` / `Delete` until at least one catalog `SKILL.m
 - Run `grok inspect` and Read a skill whose description matches the task
 - Or Read `agent-skill-gate` from the oh-my-grok plugin path in inspect
 
+## Agent skips skills (Composer 2.5)
+
+Grok may show `<skill_information>` in the prompt — that is **not** loaded skill content. oh-my-grok injects `<AGENT_SKILL_GATE_PROACTIVE>` on each turn with **Read** paths; follow those before other tools. There is no Skill tool in Grok (use Read on `SKILL.md`). Update the plugin and reload hooks (`grok plugin install` + new session).
+
 ## Ralph / ultrawork stops and asks "next phase?" instead of continuing
 
 The Stop hook must see the workspace (stdin `workspaceRoot`/`cwd` or `GROK_WORKSPACE_ROOT`) and a routine stop reason (`EndTurn`, `completed`, etc.). If the loop never started, run `/ralph-loop` or `/ulw-loop` again after `grok plugin update oh-my-grok` and start a **new session** (or Hooks reload).

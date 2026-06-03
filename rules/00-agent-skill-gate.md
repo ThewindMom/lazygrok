@@ -6,6 +6,12 @@ Applies to **Grok Composer** in any workspace. Does not govern OpenCode, Cursor,
 
 Run `grok inspect` (or rely on SessionStart hook cache at `~/.grok/state/skill-gate/<session>/all-skills.json`). The catalog lists every skill Grok discovered: project, user, and plugin scopes.
 
+## Grok Composer (2.5+)
+
+- There is **no Skill tool** — use **Read** on each applicable `SKILL.md` path.
+- `<skill_information>` / `skills_referenced` in the harness are **metadata only**, not loaded skill bodies. You must still Read the file.
+- **UserPromptSubmit** injects `<AGENT_SKILL_GATE_PROACTIVE>` with paths matched to the user message — Read those before Grep, Shell, Write, or Task.
+
 ## Before mutating tools
 
 1. Identify skills whose **description** matches the user task.

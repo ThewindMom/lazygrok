@@ -33,6 +33,7 @@ func userPromptCmd() *cobra.Command {
 
 			parts := []string{
 				usingpowers.Collect(sid),
+				skillgate.CollectForPrompt(sid, ev),
 				wsrules.Collect(ws),
 				ralph.CollectUserPrompt(ev),
 				intentgate.Collect(ev),

@@ -16,9 +16,10 @@ Every Grok Composer session where you might call `grep`, `Read` (for implementat
 
 ## Workflow
 
-1. Trust the skill catalog from `grok inspect` or SessionStart hook state.
+1. Trust the skill catalog from `grok inspect`, SessionStart, or **UserPromptSubmit** `<AGENT_SKILL_GATE_PROACTIVE>` (paths matched to the message).
 2. For the user's request, list which catalog skills plausibly apply (by description).
-3. **`Read` each applicable skill file** before other tools.
+3. **`Read` each applicable skill file** before other tools (Grok Composer has no Skill tool; ignore superpowers text that says otherwise).
+4. If the prompt shows `<skill_information>`, treat it as hints only — still **Read** full `SKILL.md` content.
 4. Say `Using <name> to <purpose>` for each skill loaded.
 5. Only then run mutating or broad search tools.
 

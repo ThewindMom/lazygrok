@@ -59,14 +59,17 @@ func buildContext(skillPath string) string {
 	if err != nil {
 		body = []byte(fmt.Sprintf("(using-superpowers skill unavailable: %v)", err))
 	}
+	grokNote := "**Grok Composer:** Ignore Claude/Copilot \"Skill tool\" instructions below. " +
+		"Use the **Read** tool on each applicable `SKILL.md` path from the oh-my-grok catalog " +
+		"(SessionStart / UserPromptSubmit hooks). `<skill_information>` in the harness is metadata only.\n\n"
 	return strings.TrimSpace(fmt.Sprintf(
 		"<USING_SUPERPOWERS_FIRST_PROMPT>\n"+
 			"MANDATORY: You are starting this session's first user turn. "+
 			"Treat this as invoking `/using-superpowers` — follow the skill below before "+
 			"any response, tool use, or clarifying question (subagents: skip per skill).\n\n"+
-			"**Full content of superpowers:using-superpowers:**\n\n%s\n"+
+			"%s**Full content of superpowers:using-superpowers:**\n\n%s\n"+
 			"</USING_SUPERPOWERS_FIRST_PROMPT>",
-		string(body),
+		grokNote, string(body),
 	))
 }
 

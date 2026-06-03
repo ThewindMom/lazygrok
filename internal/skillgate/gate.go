@@ -100,7 +100,8 @@ func PreTool(sessionID string) (allow bool, reason string) {
 	unloaded := listUnloaded(catalog, loaded, 15)
 	sample := strings.Join(unloaded, ", ")
 	return false, fmt.Sprintf(
-		"Read at least one applicable skill from the grok inspect catalog before mutating files. Rules: %s. Unloaded examples: %s",
+		"Skill gate: use Read on at least one applicable SKILL.md from the catalog before Write/StrReplace/Delete. "+
+			"(Grok Composer has no Skill tool; skill_information XML is not enough.) Rules: %s. Unloaded: %s",
 		RulesPath(), sample,
 	)
 }

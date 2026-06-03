@@ -25,16 +25,17 @@ Optional: **`grok`** CLI for `grok inspect` (skill catalog on SessionStart); **`
 
 **`user-prompt`** collects and emits a single JSON payload:
 
-1. `using-superpowers` (first prompt only)
-2. Workspace `AGENTS.md` + plugin `rules/*.md` (every prompt; size-capped)
-3. Ralph / ultrawork
-4. **IntentGate** — search / analyze / team / hyperplan banners (`OMG_INTENT_GATE`)
-5. **Prometheus** — `/plan`, `/start-work`, plan-mode state
-6. `/handoff`, `/stop-continuation`, `/resume-continuation`
-7. Boulder context (`.omg/boulder.json`)
-8. **LSP** — `<LSP_DIAGNOSTICS>` from session stash
-9. **Hashline** — `<HASHLINE_CACHE>` for recently read files
-10. Skill-gate reminder
+1. `using-superpowers` (first prompt only; includes Grok Read-tool note)
+2. **Skill gate proactive** — `<AGENT_SKILL_GATE_PROACTIVE>` with matched `SKILL.md` paths (catalog refresh if SessionStart missed)
+3. Workspace `AGENTS.md` + plugin `rules/*.md` (every prompt; size-capped)
+4. Ralph / ultrawork
+5. **IntentGate** — search / analyze / team / hyperplan banners (`OMG_INTENT_GATE`)
+6. **Prometheus** — `/plan`, `/start-work`, plan-mode state
+7. `/handoff`, `/stop-continuation`, `/resume-continuation`
+8. Boulder context (`.omg/boulder.json`)
+9. **LSP** — `<LSP_DIAGNOSTICS>` from session stash
+10. **Hashline** — `<HASHLINE_CACHE>` for recently read files
+11. Skill-gate reminder (unloaded ids)
 
 ## Stop (priority chain)
 
