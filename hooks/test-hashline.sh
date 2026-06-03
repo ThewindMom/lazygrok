@@ -42,4 +42,44 @@ for entry in HASHLINE_DICT:
     assert all(c in NIBBLE_STR for c in entry)
 "
 
+# --- Task 7: read cache + PreToolUse stale guard ---
+HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${HOOKS_DIR}/lib/common.sh"
+# shellcheck source=lib/hashline.sh
+source "${HOOKS_DIR}/lib/hashline.sh"
+
+export GROK_HOME="${GROK_HOME:-$(resolve_grok_home)}"
+export GROK_SESSION_ID="test-hashline-hook-$$"
+export OMG_HASHLINE=1
+
+ws="$(mktemp -d)"
+export GROK_WORKSPACE_ROOT="$ws"
+trap 'rm -rf "$ws" "$(hashline_cache_dir)"' EXIT
+
+printf 'hello world\n' >"${ws}/foo.ts"
+update_cache_from_read "${ws}/foo.ts"
+
+good_hash="$(python3 "$HASHLINE_PY" compute 1 "hello world")"
+good_tag="${good_hash#*#}"
+
+# Stale anchor -> deny
+printf '%s\n' '{"hookEventName":"PreToolUse","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","toolName":"StrReplace","toolInput":{"path":"foo.ts","old_string":"1#ZZ\nhello world","new_string":"hi\nhello world"}}' \
+  | GROK_HOOK_EVENT=pre_tool_use bash "${HOOKS_DIR}/run-hook.sh" pre-tool-mutate.sh >"${ws}/deny.json" || true
+rg -q '"decision":"deny"' "${ws}/deny.json" || { echo "expected deny for stale hash"; cat "${ws}/deny.json"; exit 1; }
+rg -q 'stale LINE#ID' "${ws}/deny.json" || { echo "expected stale message"; cat "${ws}/deny.json"; exit 1; }
+
+# Matching anchor -> allow (skill gate satisfied)
+reset_session_state
+mark_skill_loaded "agent-skill-gate"
+printf '%s\n' '{"hookEventName":"PreToolUse","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","toolName":"StrReplace","toolInput":{"path":"foo.ts","old_string":"1#'"${good_tag}"'\nhello world","new_string":"hi\nhello world"}}' \
+  | GROK_HOOK_EVENT=pre_tool_use bash "${HOOKS_DIR}/run-hook.sh" pre-tool-mutate.sh >"${ws}/allow.json"
+rg -q '"decision":"allow"' "${ws}/allow.json" || { echo "expected allow for fresh hash"; cat "${ws}/allow.json"; exit 1; }
+
+# UserPrompt surfaces HASHLINE_CACHE
+printf '%s\n' '{"hookEventName":"UserPromptSubmit","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","prompt":"continue"}' \
+  | GROK_HOOK_EVENT=user_prompt_submit bash "${HOOKS_DIR}/run-hook.sh" user-prompt.sh >"${ws}/prompt.json"
+rg -q 'HASHLINE_CACHE' "${ws}/prompt.json" || { echo "missing HASHLINE_CACHE"; cat "${ws}/prompt.json"; exit 1; }
+rg -q 'foo.ts' "${ws}/prompt.json" || { echo "missing cached path in prompt"; cat "${ws}/prompt.json"; exit 1; }
+
 echo "hashline: OK"

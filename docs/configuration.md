@@ -27,6 +27,15 @@ Keep workspace `AGENTS.md` focused on project constraints; use `docs/` in this p
 | `GROK_WORKSPACE_ROOT` | Active workspace for `.omg/` and `AGENTS.md` |
 | `GROK_SESSION_ID` | Session key for hook state |
 
+### Feature toggles (`OMG_*`)
+
+| Variable | Default | Role |
+|----------|---------|------|
+| `OMG_HASHLINE` | `1` | After Read, cache line hashes under `~/.grok/state/hashline/<session>/`; PreToolUse denies stale `LINE#ID` in `StrReplace` `old_string` |
+| `OMG_INTENT_GATE` | `1` | UserPromptSubmit keyword modes (search / analyze / team / hyperplan) |
+| `OMG_LSP_ENFORCE` | `1` | Stop hook blocks while LSP error diagnostics remain in session stash |
+| `OMG_PLAN_MODE` | (off) | Prometheus plan mode (also toggled via `/plan`) |
+
 Local hook tests: `export GROK_PLUGIN_ROOT="$(pwd)"`.
 
 ## superpowers plugin

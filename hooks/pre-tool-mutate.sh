@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/prometheus.sh
 source "${SCRIPT_DIR}/lib/prometheus.sh"
+# shellcheck source=lib/hashline.sh
+source "${SCRIPT_DIR}/lib/hashline.sh"
 
 stdin_tmp="$(mktemp)"
 trap 'rm -f "$stdin_tmp"' EXIT
@@ -19,6 +21,16 @@ prometheus_rc=$?
 set -e
 if [ "$prometheus_rc" -eq 2 ]; then
   emit_deny "${prometheus_deny:-Prometheus plan mode: only .omg/**/*.md writes allowed.}"
+fi
+
+hashline_deny=""
+hashline_rc=0
+set +e
+hashline_deny="$(hashline_validate_pre_tool "$stdin_tmp" 2>&1)"
+hashline_rc=$?
+set -e
+if [ "$hashline_rc" -eq 2 ]; then
+  emit_deny "${hashline_deny:-Hashline: stale LINE#ID in edit; re-read the file.}"
 fi
 
 ensure_skill_catalog
