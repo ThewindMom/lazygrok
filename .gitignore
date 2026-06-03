@@ -3,3 +3,11 @@ __pycache__/
 .DS_Store
 *.bak
 .omg/
+
+# MCP vendor: commit dist/ only; rebuild with scripts/build-mcp-runtimes.sh
+vendor/ast-grep-core/
+vendor/*/node_modules/
+vendor/ast-grep-mcp/*
+!vendor/ast-grep-mcp/dist/
+vendor/lsp-tools-mcp/*
+!vendor/lsp-tools-mcp/dist/
