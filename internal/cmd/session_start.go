@@ -5,11 +5,11 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/mihazs/oh-my-grok/internal/core/rules"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/hookio"
-	"github.com/mihazs/oh-my-grok/internal/skillgate"
-	"github.com/mihazs/oh-my-grok/internal/usingpowers"
+	"lazygrok/internal/core/rules"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/hookio"
+	"lazygrok/internal/skillgate"
+	"lazygrok/internal/usingpowers"
 	"github.com/spf13/cobra"
 )
 
@@ -42,7 +42,7 @@ func sessionStartCmd() *cobra.Command {
 			engine := rules.NewEngine()
 			rulesText, diags := engine.LoadAndFormat(ws, ws)
 			for _, d := range diags {
-				fmt.Fprintf(os.Stderr, "omg-hook: rules %s: %s\n", d.Severity, d.Message)
+				fmt.Fprintf(os.Stderr, "lazygrok-hook: rules %s: %s\n", d.Severity, d.Message)
 			}
 			if rulesText != "" {
 				hookio.EmitAdditionalContext(os.Stdout, rulesText, "SessionStart")
@@ -63,26 +63,26 @@ func hookBinaryDoctor() string {
 	case "amd64":
 	case "arm64":
 	default:
-		return fmt.Sprintf("omg-hook: unsupported arch %s — rebuild with scripts/build-hook.sh", goarch)
+		return fmt.Sprintf("lazygrok-hook: unsupported arch %s — rebuild with scripts/build-hook.sh", goarch)
 	}
 	var name string
 	switch goos {
 	case "linux":
-		name = fmt.Sprintf("omg-hook-linux-%s", goarch)
+		name = fmt.Sprintf("lazygrok-hook-linux-%s", goarch)
 	case "darwin":
-		name = fmt.Sprintf("omg-hook-darwin-%s", goarch)
+		name = fmt.Sprintf("lazygrok-hook-darwin-%s", goarch)
 	case "windows":
-		name = "omg-hook-windows-amd64.exe"
+		name = "lazygrok-hook-windows-amd64.exe"
 	default:
-		return fmt.Sprintf("omg-hook: unsupported OS %s", goos)
+		return fmt.Sprintf("lazygrok-hook: unsupported OS %s", goos)
 	}
 	path := fmt.Sprintf("%s/bin/%s", root, name)
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Sprintf("omg-hook: missing or unreadable hook binary: %s (run scripts/build-hook.sh)", path)
+		return fmt.Sprintf("lazygrok-hook: missing or unreadable hook binary: %s (run scripts/build-hook.sh)", path)
 	}
 	if info.Mode()&0o111 == 0 {
-		return fmt.Sprintf("omg-hook: hook binary not executable: %s (chmod +x)", path)
+		return fmt.Sprintf("lazygrok-hook: hook binary not executable: %s (chmod +x)", path)
 	}
 	return ""
 }

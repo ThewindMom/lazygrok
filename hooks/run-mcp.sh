@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dispatch MCP server subcommands to the appropriate omg-mcp platform binary.
+# Dispatch MCP server subcommands to the appropriate lazygrok-mcp platform binary.
 set -euo pipefail
 if [ $# -lt 1 ]; then
   echo "run-mcp.sh: missing server name" >&2
@@ -23,10 +23,10 @@ case "$arch" in
     ;;
 esac
 case "$os" in
-  linux) bin="${PLUGIN_ROOT}/bin/omg-mcp-linux-${arch}" ;;
-  darwin) bin="${PLUGIN_ROOT}/bin/omg-mcp-darwin-${arch}" ;;
+  linux) bin="${PLUGIN_ROOT}/bin/lazygrok-mcp-linux-${arch}" ;;
+  darwin) bin="${PLUGIN_ROOT}/bin/lazygrok-mcp-darwin-${arch}" ;;
   mingw*|msys*|cygwin*|windows*)
-    bin="${PLUGIN_ROOT}/bin/omg-mcp-windows-amd64.exe"
+    bin="${PLUGIN_ROOT}/bin/lazygrok-mcp-windows-amd64.exe"
     ;;
   *)
     echo "run-mcp.sh: unsupported OS: $(uname -s)" >&2

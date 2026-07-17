@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	commentchecker "github.com/mihazs/oh-my-grok/internal/core/policy"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/hookio"
+	commentchecker "lazygrok/internal/core/policy"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/hookio"
 	"github.com/spf13/cobra"
 )
 

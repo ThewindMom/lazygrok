@@ -6,7 +6,7 @@
 // CR removed) using xxhash32, then mapped to a 2-character encoding from the
 // dictionary "ZPMQVRWSNKTXJBYH".
 //
-// This implementation is compatible with the existing oh-my-grok anchor format.
+// This implementation is compatible with the existing lazygrok anchor format.
 // Edit semantics are independently implemented and do not derive from any
 // SUL-covered source.
 package hashline

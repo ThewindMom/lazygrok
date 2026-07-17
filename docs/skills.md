@@ -1,6 +1,6 @@
 # Skills and slash commands
 
-oh-my-grok bundles user-invocable skills under `skills/` plus **[superpowers](https://github.com/obra/superpowers)** at `vendor/superpowers/skills/` (no separate superpowers plugin install). Grok discovers both via `plugin.json` and `grok inspect`.
+lazygrok bundles user-invocable skills under `skills/` plus **[superpowers](https://github.com/obra/superpowers)** at `vendor/superpowers/skills/` (no separate superpowers plugin install). Grok discovers both via `plugin.json` and `grok inspect`.
 
 ## Skill gate flow
 
@@ -29,7 +29,7 @@ Hooks: `hooks/pre-tool-mutate.sh`, `hooks/post-tool-read.sh`, `hooks/session-sta
 
 ## Custom skills in your project
 
-Add project skills under `.agents/skills/<name>/SKILL.md` or `.grok/skills/<name>/SKILL.md`. The skill gate uses the full `grok inspect` catalog — oh-my-grok skills are not hardcoded.
+Add project skills under `.agents/skills/<name>/SKILL.md` or `.grok/skills/<name>/SKILL.md`. The skill gate uses the full `grok inspect` catalog — lazygrok skills are not hardcoded.
 
 When delegating subagents, paste skill **paths** from inspect into the subagent prompt (Grok has no `load_skills` API).
 

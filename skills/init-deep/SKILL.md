@@ -2,7 +2,7 @@
 name: init-deep
 description: >
   Deep repository initialization: discover all AGENTS.md files, understand
-  project structure, identify build/test/lint commands, check for oh-my-grok
+  project structure, identify build/test/lint commands, check for lazygrok
   state, and report a comprehensive project overview. Use when entering a
   new or unfamiliar repository.
 ---
@@ -41,13 +41,13 @@ Walk from workspace root to current directory:
 - **Run**: how to run the project locally
 - **Deploy**: how to deploy (if applicable)
 
-## Step 4: Check for oh-my-grok state
+## Step 4: Check for lazygrok state
 
-- `.omg/` directory existence
-- `.omg/boulder.json` — active work records
-- `.omg/plans/` — approved plans
-- `.omg/handoff.md` — handoff documents
-- `.omg/config.jsonc` — workspace configuration
+- `.lazygrok/` directory existence
+- `.lazygrok/boulder.json` — active work records
+- `.lazygrok/plans/` — approved plans
+- `.lazygrok/handoff.md` — handoff documents
+- `.lazygrok/config.jsonc` — workspace configuration
 - Active continuation loops
 
 ## Step 5: Check for vendored dependencies
@@ -62,6 +62,6 @@ Report:
 - Project type, language, and framework
 - All build/test/lint/run commands
 - All AGENTS.md locations and key rules
-- Active oh-my-grok state (if any)
+- Active lazygrok state (if any)
 - CI/CD configuration
 - Any potential issues (missing licenses, broken builds, etc.)

@@ -11,11 +11,11 @@ echo "Generating checksums..."
 bash scripts/build-hook.sh
 bash scripts/build-mcp.sh
 
-# Generate checksums
+# Generate checksums (paths relative to bin/ so sha256sum -c works from there)
 : > "$CHECKSUM_FILE"
-for f in bin/omg-hook-* bin/omg-mcp-*; do
+for f in bin/lazygrok-hook-* bin/lazygrok-mcp-*; do
   if [ -f "$f" ]; then
-    sha256sum "$f" >> "$CHECKSUM_FILE"
+    ( cd bin && sha256sum "$(basename "$f")" ) >> "$CHECKSUM_FILE"
   fi
 done
 

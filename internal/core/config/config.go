@@ -1,10 +1,10 @@
-// Package config provides typed configuration for oh-my-grok with
+// Package config provides typed configuration for lazygrok with
 // environment, workspace, user, and default precedence.
 //
 // Configuration sources, highest priority first:
-//  1. Explicit environment overrides (OMG_* variables)
-//  2. Workspace config at .omg/config.jsonc
-//  3. User config at $GROK_HOME/oh-my-grok/config.jsonc (or ~/.grok/...)
+//  1. Explicit environment overrides (LAZYGROK_* variables)
+//  2. Workspace config at .lazygrok/config.jsonc
+//  3. User config at $GROK_HOME/lazygrok/config.jsonc (or ~/.grok/...)
 //  4. Built-in defaults
 //
 // Unknown keys produce diagnostics rather than silently changing behavior.
@@ -141,7 +141,7 @@ func Defaults() *Config {
 }
 
 // Load resolves configuration from all sources with proper precedence.
-// workspaceRoot is the current workspace root (for .omg/config.jsonc).
+// workspaceRoot is the current workspace root (for .lazygrok/config.jsonc).
 // grokHome is the Grok home directory (for user config).
 func Load(workspaceRoot, grokHome string) (*Config, error) {
 	cfg := Defaults()
@@ -156,7 +156,7 @@ func Load(workspaceRoot, grokHome string) (*Config, error) {
 
 	// 2. Workspace config
 	if workspaceRoot != "" {
-		wsPath := filepath.Join(workspaceRoot, ".omg", "config.jsonc")
+		wsPath := filepath.Join(workspaceRoot, ".lazygrok", "config.jsonc")
 		if err := loadJSONCInto(cfg, wsPath, "workspace"); err != nil {
 			return nil, fmt.Errorf("workspace config %s: %w", wsPath, err)
 		}
@@ -175,7 +175,7 @@ func userConfigPath(grokHome string) string {
 	if grokHome == "" {
 		return ""
 	}
-	return filepath.Join(grokHome, "oh-my-grok", "config.jsonc")
+	return filepath.Join(grokHome, "lazygrok", "config.jsonc")
 }
 
 func defaultGrokHome() string {
@@ -354,37 +354,37 @@ func mergeNonZero(dst, src *Config) {
 // --- Environment overrides ---
 
 func applyEnvOverrides(cfg *Config) {
-	if v := os.Getenv("OMG_HASHLINE"); v != "" {
+	if v := os.Getenv("LAZYGROK_HASHLINE"); v != "" {
 		cfg.HashlineMode = parseHashlineMode(v)
 	}
-	if v := os.Getenv("OMG_INTENT_GATE"); v != "" {
+	if v := os.Getenv("LAZYGROK_INTENT_GATE"); v != "" {
 		cfg.IntentGateEnabled = envTruthy(v, true)
 	}
-	if v := os.Getenv("OMG_LSP_ENFORCE"); v != "" {
+	if v := os.Getenv("LAZYGROK_LSP_ENFORCE"); v != "" {
 		cfg.LSPStopEnforcement = envTruthy(v, false)
 		cfg.LSPEnabled = envTruthy(v, true)
 	}
-	if v := os.Getenv("OMG_PLAN_MODE"); v != "" {
+	if v := os.Getenv("LAZYGROK_PLAN_MODE"); v != "" {
 		// Deprecated: plan mode is now controlled by config; env forces on.
 		_ = v
 	}
-	if v := os.Getenv("OMG_MAX_CONTINUATIONS"); v != "" {
+	if v := os.Getenv("LAZYGROK_MAX_CONTINUATIONS"); v != "" {
 		if n := parseInt(v); n > 0 {
 			cfg.MaxContinuations = n
 		}
 	}
-	if v := os.Getenv("OMG_COOLDOWN_SECONDS"); v != "" {
+	if v := os.Getenv("LAZYGROK_COOLDOWN_SECONDS"); v != "" {
 		if n := parseInt(v); n >= 0 {
 			cfg.CooldownSeconds = n
 		}
 	}
-	if v := os.Getenv("OMG_RALPH"); v != "" {
+	if v := os.Getenv("LAZYGROK_RALPH"); v != "" {
 		cfg.RalphEnabled = envTruthy(v, true)
 	}
-	if v := os.Getenv("OMG_ULTRAWORK"); v != "" {
+	if v := os.Getenv("LAZYGROK_ULTRAWORK"); v != "" {
 		cfg.UltraworkEnabled = envTruthy(v, true)
 	}
-	if v := os.Getenv("OMG_CONTINUATION"); v != "" {
+	if v := os.Getenv("LAZYGROK_CONTINUATION"); v != "" {
 		cfg.ContinuationEnabled = envTruthy(v, true)
 	}
 	cfg.Source = "env"

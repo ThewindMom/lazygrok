@@ -6,13 +6,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/core/continuation"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/hookio"
+	"lazygrok/internal/core/continuation"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/hookio"
 	"github.com/spf13/cobra"
 )
 
-// resumeContinuationCmd implements the `omg-hook resume-continuation` subcommand.
+// resumeContinuationCmd implements the `lazygrok-hook resume-continuation` subcommand.
 // It clears the stop marker, resumes any paused loop, and lists resumable work.
 func resumeContinuationCmd() *cobra.Command {
 	return &cobra.Command{

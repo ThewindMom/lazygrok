@@ -15,7 +15,7 @@ Dynamic `PostToolUse` output is injected as additional context and is deduplicat
 Supported project sources:
 
 - `CONTEXT.md`
-- `.omg/rules/**/*.md`
+- `.lazygrok/rules/**/*.md`
 - `.grok/rules/**/*.md`
 - `.claude/rules/**/*.md`
 - `.cursor/rules/**/*.md`
@@ -28,6 +28,6 @@ Supported environment knobs:
 - `GROK_RULES_MODE=both|static|dynamic|off`
 - `GROK_RULES_MAX_RULE_CHARS=<number>`
 - `GROK_RULES_MAX_RESULT_CHARS=<number>`
-- `GROK_RULES_ENABLED_SOURCES=CONTEXT.md,.omg/rules`
+- `GROK_RULES_ENABLED_SOURCES=CONTEXT.md,.lazygrok/rules`
 
 The legacy `PI_RULES_*` variables are accepted as fallbacks for users migrating from `pi-rules`.

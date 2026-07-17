@@ -23,7 +23,7 @@ Analyze the user's request and classify it:
 
 ## Step 3: Track work
 
-- Record the objective and completion criteria in boulder state (`.omg/boulder.json`).
+- Record the objective and completion criteria in boulder state (`.lazygrok/boulder.json`).
 - Track active subagents and their status.
 - Update task status as work progresses.
 

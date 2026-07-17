@@ -8,8 +8,8 @@ source "${HOOKS_DIR}/test-support.sh"
 export GROK_HOME="${GROK_HOME:-$(resolve_grok_home)}"
 export GROK_PLUGIN_ROOT="${GROK_PLUGIN_ROOT:-$(cd "${HOOKS_DIR}/.." && pwd)}"
 export GROK_SESSION_ID="test-lsp-$$"
-export OMG_LSP_MOCK_DIAG='error[typescript] (1) at 1:1: syntax error'
-export OMG_LSP_ENFORCE=1
+export LAZYGROK_LSP_MOCK_DIAG='error[typescript] (1) at 1:1: syntax error'
+export LAZYGROK_LSP_ENFORCE=1
 
 tmpdir="$(mktemp -d)"
 export GROK_WORKSPACE_ROOT="$tmpdir"
@@ -37,14 +37,14 @@ printf '%s\n' '{"hookEventName":"Stop","sessionId":"'"$GROK_SESSION_ID"'","works
 rg -q '"decision":"block"' "${tmpdir}/block.json" || { echo "expected stop block"; cat "${tmpdir}/block.json"; exit 1; }
 rg -q 'LSP errors remain' "${tmpdir}/block.json" || { echo "expected LSP block reason"; cat "${tmpdir}/block.json"; exit 1; }
 
-# OMG_LSP_ENFORCE=0 allows stop even with stash errors
-export OMG_LSP_ENFORCE=0
+# LAZYGROK_LSP_ENFORCE=0 allows stop even with stash errors
+export LAZYGROK_LSP_ENFORCE=0
 printf '%s\n' '{"hookEventName":"Stop","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","stopReason":"end_turn"}' \
   | GROK_HOOK_EVENT=stop bash "${HOOKS_DIR}/run-hook.sh" stop >"${tmpdir}/allow.json"
-rg -q '"decision":"block"' "${tmpdir}/allow.json" && { echo "unexpected block with OMG_LSP_ENFORCE=0"; cat "${tmpdir}/allow.json"; exit 1; }
+rg -q '"decision":"block"' "${tmpdir}/allow.json" && { echo "unexpected block with LAZYGROK_LSP_ENFORCE=0"; cat "${tmpdir}/allow.json"; exit 1; }
 
 # Clean stash -> allow stop with enforcement on
-export OMG_LSP_ENFORCE=1
+export LAZYGROK_LSP_ENFORCE=1
 printf '{"version":1,"files":{},"updated_at":"2026-06-02T00:00:00+00:00"}\n' >"$stash"
 printf '%s\n' '{"hookEventName":"Stop","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","stopReason":"end_turn"}' \
   | GROK_HOOK_EVENT=stop bash "${HOOKS_DIR}/run-hook.sh" stop >"${tmpdir}/allow2.json"

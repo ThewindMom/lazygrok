@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/lsp"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/lsp"
 	"github.com/spf13/cobra"
 )
 

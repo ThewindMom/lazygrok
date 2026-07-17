@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
 var (
@@ -36,8 +36,8 @@ func planModeOff(sessionID string) {
 }
 
 const planModeBanner = "<PROMETHEUS_PLAN_MODE>\n" +
-	"You are in planning mode. ONLY create or edit files under `.omg/` (plans, drafts).\n" +
-	`Interview the user, then Task(subagent_type="metis-consultant") for gaps, write plan to ` + "`.omg/plans/<name>.md`" + `, optional Task(subagent_type="momus-reviewer").` + "\n" +
+	"You are in planning mode. ONLY create or edit files under `.lazygrok/` (plans, drafts).\n" +
+	`Interview the user, then Task(subagent_type="metis-consultant") for gaps, write plan to ` + "`.lazygrok/plans/<name>.md`" + `, optional Task(subagent_type="momus-reviewer").` + "\n" +
 	"Implementation starts only after `/start-work <plan-file>`.\n" +
 	"</PROMETHEUS_PLAN_MODE>"
 
@@ -75,7 +75,7 @@ func handleStartWork(workspace, sessionID, prompt string) string {
 		raw = strings.Trim(strings.TrimSpace(m[1]), "\"'")
 	}
 	if raw == "" {
-		return "<PROMETHEUS_PLAN_MODE>Start-work failed: provide plan path, e.g. /start-work .omg/plans/auth.md</PROMETHEUS_PLAN_MODE>"
+		return "<PROMETHEUS_PLAN_MODE>Start-work failed: provide plan path, e.g. /start-work .lazygrok/plans/auth.md</PROMETHEUS_PLAN_MODE>"
 	}
 
 	base := workspace
@@ -84,7 +84,7 @@ func handleStartWork(workspace, sessionID, prompt string) string {
 		planPath = filepath.Join(base, raw)
 	}
 	if _, err := os.Stat(planPath); err != nil {
-		alt := filepath.Join(base, ".omg", "plans", filepath.Base(raw))
+		alt := filepath.Join(base, ".lazygrok", "plans", filepath.Base(raw))
 		if _, err2 := os.Stat(alt); err2 == nil {
 			planPath = alt
 		} else {
@@ -100,8 +100,8 @@ func handleStartWork(workspace, sessionID, prompt string) string {
 		activePlan = planPath
 	}
 	activePlan = strings.ReplaceAll(activePlan, "\\", "/")
-	if !strings.HasPrefix(activePlan, ".omg/") || !strings.HasSuffix(activePlan, ".md") {
-		return "<PROMETHEUS_PLAN_MODE>Start-work failed: plan must be under .omg/ and end with .md</PROMETHEUS_PLAN_MODE>"
+	if !strings.HasPrefix(activePlan, ".lazygrok/") || !strings.HasSuffix(activePlan, ".md") {
+		return "<PROMETHEUS_PLAN_MODE>Start-work failed: plan must be under .lazygrok/ and end with .md</PROMETHEUS_PLAN_MODE>"
 	}
 
 	planName := strings.TrimSuffix(filepath.Base(activePlan), filepath.Ext(activePlan))
@@ -130,7 +130,7 @@ func handleStartWork(workspace, sessionID, prompt string) string {
 			},
 		},
 	}
-	boulderFile := filepath.Join(base, ".omg", "boulder.json")
+	boulderFile := filepath.Join(base, ".lazygrok", "boulder.json")
 	_ = os.MkdirAll(filepath.Dir(boulderFile), 0o755)
 	b, _ := json.MarshalIndent(state, "", "  ")
 	_ = os.WriteFile(boulderFile, append(b, '\n'), 0o644)

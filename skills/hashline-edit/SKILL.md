@@ -8,7 +8,7 @@ user_invocable: false
 
 # Hashline edits (LINE#ID)
 
-oh-my-grok caches per-line hashes after each workspace **Read**. Use those tags in `StrReplace` `old_string` when you need precise, conflict-safe edits.
+lazygrok caches per-line hashes after each workspace **Read**. Use those tags in `StrReplace` `old_string` when you need precise, conflict-safe edits.
 
 ## Format
 
@@ -36,12 +36,12 @@ Example: `11#XJ|  console.log("hi");` → anchor `11#XJ` (omit `|content` in `ol
 - Anchors in `old_string` must match the **last Read cache** for that path.
 - Whitespace in `old_string` must still match file content; hashes only guard line identity.
 - SKILL.md reads are not cached — use normal edits for skills.
-- Disable validation: `OMG_HASHLINE=0`.
+- Disable validation: `LAZYGROK_HASHLINE=0`.
 
 ## Configuration
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `OMG_HASHLINE` | `1` | `0` disables cache + PreToolUse guard |
+| `LAZYGROK_HASHLINE` | `1` | `0` disables cache + PreToolUse guard |
 
 UserPromptSubmit may include `<HASHLINE_CACHE>` listing recently read files and sample tags.

@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/hookio"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/hookio"
 	"github.com/spf13/cobra"
 )
 
@@ -153,7 +153,7 @@ func recordDiagnostic(ev hookenv.Event, eventType string) {
 	if grokHome == "" || ev.SessionID == "" {
 		return
 	}
-	logDir := filepath.Join(grokHome, "state", "oh-my-grok", "diagnostics", ev.SessionID)
+	logDir := filepath.Join(grokHome, "state", "lazygrok", "diagnostics", ev.SessionID)
 	_ = os.MkdirAll(logDir, 0o755)
 	entry := map[string]any{
 		"event":      eventType,
@@ -177,7 +177,7 @@ func recordSubagentEvent(ev hookenv.Event, phase string) {
 	if grokHome == "" || ev.SessionID == "" {
 		return
 	}
-	stateDir := filepath.Join(grokHome, "state", "oh-my-grok", "subagents", ev.SessionID)
+	stateDir := filepath.Join(grokHome, "state", "lazygrok", "subagents", ev.SessionID)
 	_ = os.MkdirAll(stateDir, 0o755)
 	entry := map[string]any{
 		"phase":     phase,

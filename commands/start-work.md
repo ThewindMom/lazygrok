@@ -9,12 +9,12 @@ You are now executing an approved plan. Activate the Atlas coordinator workflow.
 
 ## Step 1: Select plan
 
-Read the plan file specified (or find the most recent plan in `.omg/plans/`).
+Read the plan file specified (or find the most recent plan in `.lazygrok/plans/`).
 If no plan exists, tell the user to run `/plan` first.
 
 ## Step 2: Initialize boulder state
 
-Create a work record in `.omg/boulder.json` with:
+Create a work record in `.lazygrok/boulder.json` with:
 - Work ID
 - Objective
 - Plan path

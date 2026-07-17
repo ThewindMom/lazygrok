@@ -40,4 +40,4 @@ Fix issues, emit `<promise>DONE</promise>` again, and re-run verification.
 
 ## State
 
-`.omg/ralph-loop.local.md` with `ultrawork: true` and `verification_pending` when awaiting verification.
+`.lazygrok/ralph-loop.local.md` with `ultrawork: true` and `verification_pending` when awaiting verification.

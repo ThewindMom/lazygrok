@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/core/hashline"
+	"lazygrok/internal/core/hashline"
 )
 
 // JSON-RPC 2.0 message types
@@ -98,7 +98,7 @@ func (s *Server) handleRequest(req rpcRequest) {
 					"tools": map[string]any{},
 				},
 				"serverInfo": map[string]any{
-					"name":    "oh-my-grok-hashline",
+					"name":    "lazygrok-hashline",
 					"version": "1.0.0",
 				},
 			},

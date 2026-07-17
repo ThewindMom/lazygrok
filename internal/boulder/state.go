@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
-const boulderFile = ".omg/boulder.json"
+const boulderFile = ".lazygrok/boulder.json"
 
 func boulderPath(workspace string) string {
 	return filepath.Join(workspace, boulderFile)

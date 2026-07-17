@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/skillgate"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/skillgate"
 )
 
 var cancelRE = regexp.MustCompile(`(?i)^/?cancel-ralph\b`)

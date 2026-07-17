@@ -31,10 +31,10 @@ When entering a new repository, establish context first.
 - Lint/format command
 - Run command
 
-## Step 4: Check for oh-my-grok state
+## Step 4: Check for lazygrok state
 
-- Look for `.omg/` directory (boulder state, plans, handoffs).
-- Look for `.omg/config.jsonc` (workspace configuration).
+- Look for `.lazygrok/` directory (boulder state, plans, handoffs).
+- Look for `.lazygrok/config.jsonc` (workspace configuration).
 - Check for active continuation loops.
 
 ## Output
@@ -43,4 +43,4 @@ Report:
 - Project type and language
 - Build/test/lint commands
 - AGENTS.md locations and key rules
-- Active oh-my-grok state (if any)
+- Active lazygrok state (if any)

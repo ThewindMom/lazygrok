@@ -77,4 +77,4 @@ Edits a file using line anchors for precise, conflict-free modifications.
 |------|----------|
 | `off` | No hashline enforcement; native edits behave normally |
 | `prefer` | Hashline tools available; native mutations permitted |
-| `strict` | Implementation agents must use hashline; native mutations denied (except `.omg` state paths) |
+| `strict` | Implementation agents must use hashline; native mutations denied (except `.lazygrok` state paths) |

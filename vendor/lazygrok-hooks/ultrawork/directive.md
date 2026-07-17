@@ -90,7 +90,7 @@ wave order and parallel grouping exactly, and run the verification it
 specifies. LIGHT: plan directly in the notepad.
 
 ## 1. Create the goal with binding success criteria
-Call `create_goal` (or open your reply with a `# Goal` block treated as
+Call `update_goal` (or open your reply with a `# Goal` block treated as
 binding) using exactly `objective`. Do not include `status`. Goals are
 unlimited; never invent a numeric budget or limit.
 The criteria MUST list, upfront:
@@ -143,18 +143,18 @@ artifact path the moment it happens. Update `## Now` and
 is your durable memory and it OUTLIVES the context window. After any
 compaction or context loss (a `Context compacted` notice, a summarized
 history, or you no longer see your own earlier steps), STOP and re-read
-the WHOLE notepad FIRST — `omo sparkshell cat "$NOTE"`, or read the path
+the WHOLE notepad FIRST — `bash cat "$NOTE"`, or read the path
 directly — before any other action, then resume from `## Now`. Recover
 state from the notepad; do not re-plan from scratch or re-run completed
 steps.
 
-## 3. Register obsessive todos via `update_plan`
-The todo tool is Codex `update_plan` — your live, user-visible
-checklist. Translate every action from the plan into one `update_plan`
+## 3. Register obsessive todos via `todo_write`
+The todo tool is Codex `todo_write` — your live, user-visible
+checklist. Translate every action from the plan into one `todo_write`
 step — one step per atomic work unit: an edit plus its verification, a
 QA scenario run, a teardown. Keep each step small enough to finish
 within a few tool calls.
-Call `update_plan` on EVERY state transition — the instant a step starts
+Call `todo_write` on EVERY state transition — the instant a step starts
 (mark it `in_progress`) and the instant it finishes (mark it `completed`
 and the next `in_progress`). Exactly ONE `in_progress` at a time. Mark
 completed IMMEDIATELY — never batch, never let the rendered plan lag
@@ -178,10 +178,11 @@ serialize only when one output strictly feeds the next.
   inactive/uninitialized, or cold-start unavailable, keep moving with
   Read/Grep/Glob/LSP and the ast-grep skill.
 - Repo-wide inspection, CLI smoke tests, git/history, bounded command
-  output → prefer `omo sparkshell <command>` before raw shell commands
-  (use `omo sparkshell --shell '<cmd>'` only when shell metacharacters
-  are required; `--tmux-pane <id> --tail-lines N` only to inspect an
-  existing pane). Sparkshell is your default lens on the tree.
+  output → use `bash <command>` first. Raw
+  `rg`/`grep`/`cat`/`git` are fallbacks when Sparkshell is unavailable
+  or too narrow. `--shell` is only for shell metacharacters or
+  pipelines; `--tmux-pane` is only for inspecting an existing pane,
+  never for launching ordinary commands. Sparkshell is your default lens.
 - Symbols — definitions, references, rename impact, diagnostics →
   `lsp_goto_definition`, `lsp_find_references`, `lsp_symbols`,
   `lsp_diagnostics`. Use the LSP, not text search, for anything
@@ -194,7 +195,7 @@ When discovery needs multiple angles or the module layout is
 unfamiliar, delegate to the `explorer` subagent (read-only codebase
 search, absolute-path results). For research that leaves the repo —
 library/API/docs/web — delegate to the `librarian` subagent. Spawn them
-`fork_context: false` and keep doing root work while they run.
+`background: true` and keep doing root work while they run.
 
 # Execution loop (PIN → RED → GREEN → SURFACE → CLEAN)
 Until every success criterion PASSES with its evidence captured:
@@ -243,16 +244,16 @@ Parallel-batch independent reads / searches / subagents within a step,
 but NEVER parallelise RED and GREEN of the same criterion.
 
 # Codex subagent reliability
-Every `multi_agent_v1.spawn_agent` message is self-contained and starts with
+Every `spawn_subagent` message is self-contained and starts with
 `TASK: <imperative assignment>`, then names `DELIVERABLE`, `SCOPE`, and
 `VERIFY`. State that it is an executable assignment, not a context
-handoff. Use `fork_context: false` unless full history is truly
+handoff. Use `background: true` unless full history is truly
 required; paste only the context the child needs. Full-history forks can
 make the child continue old parent context instead of the delegated task.
 
 # TOML-backed subagent routing compatibility
 Treat TOML-backed role routing as **routing-unverified**. The
-`multi_agent_v1.spawn_agent` schema accepts `message`, `fork_context`,
+`spawn_subagent` schema accepts `prompt`, `background`,
 `agent_type`, and `model`; it cannot select a TOML-backed role, model, reasoning
 effort, or `service_tier` by name alone. Say so briefly in the notepad, paste the
 role requirements into the message, and judge the result from delivered
@@ -263,23 +264,23 @@ Treat child status as a progress signal, not a timeout counter. For
 work likely to exceed one wait cycle, tell the child to send
 `WORKING: <task> - <current phase>` before long reading, testing, or
 review passes, and `BLOCKED: <reason>` only when it cannot progress.
-Track spawned agent names locally. Use `multi_agent_v1.wait_agent` for mailbox
+Track spawned agent names locally. Use `get_command_or_subagent_output` for mailbox
 signals, but a timeout only means no new mailbox update arrived.
 Treat a running child as alive and keep doing independent root work.
 Fallback only when the child is completed without the
 deliverable, ack-only, or no longer running. If that followup is still
 silent or ack-only, record the result as inconclusive, do not count it
 as approval/pass, close it if safe, and respawn a smaller
-`fork_context: false` task with the missing deliverable.
+`background: true` task with the missing deliverable.
 
 # Subagent-dependent transition barrier
-Do not mark an `update_plan` step `completed` while an active child owns
+Do not mark an `todo_write` step `completed` while an active child owns
 evidence for that step. Do not start dependent implementation until the
 audit, research, or review result is integrated or explicitly recorded
 as inconclusive. Do not generate a plan before spawned research lanes
 that feed the plan have returned or been closed as inconclusive.
 Do not write the final answer, PR handoff, or completion summary while
-active child agents remain open. Use short `multi_agent_v1.wait_agent` cycles.
+active child agents remain open. Use short `get_command_or_subagent_output` cycles.
 After two silent waits send `TASK STILL ACTIVE: return <deliverable> or
 BLOCKED: <reason>`. After four silent or ack-only checks, close the lane as
 inconclusive, record that it is not approval, and respawn smaller only
@@ -295,8 +296,8 @@ diff, run diagnostics, confirm each criterion's evidence, and state in
 one line why the tier held.
 
 Procedure (NON-NEGOTIABLE):
-1. Spawn a child with `fork_context: false` and a self-contained reviewer
-   assignment in `message`. The `multi_agent_v1.spawn_agent` schema cannot select a
+1. Spawn a child with `background: true` and a self-contained reviewer
+   assignment in `message`. The `spawn_subagent` schema cannot select a
    TOML-backed reviewer role, so paste the reviewer requirements into
    the message.
    Pass: goal, success-criteria, scenario evidence, full diff, notepad
@@ -316,7 +317,7 @@ Atomic, Conventional Commits (`<type>(<scope>): <imperative>` — feat /
 fix / refactor / test / docs / chore / build / ci / perf). One logical
 change per commit; each commit builds + tests green on its own. No WIP
 on the final branch. If a plan file exists, final commit footer:
-`Plan: .omo/plans/<slug>.md`. Do NOT auto-`git commit` unless the user
+`Plan: .lazygrok/plans/<slug>.md`. Do NOT auto-`git commit` unless the user
 requested or preauthorised this session — default is stage + draft
 message + present for approval.
 

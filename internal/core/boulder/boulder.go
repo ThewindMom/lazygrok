@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mihazs/oh-my-grok/internal/core/state"
+	"lazygrok/internal/core/state"
 )
 
 // SchemaVersion is the current boulder state schema version.
@@ -86,7 +86,7 @@ type BoulderState struct {
 
 // boulderPath returns the path to the boulder state file.
 func boulderPath(workspace string) string {
-	return filepath.Join(workspace, ".omg", "boulder.json")
+	return filepath.Join(workspace, ".lazygrok", "boulder.json")
 }
 
 // Load reads the boulder state from disk.

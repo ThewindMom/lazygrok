@@ -1,4 +1,4 @@
-# oh-my-grok
+# lazygrok
 
 A Grok-native productivity plugin for Grok Build CLI, inspired by [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) but implemented independently against documented Grok Build APIs.
 
@@ -21,13 +21,13 @@ grok plugin install "$(pwd)" --trust
 Or from GitHub:
 
 ```bash
-grok plugin install mihazs/oh-my-grok --trust
+grok plugin install mihazs/lazygrok --trust
 ```
 
 ## Uninstall
 
 ```bash
-grok plugin uninstall oh-my-grok --confirm
+grok plugin uninstall lazygrok --confirm
 ```
 
 This removes only plugin-owned files. It does not delete unrelated Grok files.
@@ -36,9 +36,9 @@ This removes only plugin-owned files. It does not delete unrelated Grok files.
 
 Configuration is loaded with this precedence (highest first):
 
-1. Environment variables (`OMG_*`)
-2. Workspace config: `.omg/config.jsonc`
-3. User config: `~/.grok/oh-my-grok/config.jsonc`
+1. Environment variables (`LAZYGROK_*`)
+2. Workspace config: `.lazygrok/config.jsonc`
+3. User config: `~/.grok/lazygrok/config.jsonc`
 4. Built-in defaults
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full reference.

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
-const stateRelPath = ".omg/ralph-loop.local.md"
+const stateRelPath = ".lazygrok/ralph-loop.local.md"
 
 // StatePath returns the ralph loop state file for a workspace.
 func StatePath(workspace string) string {

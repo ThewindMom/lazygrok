@@ -3,9 +3,9 @@ package cmd
 import (
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/hashline"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/skillgate"
+	"lazygrok/internal/hashline"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/skillgate"
 	"github.com/spf13/cobra"
 )
 

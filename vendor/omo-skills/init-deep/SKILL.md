@@ -8,17 +8,17 @@ This skill may include examples copied from the OpenCode harness. In Grok, do no
 
 | OpenCode example | Grok tool to use |
 | --- | --- |
-| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent(subagent_type="oh-my-grok:explore", background=true, prompt="TASK: act as an explorer. ...")` |
-| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent(subagent_type="oh-my-grok:librarian", background=true, prompt="TASK: act as a librarian. ...")` |
-| `task(subagent_type="plan", ...)` | `spawn_subagent(subagent_type="oh-my-grok:prometheus", background=true, prompt="TASK: act as a planning agent. ...")` |
-| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent(subagent_type="oh-my-grok:momus", background=true, prompt="TASK: act as a rigorous reviewer. ...")` |
-| `task(category="...", ...)` for implementation or QA | `spawn_subagent(subagent_type="oh-my-grok:hephaestus", background=true, prompt="TASK: act as an implementation or QA worker. ...")` |
+| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: act as an explorer. ...")` |
+| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent(subagent_type="lazygrok:librarian", background=true, prompt="TASK: act as a librarian. ...")` |
+| `task(subagent_type="plan", ...)` | `spawn_subagent(subagent_type="lazygrok:prometheus", background=true, prompt="TASK: act as a planning agent. ...")` |
+| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent(subagent_type="lazygrok:momus", background=true, prompt="TASK: act as a rigorous reviewer. ...")` |
+| `task(category="...", ...)` for implementation or QA | `spawn_subagent(subagent_type="lazygrok:hephaestus", background=true, prompt="TASK: act as an implementation or QA worker. ...")` |
 | `background_output(task_id="...")` | `get_command_or_subagent_output(task_ids=["..."])` |
 | `background_cancel(taskId="...")` | `kill_command_or_subagent(task_id="...")` |
 | `task(task_id="ses_...")` | `spawn_subagent(subagent_type="...", resume_from="...")` |
 | `team_*(...)` | Use Grok native subagents via `spawn_subagent` with `background: true`, then `get_command_or_subagent_output` and `kill_command_or_subagent` |
 
-Role-specific behavior must be described in a self-contained `prompt`. The child starts with only the prompt (no parent history); there is no fork-context concept in Grok. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `prompt`. oh-my-grok installs these selectable agent roles into `~/.grok/agents/`: `explore`, `librarian`, `prometheus`, `momus`, `metis`, `hephaestus`, `oracle`, and `atlas` - pass the matching name as `subagent_type` (e.g. `oh-my-grok:explore`) so the child gets that role's model and instructions. If the spawn tool exposes no `subagent_type` parameter, omit it and describe the role inside `prompt`. If a code block below conflicts with this section, this section wins.
+Role-specific behavior must be described in a self-contained `prompt`. The child starts with only the prompt (no parent history); there is no fork-context concept in Grok. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `prompt`. lazygrok installs these selectable agent roles into `~/.grok/agents/`: `explore`, `librarian`, `prometheus`, `momus`, `metis`, `hephaestus`, `oracle`, and `atlas` - pass the matching name as `subagent_type` (e.g. `lazygrok:explore`) so the child gets that role's model and instructions. If the spawn tool exposes no `subagent_type` parameter, omit it and describe the role inside `prompt`. If a code block below conflicts with this section, this section wins.
 
 For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `get_command_or_subagent_output` timeout only means no new output arrived. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
 
@@ -69,12 +69,12 @@ Don't wait-these run async while main session works. **Equip every agent with th
 
 ```
 // Fire all at once, collect results later
-spawn_subagent(subagent_type="oh-my-grok:explore", background=true, prompt="TASK: Explore project structure. DELIVERABLE: layout map. SCOPE: codegraph_explore/codegraph_files. VERIFY: REPORT deviations from standard patterns")
-spawn_subagent(subagent_type="oh-my-grok:explore", background=true, prompt="TASK: Find entry points. DELIVERABLE: entry point list. SCOPE: codegraph_callees + lsp_symbols. VERIFY: REPORT non-standard organization")
-spawn_subagent(subagent_type="oh-my-grok:explore", background=true, prompt="TASK: Find conventions. DELIVERABLE: config file list. SCOPE: config files (.eslintrc, pyproject.toml, .editorconfig). VERIFY: REPORT project-specific rules")
-spawn_subagent(subagent_type="oh-my-grok:explore", background=true, prompt="TASK: Find anti-patterns. DELIVERABLE: forbidden pattern list. SCOPE: 'DO NOT', 'NEVER', 'ALWAYS', 'DEPRECATED' comments. VERIFY: LIST forbidden patterns")
-spawn_subagent(subagent_type="oh-my-grok:explore", background=true, prompt="TASK: Explore build/CI. DELIVERABLE: build/CI map. SCOPE: .github/workflows, Makefile. VERIFY: REPORT non-standard patterns")
-spawn_subagent(subagent_type="oh-my-grok:explore", background=true, prompt="TASK: Find test patterns. DELIVERABLE: test convention report. SCOPE: test configs/structure; codegraph_callers on core modules. VERIFY: REPORT unique conventions")
+spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Explore project structure. DELIVERABLE: layout map. SCOPE: codegraph_explore/codegraph_files. VERIFY: REPORT deviations from standard patterns")
+spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Find entry points. DELIVERABLE: entry point list. SCOPE: codegraph_callees + lsp_symbols. VERIFY: REPORT non-standard organization")
+spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Find conventions. DELIVERABLE: config file list. SCOPE: config files (.eslintrc, pyproject.toml, .editorconfig). VERIFY: REPORT project-specific rules")
+spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Find anti-patterns. DELIVERABLE: forbidden pattern list. SCOPE: 'DO NOT', 'NEVER', 'ALWAYS', 'DEPRECATED' comments. VERIFY: LIST forbidden patterns")
+spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Explore build/CI. DELIVERABLE: build/CI map. SCOPE: .github/workflows, Makefile. VERIFY: REPORT non-standard patterns")
+spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Find test patterns. DELIVERABLE: test convention report. SCOPE: test configs/structure; codegraph_callers on core modules. VERIFY: REPORT unique conventions")
 ```
 
 <dynamic-agents>
@@ -100,9 +100,9 @@ max_depth=$(find . -type d -not -path '*/node_modules/*' -not -path '*/.git/*' |
 Example spawning:
 ```
 // 500 files, 50k lines, depth 6, 15 large files → spawn 5+5+2+1 = 13 additional agents
-spawn_subagent(subagent_type="oh-my-grok:explore", background=true, prompt="TASK: Analyze large files. DELIVERABLE: complexity hotspot report. SCOPE: files >500 lines. VERIFY: REPORT hotspots")
-spawn_subagent(subagent_type="oh-my-grok:explore", background=true, prompt="TASK: Explore deep modules. DELIVERABLE: hidden pattern report. SCOPE: modules at depth 4+. VERIFY: FIND hidden patterns, internal conventions")
-spawn_subagent(subagent_type="oh-my-grok:explore", background=true, prompt="TASK: Find shared utilities. DELIVERABLE: cross-cutting concern list. SCOPE: shared utilities across directories. VERIFY: FIND shared utilities")
+spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Analyze large files. DELIVERABLE: complexity hotspot report. SCOPE: files >500 lines. VERIFY: REPORT hotspots")
+spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Explore deep modules. DELIVERABLE: hidden pattern report. SCOPE: modules at depth 4+. VERIFY: FIND hidden patterns, internal conventions")
+spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Find shared utilities. DELIVERABLE: cross-cutting concern list. SCOPE: shared utilities across directories. VERIFY: FIND shared utilities")
 // ... more based on calculation
 ```
 </dynamic-agents>
@@ -264,7 +264,7 @@ Launch writing tasks for each location:
 
 ```
 for loc in AGENTS_LOCATIONS (except root):
-  spawn_subagent(subagent_type="oh-my-grok:hephaestus", background=false, prompt=`
+  spawn_subagent(subagent_type="lazygrok:hephaestus", background=false, prompt=`
     TASK: Generate AGENTS.md for: ${loc.path}
     DELIVERABLE: AGENTS.md file at ${loc.path}
     SCOPE: ${loc.reason}

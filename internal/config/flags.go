@@ -24,24 +24,24 @@ func envTruthyOff(key string) bool {
 	return envTruthy(key, true)
 }
 
-// HashlineEnabled reports OMG_HASHLINE (default on).
+// HashlineEnabled reports LAZYGROK_HASHLINE (default on).
 func HashlineEnabled() bool {
-	return envTruthyOff("OMG_HASHLINE")
+	return envTruthyOff("LAZYGROK_HASHLINE")
 }
 
-// IntentGateEnabled reports OMG_INTENT_GATE (default on).
+// IntentGateEnabled reports LAZYGROK_INTENT_GATE (default on).
 func IntentGateEnabled() bool {
-	return envTruthyOff("OMG_INTENT_GATE")
+	return envTruthyOff("LAZYGROK_INTENT_GATE")
 }
 
-// LSPEnforceEnabled reports OMG_LSP_ENFORCE (default on).
+// LSPEnforceEnabled reports LAZYGROK_LSP_ENFORCE (default on).
 func LSPEnforceEnabled() bool {
-	return envTruthyOff("OMG_LSP_ENFORCE")
+	return envTruthyOff("LAZYGROK_LSP_ENFORCE")
 }
 
-// PlanModeForced reports OMG_PLAN_MODE force-on.
+// PlanModeForced reports LAZYGROK_PLAN_MODE force-on.
 func PlanModeForced() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("OMG_PLAN_MODE"))) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("LAZYGROK_PLAN_MODE"))) {
 	case "1", "true", "yes", "on":
 		return true
 	default:

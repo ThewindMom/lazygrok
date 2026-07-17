@@ -8,7 +8,7 @@ Modeled on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) `r
 |---------|--------|
 | `/ralph-loop "task" [--max-iterations=100]` | Work-until-done; exit on `<promise>DONE</promise>` |
 | `/ulw-loop` / `/ultrawork` / `ultrawork <task>` | Same + mandatory verifier; exit on `<promise>VERIFIED</promise>` |
-| `/cancel-ralph` | Clear `.omg/ralph-loop.local.md` |
+| `/cancel-ralph` | Clear `.lazygrok/ralph-loop.local.md` |
 
 ## Ultrawork verification
 
@@ -25,4 +25,4 @@ After `<promise>DONE</promise>`, run `task(subagent_type="code-reviewer", ...)` 
 - `user-prompt` — start/cancel (merged UserPromptSubmit)
 - `stop` — continuation chain (Ralph first; see `hooks/README.md`)
 
-Skills: `ralph-loop`, `ulw-loop`, `cancel-ralph` (oh-my-grok plugin; see `grok inspect`).
+Skills: `ralph-loop`, `ulw-loop`, `cancel-ralph` (lazygrok plugin; see `grok inspect`).

@@ -6,14 +6,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/prometheus"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/prometheus"
 )
 
 func TestDenyWriteOutsideOmgDuringPlanMode(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("GROK_HOME", tmp)
-	t.Setenv("OMG_PLAN_MODE", "1")
+	t.Setenv("LAZYGROK_PLAN_MODE", "1")
 
 	ev := hookenv.Event{
 		ToolName:      "Write",
@@ -34,13 +34,13 @@ func TestDenyWriteOutsideOmgDuringPlanMode(t *testing.T) {
 func TestAllowOmgMdDuringPlanMode(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("GROK_HOME", tmp)
-	t.Setenv("OMG_PLAN_MODE", "1")
+	t.Setenv("LAZYGROK_PLAN_MODE", "1")
 
 	ev := hookenv.Event{
 		ToolName:      "Write",
 		WorkspaceRoot: tmp,
 		ToolInput: map[string]any{
-			"path": filepath.Join(tmp, ".omg", "plans", "auth.md"),
+			"path": filepath.Join(tmp, ".lazygrok", "plans", "auth.md"),
 		},
 	}
 	if got := prometheus.DenyIfPlanMode(ev); got != "" {
@@ -51,7 +51,7 @@ func TestAllowOmgMdDuringPlanMode(t *testing.T) {
 func TestPlanModeFlagFile(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("GROK_HOME", tmp)
-	t.Setenv("OMG_PLAN_MODE", "")
+	t.Setenv("LAZYGROK_PLAN_MODE", "")
 	session := "sess-1"
 	flag := filepath.Join(tmp, "state", "plan-mode", session, "enabled")
 	if err := os.MkdirAll(filepath.Dir(flag), 0o755); err != nil {

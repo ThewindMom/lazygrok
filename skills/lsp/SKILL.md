@@ -30,7 +30,7 @@ Bundled server: `node ${GROK_PLUGIN_ROOT}/vendor/lsp-tools-mcp/dist/cli.js mcp`
 
 ## Configuration
 
-Project LSP config (optional): `.omg/lsp.json` or `.opencode/lsp.json`
+Project LSP config (optional): `.lazygrok/lsp.json` or `.opencode/lsp.json`
 
 Override paths:
 
@@ -57,6 +57,6 @@ Example entry:
 3. Fix reported errors before claiming the task is done.
 4. For symbol renames: `lsp_prepare_rename` → `lsp_rename` (prefer over manual text replace).
 
-## Note (oh-my-grok hooks)
+## Note (lazygrok hooks)
 
 Task 5+ may stash diagnostics and inject them on the next prompt / Stop. Until then, call MCP tools explicitly after edits.

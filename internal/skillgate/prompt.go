@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
 const grokComposerPreamble = `Grok Composer: There is no Skill tool. The harness may show <skill_information> with skill names and paths — that is metadata only, not loaded skill content.

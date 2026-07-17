@@ -8,7 +8,7 @@ description: >
 
 Follow this protocol to safely resume paused work. The continuation engine
 state lives in two places: the stop marker under `${GROK_HOME}` and the
-loop state under the workspace `.omg/` directory.
+loop state under the workspace `.lazygrok/` directory.
 
 ## Step 1: Clear the stop marker
 
@@ -21,11 +21,11 @@ rm -f "${GROK_HOME:-$HOME/.grok}/state/stop-continuation/${GROK_SESSION_ID}/stop
 
 ## Step 2: Resume the continuation loop
 
-If `.omg/continuation.json` exists and has `paused: true`, update it to
+If `.lazygrok/continuation.json` exists and has `paused: true`, update it to
 set `paused: false` and clear the pause reason:
 
 ```bash
-if [ -f ".omg/continuation.json" ]; then
+if [ -f ".lazygrok/continuation.json" ]; then
   # Set paused: false, pauseReason: "", and refresh lastIterationAt
 fi
 ```
@@ -41,8 +41,8 @@ echo '{"hookEventName":"user_prompt_submit","sessionId":"'"${GROK_SESSION_ID}"'"
 ## Step 3: Show resumable work
 
 List all resumable work items:
-- Active boulder work records (from `.omg/boulder.json`)
-- Paused Ralph/Ultrawork loops (from `.omg/continuation.json`)
+- Active boulder work records (from `.lazygrok/boulder.json`)
+- Paused Ralph/Ultrawork loops (from `.lazygrok/continuation.json`)
 - Incomplete todos
 
 For each item, show:

@@ -4,7 +4,7 @@ description: >
   MANDATORY before code changes, debugging, planning, or multi-step implementation in ANY
   repository. Discover skills via grok inspect, Read every SKILL.md whose description matches
   the task, then use tools. Hooks block mutating tools until at least one catalog skill was
-  Read. superpowers skills ship bundled in oh-my-grok (vendor/superpowers/skills).
+  Read. superpowers skills ship bundled in lazygrok (vendor/superpowers/skills).
 ---
 
 # Agent Skill Gate
@@ -25,11 +25,11 @@ Every Grok Composer session where you might call `grep`, `Read` (for implementat
 
 ## Hook enforcement
 
-The **oh-my-grok** plugin (`grok plugin install github:mihazs/oh-my-grok --trust`) registers
+The **lazygrok** plugin (`grok plugin install github:mihazs/lazygrok --trust`) registers
 hooks via `hooks/hooks.json`. They deny mutating tools when the catalog is non-empty and
 no skill was Read yet. Satisfy the gate by Reading any applicable catalog entry, or this
 meta-skill file (path from `grok inspect`).
 
 ## Rules reference
 
-Bundled at `rules/00-agent-skill-gate.md` inside the oh-my-grok plugin install directory.
+Bundled at `rules/00-agent-skill-gate.md` inside the lazygrok plugin install directory.

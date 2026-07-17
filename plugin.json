@@ -6,8 +6,8 @@
   "author": {
     "name": "mihazs"
   },
-  "homepage": "https://github.com/mihazs/oh-my-grok",
-  "repository": "https://github.com/mihazs/oh-my-grok",
+  "homepage": "https://github.com/mihazs/lazygrok",
+  "repository": "https://github.com/mihazs/lazygrok",
   "license": "MIT",
   "categories": ["productivity", "workflow", "loops"],
   "keywords": [

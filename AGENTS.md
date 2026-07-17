@@ -1,4 +1,4 @@
-# oh-my-grok — agent guide
+# lazygrok — agent guide
 
 **README.md** is for humans (install, features, links). **This file** is for coding agents editing the plugin or debugging hook behavior. Keep changes aligned with both; do not duplicate the full README here.
 
@@ -11,10 +11,10 @@ Inspired by [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent). 
 | Is | Is not |
 |----|--------|
 | A **Grok plugin** (`plugin.json`, `hooks/hooks.json`, bundled skills/rules) | A standalone CLI or application users run from this repo |
-| Go hook binary (`bin/omg-hook-*`) + thin `hooks/run-hook.sh` | User application code |
-| Install target: `grok plugin install github:mihazs/oh-my-grok --trust` | Global copies under `~/.grok/hooks/` (deprecated; plugin-only) |
+| Go hook binary (`bin/lazygrok-hook-*`) + thin `hooks/run-hook.sh` | User application code |
+| Install target: `grok plugin install github:mihazs/lazygrok --trust` | Global copies under `~/.grok/hooks/` (deprecated; plugin-only) |
 
-After install, Grok loads hooks from `GROK_PLUGIN_ROOT` (installed copy under `~/.grok/installed-plugins/oh-my-grok-*`, often symlinked to a local clone).
+After install, Grok loads hooks from `GROK_PLUGIN_ROOT` (installed copy under `~/.grok/installed-plugins/lazygrok-*`, often symlinked to a local clone).
 
 ---
 
@@ -23,8 +23,8 @@ After install, Grok loads hooks from `GROK_PLUGIN_ROOT` (installed copy under `~
 ```
 plugin.json
 hooks/hooks.json          → SessionStart, UserPromptSubmit, Pre/PostToolUse, Stop, SessionEnd
-hooks/run-hook.sh         → dispatches to bin/omg-hook-<os>-<arch>
-cmd/omg-hook + internal/  → all hook logic (see docs/superpowers/plans/2026-06-02-go-hooks-migration.md)
+hooks/run-hook.sh         → dispatches to bin/lazygrok-hook-<os>-<arch>
+cmd/lazygrok-hook + internal/  → all hook logic (see docs/superpowers/plans/2026-06-02-go-hooks-migration.md)
   cmd/user_prompt.go      → single merged additionalContext (do not split into multiple JSON hooks)
   cmd/stop.go             → ralph → boulder → todo → lsp → plan.md (first block wins)
   internal/skillgate/     → catalog, PreTool gate, reminders
@@ -38,7 +38,7 @@ skills/*/SKILL.md         → user-invocable workflows (discovered by grok inspe
 rules/*.md                → injected on every UserPromptSubmit (with workspace AGENTS.md)
 ```
 
-**superpowers** skills are **bundled** at `vendor/superpowers/skills/` (`plugin.json` `skills` paths). Do not register duplicate oh-my-grok hooks globally. Refresh vendor: `task vendor:superpowers`.
+**superpowers** skills are **bundled** at `vendor/superpowers/skills/` (`plugin.json` `skills` paths). Do not register duplicate lazygrok hooks globally. Refresh vendor: `task vendor:superpowers`.
 
 ---
 
@@ -47,9 +47,9 @@ rules/*.md                → injected on every UserPromptSubmit (with workspace
 | Location | Owner | Examples |
 |----------|--------|----------|
 | **`~/.grok/`** | Grok harness | `installed-plugins/`, `state/skill-gate/`, `state/hashline/`, `state/lsp-diagnostics/`, `state/todo-enforcer/`, `state/stop-continuation/`, `sessions/` |
-| **`.omg/`** (per workspace) | oh-my-grok runtime | `boulder.json`, `plans/`, `todos/`, `ralph-loop.local.md`, `handoffs/` |
+| **`.lazygrok/`** (per workspace) | lazygrok runtime | `boulder.json`, `plans/`, `todos/`, `ralph-loop.local.md`, `handoffs/` |
 
-Analogous to omo’s **`.omo/`** in OpenCode workspaces. Never store plugin source or session catalogs under `.omg/`.
+Analogous to omo’s **`.omo/`** in OpenCode workspaces. Never store plugin source or session catalogs under `.lazygrok/`.
 
 ---
 
@@ -60,7 +60,7 @@ Analogous to omo’s **`.omo/`** in OpenCode workspaces. Never store plugin sour
 | `agent-skill-gate` | (meta; Read before mutating) | `session-start`, `user-prompt`, `pre-tool-use`, `post-tool-read` |
 | `ralph-loop` | `/ralph-loop "task"` | `user-prompt`, `stop` |
 | `ulw-loop` | `/ulw-loop "task"` | same + Oracle verification pending |
-| `cancel-ralph` | `/cancel-ralph` | clears `.omg/ralph-loop.local.md` |
+| `cancel-ralph` | `/cancel-ralph` | clears `.lazygrok/ralph-loop.local.md` |
 | `handoff` | `/handoff` | `user-prompt` injects PHASE 0–4 instructions |
 | `prometheus-plan` | `/plan`, `/prometheus` | `user-prompt` + `pre-tool-use` |
 | `hashline-edit` | (workflow) | `hashline` package, `post-tool-read` |
@@ -78,7 +78,7 @@ Full event map and stop priority: **`hooks/README.md`** (read when touching Stop
 | Task | Read first |
 |------|------------|
 | Install / publish / repo URL | `README.md`, `docs/installation.md` |
-| Hook events, stop chain, `.omg/` layout | `hooks/README.md` |
+| Hook events, stop chain, `.lazygrok/` layout | `hooks/README.md` |
 | Skill-gate behavior | `skills/agent-skill-gate/SKILL.md`, `rules/00-agent-skill-gate.md` |
 | Ralph / ultrawork | `skills/ralph-loop/SKILL.md`, `skills/ulw-loop/SKILL.md`, `rules/10-ralph-loop.md` |
 | Boulder + todos | `rules/12-todo-boulder.md`, `internal/boulder/` |
@@ -98,7 +98,7 @@ Do not paste entire skill bodies into this file. Load the path from `grok inspec
 3. Run smoke tests (required before claiming done):
 
 ```bash
-cd oh-my-grok
+cd lazygrok
 grok plugin validate .
 export GROK_PLUGIN_ROOT="$(pwd)"
 bash hooks/test-ralph-loop.sh
@@ -114,7 +114,7 @@ bash hooks/test-hashline.sh
 bash hooks/test-lsp.sh
 ```
 
-4. Refresh install: `grok plugin update oh-my-grok` (or `grok plugin install "$(pwd)" --trust`).
+4. Refresh install: `grok plugin update lazygrok` (or `grok plugin install "$(pwd)" --trust`).
 5. **New Grok session** or TUI Hooks reload (`Ctrl+L`) — hooks do not always hot-reload mid-session.
 
 Optional E2E: `bash hooks/test-inline-skill-gate.sh` (needs `grok` CLI + trusted workspace).
@@ -132,7 +132,7 @@ Optional E2E: `bash hooks/test-inline-skill-gate.sh` (needs `grok` CLI + trusted
 | Workspace file paths (boulder, todos) | `internal/boulder/` constants + docs | Hardcoded `/home/...` paths anywhere in repo |
 | Stop continuation order | `hooks/lib/stop-chain.sh` only | Second Stop hook registration |
 | IntentGate keyword modes | `hooks/lib/intent-gate.sh`, `rules/13-intent-gate.md` | Duplicate mode logic in `user-prompt.sh` |
-| Prometheus plan mode | `hooks/lib/prometheus.sh`, `skills/prometheus-plan/` | Allow non-`.omg` writes while plan mode active |
+| Prometheus plan mode | `hooks/lib/prometheus.sh`, `skills/prometheus-plan/` | Allow non-`.lazygrok` writes while plan mode active |
 | Hashline LINE#ID guard | `hooks/lib/hashline.sh`, `hashline.py`, `post-tool-read.sh` | Second PreToolUse hook in `hooks.json` |
 | LSP stash + Stop block | `hooks/lib/lsp.sh`, `post-tool-lsp.sh` | Inline LSP calls in `stop-hook.sh` |
 | ast-grep / lsp MCP dist | `scripts/build-mcp-runtimes.sh`, `vendor/*` | Commit `node_modules` (run build script) |
@@ -186,9 +186,9 @@ Human docs: `docs/installation.md`, `docs/skills.md`, `docs/configuration.md`. R
 
 - **Shell**: `bash`, `set -euo pipefail`; hook entry via `hooks/run-hook.sh`.
 - **Search**: use `rg`, not `grep`, in docs and agent instructions for this repo.
-- **Paths in repo**: machine-agnostic (`$(pwd)`, `oh-my-grok/`); author metadata in `plugin.json` / LICENSE is fine; no contributor home directories in source.
+- **Paths in repo**: machine-agnostic (`$(pwd)`, `lazygrok/`); author metadata in `plugin.json` / LICENSE is fine; no contributor home directories in source.
 - **Hook JSON output**: one `additionalContext` per event per manifest path; `user-prompt.sh` merges parts.
-- **Tests**: temp dirs use `.omg/` subdirs; do not depend on a specific user workspace path.
+- **Tests**: temp dirs use `.lazygrok/` subdirs; do not depend on a specific user workspace path.
 - **Go** hooks (`internal/boulder/`, etc.) stay compatible with omo boulder schema where possible.
 
 ---
@@ -198,7 +198,7 @@ Human docs: `docs/installation.md`, `docs/skills.md`, `docs/configuration.md`. R
 - Registering the same hooks in **`~/.grok/hooks/*.json`** and the plugin (double Stop / UserPromptSubmit).
 - Adding legacy `user-prompt-*.sh` hooks to `hooks.json` (merged handler exists).
 - Changing stop order without updating `hooks/README.md` and tests.
-- Documenting only `~/.grok/` for boulder/ralph state — user workspaces use **`.omg/`**.
+- Documenting only `~/.grok/` for boulder/ralph state — user workspaces use **`.lazygrok/`**.
 - Bloating this AGENTS.md past ~150 lines; link to `hooks/README.md` and skills instead.
 
 ---

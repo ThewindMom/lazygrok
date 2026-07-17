@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting. Check [docs/troubleshooting.md](https://github.com/mihazs/oh-my-grok/blob/main/docs/troubleshooting.md) first.
+        Thanks for reporting. Check [docs/troubleshooting.md](https://github.com/mihazs/lazygrok/blob/main/docs/troubleshooting.md) first.
   - type: input
     id: grok_version
     attributes:
@@ -18,7 +18,7 @@ body:
     attributes:
       label: Install method
       options:
-        - github:mihazs/oh-my-grok
+        - github:mihazs/lazygrok
         - Local path / symlink
         - Unknown
     validations:

@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
 const maxBlocks = 8

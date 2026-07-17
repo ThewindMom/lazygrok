@@ -4,14 +4,14 @@ import (
 	"io"
 	"os"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/hookio"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/hookio"
 	"github.com/spf13/cobra"
 )
 
-// NewRoot returns the omg-hook cobra root command.
+// NewRoot returns the lazygrok-hook cobra root command.
 func NewRoot() *cobra.Command {
-	root := &cobra.Command{Use: "omg-hook"}
+	root := &cobra.Command{Use: "lazygrok-hook"}
 	root.AddCommand(
 		sessionStartCmd(),
 		sessionEndCmd(),

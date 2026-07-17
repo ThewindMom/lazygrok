@@ -1,9 +1,9 @@
 # OMO Parity Gap Analysis
 
-This document analyzes the gap between oh-my-grok and Oh My OpenAgent (OMO),
+This document analyzes the gap between lazygrok and Oh My OpenAgent (OMO),
 identifying what can be brought to parity within Grok's plugin API constraints.
 
-## What oh-my-grok already has (implemented)
+## What lazygrok already has (implemented)
 
 | Feature | Status |
 |---------|--------|
@@ -27,7 +27,7 @@ identifying what can be brought to parity within Grok's plugin API constraints.
 | No telemetry | ✅ Documented policy |
 | License inventory | ✅ THIRD-PARTY-NOTICES + manifest |
 
-## What OMO has that oh-my-grok lacks
+## What OMO has that lazygrok lacks
 
 ### High-impact gaps (achievable within Grok APIs)
 

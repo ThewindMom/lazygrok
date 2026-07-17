@@ -12,11 +12,11 @@ Turn an approved plan into completed work.
 
 ## Step 1: Load plan
 
-Read the plan from `.omg/plans/<name>.md`. Parse the TODOs and dependencies.
+Read the plan from `.lazygrok/plans/<name>.md`. Parse the TODOs and dependencies.
 
 ## Step 2: Initialize boulder state
 
-Create a work record in `.omg/boulder.json`:
+Create a work record in `.lazygrok/boulder.json`:
 - Work ID (stable identifier)
 - Objective (from plan)
 - Plan path

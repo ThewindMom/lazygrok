@@ -27,7 +27,7 @@ mark_skill_loaded() {
 export GROK_HOME="${GROK_HOME:-$(resolve_grok_home)}"
 export GROK_SESSION_ID="test-hashline-hook-$$"
 export GROK_PLUGIN_ROOT="${GROK_PLUGIN_ROOT:-$ROOT}"
-export OMG_HASHLINE=1
+export LAZYGROK_HASHLINE=1
 
 ws="$(mktemp -d)"
 export GROK_WORKSPACE_ROOT="$ws"

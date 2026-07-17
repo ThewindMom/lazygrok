@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Minimal helpers for hooks/test-*.sh (runtime is Go omg-hook).
+# Minimal helpers for hooks/test-*.sh (runtime is Go lazygrok-hook).
 set -euo pipefail
 
 resolve_grok_home() {

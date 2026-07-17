@@ -5,23 +5,23 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/core/config"
-	"github.com/mihazs/oh-my-grok/internal/core/continuation"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/hookio"
+	"lazygrok/internal/core/config"
+	"lazygrok/internal/core/continuation"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/hookio"
 	"github.com/spf13/cobra"
 )
 
-// startLoopCmd implements the `omg-hook start-loop` subcommand.
+// startLoopCmd implements the `lazygrok-hook start-loop` subcommand.
 // It initializes a new continuation loop (ralph or ultrawork) by delegating
 // to continuation.StartLoop.
 //
 // The loop type, objective, and completion criteria are read from the hook
 // event prompt or environment variables:
 //
-//	OMG_LOOP_TYPE         "ralph" | "ultrawork"
-//	OMG_LOOP_OBJECTIVE    free-text objective
-//	OMG_LOOP_COMPLETION   completion criteria (default "DONE")
+//	LAZYGROK_LOOP_TYPE         "ralph" | "ultrawork"
+//	LAZYGROK_LOOP_OBJECTIVE    free-text objective
+//	LAZYGROK_LOOP_COMPLETION   completion criteria (default "DONE")
 func startLoopCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "start-loop",
@@ -53,7 +53,7 @@ func startLoopCmd() *cobra.Command {
 				"[START-LOOP] Initialized %s loop for session %s.\n"+
 					"Objective: %s\n"+
 					"Completion criteria: %s\n"+
-					"State persisted at %s/.omg/continuation.json.",
+					"State persisted at %s/.lazygrok/continuation.json.",
 				loopType, sid, objective, completion, ws,
 			)
 			hookio.EmitAdditionalContext(os.Stdout, msg, "UserPromptSubmit")
@@ -71,7 +71,7 @@ func loopTypeFrom(ev hookenv.Event) string {
 	case strings.Contains(prompt, "ralph-loop"), strings.Contains(prompt, "ralph"):
 		return "ralph"
 	}
-	if v := strings.TrimSpace(os.Getenv("OMG_LOOP_TYPE")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("LAZYGROK_LOOP_TYPE")); v != "" {
 		return v
 	}
 	return "ralph"
@@ -79,7 +79,7 @@ func loopTypeFrom(ev hookenv.Event) string {
 
 // loopObjectiveFrom resolves the objective from the event prompt or environment.
 func loopObjectiveFrom(ev hookenv.Event) string {
-	if v := strings.TrimSpace(os.Getenv("OMG_LOOP_OBJECTIVE")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("LAZYGROK_LOOP_OBJECTIVE")); v != "" {
 		return v
 	}
 	if ev.Prompt != "" {
@@ -90,7 +90,7 @@ func loopObjectiveFrom(ev hookenv.Event) string {
 
 // loopCompletionFrom resolves the completion criteria from the event or environment.
 func loopCompletionFrom(ev hookenv.Event) string {
-	if v := strings.TrimSpace(os.Getenv("OMG_LOOP_COMPLETION")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("LAZYGROK_LOOP_COMPLETION")); v != "" {
 		return v
 	}
 	return "DONE"

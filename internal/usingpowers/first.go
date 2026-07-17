@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/skillgate"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/skillgate"
 )
 
 func stateDir(sessionID string) string {
@@ -66,7 +66,7 @@ func buildContext(skillPath string) string {
 		body = []byte(fmt.Sprintf("(using-superpowers skill unavailable: %v)", err))
 	}
 	grokNote := "**Grok Composer:** Ignore Claude/Copilot \"Skill tool\" instructions below. " +
-		"Use the **Read** tool on each applicable `SKILL.md` path from the oh-my-grok catalog " +
+		"Use the **Read** tool on each applicable `SKILL.md` path from the lazygrok catalog " +
 		"(SessionStart / UserPromptSubmit hooks). `<skill_information>` in the harness is metadata only.\n\n"
 	return strings.TrimSpace(fmt.Sprintf(
 		"<USING_SUPERPOWERS_FIRST_PROMPT>\n"+

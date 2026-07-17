@@ -97,7 +97,7 @@ func (s *LSPServer) handleRequest(req rpcRequest) {
 					"tools": map[string]any{},
 				},
 				"serverInfo": map[string]any{
-					"name":    "oh-my-grok-lsp",
+					"name":    "lazygrok-lsp",
 					"version": "1.0.0",
 				},
 			},

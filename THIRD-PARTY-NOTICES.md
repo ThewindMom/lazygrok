@@ -1,10 +1,10 @@
 # Third-Party Notices
 
 This file documents every third-party component redistributed within the
-oh-my-grok plugin, its license, upstream source, and the exact version or
+lazygrok plugin, its license, upstream source, and the exact version or
 commit pinned.
 
-oh-my-grok is MIT-licensed (see `LICENSE`), but it redistributes components
+lazygrok is MIT-licensed (see `LICENSE`), but it redistributes components
 under other licenses. This file preserves the notices required by each.
 
 ---
@@ -28,7 +28,7 @@ under other licenses. This file preserves the notices required by each.
 - **Upstream**: https://github.com/spf13/cobra
 - **Version**: v1.8.1 (pinned in `go.mod`)
 - **License**: Apache License 2.0 — `vendor/github.com/spf13/cobra/LICENSE.txt`
-- **Use**: CLI command dispatch for the `omg-hook` binary
+- **Use**: CLI command dispatch for the `lazygrok-hook` binary
 
 ## 3. spf13/pflag (Go library)
 
@@ -113,7 +113,7 @@ licensing or provenance reasons:
 
 ## oh-my-openagent (reference, not redistributed)
 
-oh-my-grok is inspired by [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)
+lazygrok is inspired by [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)
 but does **not** redistribute its source, prompts, skills, or documentation.
 Most OMO content is licensed under the Sustainable Use License 1.0, which is
 incompatible with this fork. All OMO-like behavior is independently implemented
@@ -125,7 +125,7 @@ against documented behavior and public Grok interfaces.
 
 | Component | License | Redistributed |
 |-----------|---------|---------------|
-| oh-my-grok (this plugin) | MIT | — |
+| lazygrok (this plugin) | MIT | — |
 | obra/superpowers skills | MIT | yes (`vendor/superpowers/`) |
 | spf13/cobra | Apache 2.0 | yes (`vendor/github.com/spf13/cobra/`) |
 | spf13/pflag | BSD 3-Clause | yes (`vendor/github.com/spf13/pflag/`) |

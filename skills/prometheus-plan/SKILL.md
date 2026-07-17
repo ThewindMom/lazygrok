@@ -2,7 +2,7 @@
 name: prometheus-plan
 description: >
   Strategic planning mode (/plan): interview, gap analysis, write work plans under
-  .omg/plans/, optional review, then /start-work to activate boulder execution.
+  .lazygrok/plans/, optional review, then /start-work to activate boulder execution.
 user_invocable: true
 ---
 
@@ -10,7 +10,7 @@ user_invocable: true
 
 ## Purpose
 
-Use `/plan` (or `/prometheus`) when you need a **work plan before implementation**. Planning mode blocks non-markdown writes outside `.omg/` until `/start-work`.
+Use `/plan` (or `/prometheus`) when you need a **work plan before implementation**. Planning mode blocks non-markdown writes outside `.lazygrok/` until `/start-work`.
 
 ---
 
@@ -19,7 +19,7 @@ Use `/plan` (or `/prometheus`) when you need a **work plan before implementation
 ### Step 1 — Interview
 
 - Classify intent (trivial, refactor, greenfield, architecture, etc.).
-- Ask focused questions; record decisions in `.omg/drafts/<topic>.md`.
+- Ask focused questions; record decisions in `.lazygrok/drafts/<topic>.md`.
 - Do **not** implement product code in plan mode.
 
 ### Step 2 — Research (parallel)
@@ -35,15 +35,15 @@ Use `/plan` (or `/prometheus`) when you need a **work plan before implementation
 
 ### Step 4 — Write the plan
 
-- Single plan file: `.omg/plans/<name>.md`
+- Single plan file: `.lazygrok/plans/<name>.md`
 - Use skeleton Write + Edit batches for large TODO lists (see prometheus-planner agent).
 - Include waves, dependencies, QA scenarios, and Final Verification Wave.
 
 ### Step 5 — Momus review (optional) → start work
 
-- `Task(subagent_type="momus-reviewer", prompt="Review .omg/plans/<name>.md; verdict OKAY or NEEDS_REVISION.")`
+- `Task(subagent_type="momus-reviewer", prompt="Review .lazygrok/plans/<name>.md; verdict OKAY or NEEDS_REVISION.")`
 - Fix revisions until OKAY or user accepts risk.
-- User runs `/start-work .omg/plans/<name>.md` to write `.omg/boulder.json` and exit plan mode.
+- User runs `/start-work .lazygrok/plans/<name>.md` to write `.lazygrok/boulder.json` and exit plan mode.
 
 ---
 
@@ -59,6 +59,6 @@ Use `/plan` (or `/prometheus`) when you need a **work plan before implementation
 
 ## Constraints (enforced by hooks)
 
-- **Allowed writes in plan mode:** `.omg/**/*.md` only
+- **Allowed writes in plan mode:** `.lazygrok/**/*.md` only
 - **Forbidden:** source edits, deletes outside that pattern
 - **Execution:** only after `/start-work`

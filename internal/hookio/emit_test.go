@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/mihazs/oh-my-grok/internal/hookio"
+	"lazygrok/internal/hookio"
 )
 
 func TestEmitAllow(t *testing.T) {

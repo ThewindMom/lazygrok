@@ -495,7 +495,7 @@ func joinLines(lines []string, newline NewlineStyle, hasFinalNL bool) string {
 // atomicWrite writes data to a temp file in the same directory, then renames.
 func atomicWrite(path string, data []byte, mode os.FileMode) error {
 	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".omg-mcp-tmp-*")
+	tmp, err := os.CreateTemp(dir, ".lazygrok-mcp-tmp-*")
 	if err != nil {
 		return fmt.Errorf("create temp: %w", err)
 	}

@@ -15,7 +15,7 @@ trap 'rm -rf "$GROK_WORKSPACE_ROOT"' EXIT
 printf '%s\n' '{"hookEventName":"UserPromptSubmit","sessionId":"'"$GROK_SESSION_ID"'","prompt":"/ralph-loop env workspace test"}' \
   | bash "${HOOKS_DIR}/run-hook.sh" user-prompt >/dev/null
 
-test -f "${GROK_WORKSPACE_ROOT}/.omg/ralph-loop.local.md" || {
+test -f "${GROK_WORKSPACE_ROOT}/.lazygrok/ralph-loop.local.md" || {
   echo "expected ralph-loop.local.md under GROK_WORKSPACE_ROOT"
   exit 1
 }

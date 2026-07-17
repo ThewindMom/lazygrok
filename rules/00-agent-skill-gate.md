@@ -24,8 +24,8 @@ Read-only work (questions, diagnostics, review without edits) should still load 
 ## Any installed skill
 
 - **Project** skills under `.agents/skills/` or `.grok/skills/` in the workspace
-- **User** skills under `~/.grok/skills/` (other tools; not oh-my-grok duplicates)
-- **Plugin** skills from installed Grok plugins (oh-my-grok, superpowers, etc.)
+- **User** skills under `~/.grok/skills/` (other tools; not lazygrok duplicates)
+- **Plugin** skills from installed Grok plugins (lazygrok, superpowers, etc.)
 
 Do not hardcode skill names. Use the catalog.
 
@@ -35,8 +35,8 @@ Grok has no `load_skills`. Paste relevant skill **paths** and summaries from the
 
 ## Fail-open
 
-If `grok inspect` fails or returns an empty skill list, hooks allow mutating tools after you `Read` the oh-my-grok `agent-skill-gate` skill from the plugin path in inspect.
+If `grok inspect` fails or returns an empty skill list, hooks allow mutating tools after you `Read` the lazygrok `agent-skill-gate` skill from the plugin path in inspect.
 
 ## Meta-skill
 
-Full hook behavior: oh-my-grok plugin `skills/agent-skill-gate/SKILL.md` (see `grok inspect`).
+Full hook behavior: lazygrok plugin `skills/agent-skill-gate/SKILL.md` (see `grok inspect`).

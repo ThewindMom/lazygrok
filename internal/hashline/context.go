@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/config"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/config"
+	"lazygrok/internal/hookenv"
 )
 
 type cachePayload struct {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dispatch hook subcommands to omg-hook (Go binary).
+# Dispatch hook subcommands to lazygrok-hook (Go binary).
 set -euo pipefail
 if [ $# -lt 1 ]; then
   echo "run-hook.sh: missing subcommand" >&2
@@ -30,10 +30,10 @@ case "$arch" in
     ;;
 esac
 case "$os" in
-  linux) bin="${PLUGIN_ROOT}/bin/omg-hook-linux-${arch}" ;;
-  darwin) bin="${PLUGIN_ROOT}/bin/omg-hook-darwin-${arch}" ;;
+  linux) bin="${PLUGIN_ROOT}/bin/lazygrok-hook-linux-${arch}" ;;
+  darwin) bin="${PLUGIN_ROOT}/bin/lazygrok-hook-darwin-${arch}" ;;
   mingw*|msys*|cygwin*|windows*)
-    bin="${PLUGIN_ROOT}/bin/omg-hook-windows-amd64.exe"
+    bin="${PLUGIN_ROOT}/bin/lazygrok-hook-windows-amd64.exe"
     ;;
   *)
     echo "run-hook.sh: unsupported OS: $(uname -s)" >&2

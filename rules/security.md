@@ -1,6 +1,6 @@
 # Security Rules
 
-These rules are enforced by the oh-my-grok plugin for all agents and hooks.
+These rules are enforced by the lazygrok plugin for all agents and hooks.
 
 ## Path safety
 

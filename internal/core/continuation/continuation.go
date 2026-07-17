@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mihazs/oh-my-grok/internal/core/config"
-	"github.com/mihazs/oh-my-grok/internal/core/state"
+	"lazygrok/internal/core/config"
+	"lazygrok/internal/core/state"
 )
 
 // StateVersion is the continuation state schema version.
@@ -58,7 +58,7 @@ type StopResult struct {
 
 // statePath returns the path to the continuation state file.
 func statePath(workspace string) string {
-	return filepath.Join(workspace, ".omg", "continuation.json")
+	return filepath.Join(workspace, ".lazygrok", "continuation.json")
 }
 
 // stopMarkerPath returns the path to the stop-continuation marker.
@@ -346,7 +346,7 @@ func ListResumableWork(workspace string) ([]map[string]any, error) {
 	}
 
 	// Check boulder state
-	boulderPath := filepath.Join(workspace, ".omg", "boulder.json")
+	boulderPath := filepath.Join(workspace, ".lazygrok", "boulder.json")
 	if data, err := os.ReadFile(boulderPath); err == nil {
 		var b map[string]any
 		if json.Unmarshal(data, &b) == nil {

@@ -1,4 +1,4 @@
-module github.com/mihazs/oh-my-grok
+module lazygrok
 
 go 1.22
 

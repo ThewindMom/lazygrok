@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the Bash/Python hook runtime (~4.6k LOC) with a single cross-compiled Go binary (`omg-hook`) per OS/arch, shipped under `bin/`, for lower memory and faster PreToolUse while preserving Grok JSON contracts and existing `hooks/test-*.sh` smoke tests.
+**Goal:** Replace the Bash/Python hook runtime (~4.6k LOC) with a single cross-compiled Go binary (`lazygrok-hook`) per OS/arch, shipped under `bin/`, for lower memory and faster PreToolUse while preserving Grok JSON contracts and existing `hooks/test-*.sh` smoke tests.
 
-**Architecture:** Thin [`hooks/run-hook.sh`](hooks/run-hook.sh) selects `bin/omg-hook-<goos>-<goarch>` and passes a subcommand; Go reads hook JSON from stdin, writes JSON to stdout, and uses `os/exec` only for `grok inspect` (skill gate) and optional `node` (LSP diagnostics). Bundled MCP stays Node ([`.mcp.json`](.mcp.json)). Legacy `hooks/lib/*.{sh,py}` removed after parity.
+**Architecture:** Thin [`hooks/run-hook.sh`](hooks/run-hook.sh) selects `bin/lazygrok-hook-<goos>-<goarch>` and passes a subcommand; Go reads hook JSON from stdin, writes JSON to stdout, and uses `os/exec` only for `grok inspect` (skill gate) and optional `node` (LSP diagnostics). Bundled MCP stays Node ([`.mcp.json`](.mcp.json)). Legacy `hooks/lib/*.{sh,py}` removed after parity.
 
 **Tech Stack:** Go 1.22+, `github.com/spf13/cobra`, `github.com/cespare/xxhash/v2` (hashline only — implement seed/normalize in-tree to match Python), Bash dispatcher + existing shell integration tests, GitHub Actions cross-compile.
 
@@ -18,11 +18,11 @@
 
 | Path | Responsibility |
 |------|----------------|
-| [`go.mod`](go.mod) | Module `github.com/mihazs/oh-my-grok` |
-| [`cmd/omg-hook/main.go`](cmd/omg-hook/main.go) | Cobra root + subcommands |
+| [`go.mod`](go.mod) | Module `github.com/mihazs/lazygrok` |
+| [`cmd/lazygrok-hook/main.go`](cmd/lazygrok-hook/main.go) | Cobra root + subcommands |
 | [`internal/hookenv/env.go`](internal/hookenv/env.go) | `GROK_*` paths, stdin JSON → `Event` |
 | [`internal/hookio/emit.go`](internal/hookio/emit.go) | `EmitAllow`, `EmitDeny`, `EmitStopBlock`, `EmitAdditionalContext` |
-| [`internal/config/flags.go`](internal/config/flags.go) | `OMG_HASHLINE`, `OMG_INTENT_GATE`, `OMG_LSP_ENFORCE`, … |
+| [`internal/config/flags.go`](internal/config/flags.go) | `LAZYGROK_HASHLINE`, `LAZYGROK_INTENT_GATE`, `LAZYGROK_LSP_ENFORCE`, … |
 | [`internal/hashline/hash.go`](internal/hashline/hash.go) | Port of [`hooks/lib/hashline.py`](hooks/lib/hashline.py) |
 | [`internal/hashline/cache.go`](internal/hashline/cache.go) | Read cache under `~/.grok/state/hashline/<session>/` |
 | [`internal/skillgate/gate.go`](internal/skillgate/gate.go) | Catalog + loaded set + PreTool deny |
@@ -41,7 +41,7 @@
 | [`scripts/build-hook.sh`](scripts/build-hook.sh) | Cross-compile 5 binaries |
 | [`hooks/run-hook.sh`](hooks/run-hook.sh) | OS/arch → binary + exec subcommand |
 | [`hooks/hooks.json`](hooks/hooks.json) | `run-hook.sh <subcommand>` not `*.sh` |
-| [`bin/omg-hook-*`](bin/) | Committed release binaries |
+| [`bin/lazygrok-hook-*`](bin/) | Committed release binaries |
 
 ---
 
@@ -49,7 +49,7 @@
 
 **Files:**
 - Create: `go.mod`, `internal/hookenv/env.go`, `internal/hookenv/event.go`, `internal/hookio/emit.go`, `internal/hookio/emit_test.go`
-- Create: `cmd/omg-hook/main.go` (stub `session-start` only)
+- Create: `cmd/lazygrok-hook/main.go` (stub `session-start` only)
 
 - [ ] **Step 1: Write failing emit test**
 
@@ -64,7 +64,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/mihazs/oh-my-grok/internal/hookio"
+	"github.com/mihazs/lazygrok/internal/hookio"
 )
 
 func TestEmitAllow(t *testing.T) {
@@ -94,7 +94,7 @@ func TestEmitDenyWritesReason(t *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /home/mihazs/Dev/oh-my-grok
+cd /home/mihazs/Dev/lazygrok
 go test ./internal/hookio/... -count=1
 ```
 
@@ -105,7 +105,7 @@ Expected: FAIL (`package hookio` not found)
 `go.mod`:
 
 ```go
-module github.com/mihazs/oh-my-grok
+module github.com/mihazs/lazygrok
 
 go 1.22
 
@@ -182,7 +182,7 @@ Expected: PASS
 
 - [ ] **Step 5: Stub CLI**
 
-`cmd/omg-hook/main.go`:
+`cmd/lazygrok-hook/main.go`:
 
 ```go
 package main
@@ -190,13 +190,13 @@ package main
 import (
 	"os"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/hookio"
+	"github.com/mihazs/lazygrok/internal/hookenv"
+	"github.com/mihazs/lazygrok/internal/hookio"
 	"github.com/spf13/cobra"
 )
 
 func main() {
-	root := &cobra.Command{Use: "omg-hook"}
+	root := &cobra.Command{Use: "lazygrok-hook"}
 	root.AddCommand(&cobra.Command{
 		Use: "session-start",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -218,8 +218,8 @@ func main() {
 - [ ] **Step 6: Commit**
 
 ```bash
-git add go.mod go.sum cmd/omg-hook internal/hookenv internal/hookio
-git commit -m "feat(go): scaffold omg-hook module with hookio and hookenv"
+git add go.mod go.sum cmd/lazygrok-hook internal/hookenv internal/hookio
+git commit -m "feat(go): scaffold lazygrok-hook module with hookio and hookenv"
 ```
 
 ---
@@ -243,21 +243,21 @@ cd "$ROOT"
 mkdir -p bin
 build() {
   local goos="$1" goarch="$2 out="$3"
-  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -ldflags="-s -w" -o "bin/$out" ./cmd/omg-hook
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -ldflags="-s -w" -o "bin/$out" ./cmd/lazygrok-hook
 }
-build linux amd64 omg-hook-linux-amd64
-build linux arm64 omg-hook-linux-arm64
-build darwin amd64 omg-hook-darwin-amd64
-build darwin arm64 omg-hook-darwin-arm64
-build windows amd64 omg-hook-windows-amd64.exe
-echo "Built bin/omg-hook-*"
+build linux amd64 lazygrok-hook-linux-amd64
+build linux arm64 lazygrok-hook-linux-arm64
+build darwin amd64 lazygrok-hook-darwin-amd64
+build darwin arm64 lazygrok-hook-darwin-arm64
+build windows amd64 lazygrok-hook-windows-amd64.exe
+echo "Built bin/lazygrok-hook-*"
 ```
 
 - [ ] **Step 2: Build locally**
 
 ```bash
 bash scripts/build-hook.sh
-file bin/omg-hook-linux-amd64
+file bin/lazygrok-hook-linux-amd64
 ```
 
 Expected: `ELF 64-bit LSB executable`
@@ -284,10 +284,10 @@ case "$arch" in
   *) echo "run-hook.sh: unsupported arch: $(uname -m)" >&2; exit 1 ;;
 esac
 case "$os" in
-  linux) bin="${PLUGIN_ROOT}/bin/omg-hook-linux-${arch}" ;;
-  darwin) bin="${PLUGIN_ROOT}/bin/omg-hook-darwin-${arch}" ;;
+  linux) bin="${PLUGIN_ROOT}/bin/lazygrok-hook-linux-${arch}" ;;
+  darwin) bin="${PLUGIN_ROOT}/bin/lazygrok-hook-darwin-${arch}" ;;
   mingw*|msys*|cygwin*|windows*)
-    bin="${PLUGIN_ROOT}/bin/omg-hook-windows-amd64.exe"
+    bin="${PLUGIN_ROOT}/bin/lazygrok-hook-windows-amd64.exe"
     ;;
   *) echo "run-hook.sh: unsupported OS: $(uname -s)" >&2; exit 1 ;;
 esac
@@ -340,7 +340,7 @@ Note: Until full port, smoke tests may still call legacy bash scripts if subcomm
 
 ```bash
 git add scripts/build-hook.sh hooks/run-hook.sh hooks/hooks.json bin/ .github/workflows/ci.yml
-git commit -m "feat(go): cross-compile omg-hook and arch dispatcher"
+git commit -m "feat(go): cross-compile lazygrok-hook and arch dispatcher"
 ```
 
 ---
@@ -400,7 +400,7 @@ git commit -m "feat(go): port hashline-core line hash with golden tests"
 
 **Files:**
 - Create: `internal/cmd/pre_tool_use.go`, wire packages `prometheus`, `hashline`, `skillgate`
-- Modify: `cmd/omg-hook/main.go`
+- Modify: `cmd/lazygrok-hook/main.go`
 - Modify: `hooks/hooks.json` PreToolUse line only
 
 - [ ] **Step 1: Write Go test for prometheus md-only deny**
@@ -409,7 +409,7 @@ git commit -m "feat(go): port hashline-core line hash with golden tests"
 
 - [ ] **Step 2: Implement prometheus PreTool guard**
 
-Port [`evaluate_prometheus_pre_tool`](hooks/lib/prometheus.sh) logic: allow only `.omg/**/*.md`.
+Port [`evaluate_prometheus_pre_tool`](hooks/lib/prometheus.sh) logic: allow only `.lazygrok/**/*.md`.
 
 - [ ] **Step 3: Implement hashline PreTool validate**
 
@@ -439,8 +439,8 @@ Full `grok inspect` port can follow in Task 8; initially read cached `all-skills
 export GROK_PLUGIN_ROOT="$(pwd)"
 bash hooks/test-prometheus.sh
 bash hooks/test-hashline.sh
-git add internal/cmd internal/prometheus internal/hashline internal/skillgate hooks/hooks.json cmd/omg-hook
-git commit -m "feat(go): pre-tool-use chain in omg-hook"
+git add internal/cmd internal/prometheus internal/hashline internal/skillgate hooks/hooks.json cmd/lazygrok-hook
+git commit -m "feat(go): pre-tool-use chain in lazygrok-hook"
 ```
 
 ---
@@ -483,7 +483,7 @@ Port `should_skip_todo_continuation` — second stop within 5s must not block.
 
 - [ ] **Step 2: Implement boulder read/write, plan progress, todo mirror**
 
-Paths: `.omg/boulder.json`, `.omg/todos/<session>.json`, `~/.grok/state/todo-enforcer/<session>/state.json`.
+Paths: `.lazygrok/boulder.json`, `.lazygrok/todos/<session>.json`, `~/.grok/state/todo-enforcer/<session>/state.json`.
 
 - [ ] **Step 3: `EvaluateTodoStop`, `EvaluateBoulderStop` return (block bool, message string)**
 
@@ -502,7 +502,7 @@ Stop order (must match [`hooks/lib/stop-chain.sh`](hooks/lib/stop-chain.sh)):
 2. if `!boulder.AutoContinuePaused()` → boulder → todo → lsp → stoppending
 3. EmitStopBlock or EmitStopAllow
 
-- [ ] **Step 1: Port ralph stop evaluator** (read `.omg/ralph-loop.local.md`)
+- [ ] **Step 1: Port ralph stop evaluator** (read `.lazygrok/ralph-loop.local.md`)
 
 - [ ] **Step 2: Port lsp `EvaluateStop`** from [`hooks/lib/lsp.sh`](hooks/lib/lsp.sh)
 
@@ -521,7 +521,7 @@ bash hooks/test-stop-verify.sh
 - [ ] **Step 5: Commit**
 
 ```bash
-git commit -m "feat(go): stop chain in omg-hook"
+git commit -m "feat(go): stop chain in lazygrok-hook"
 ```
 
 ---
@@ -599,9 +599,9 @@ git commit -m "chore(go): remove bash/python hook runtime"
 **Files:**
 - Create: `internal/config/flags.go`, `internal/cmd/session_start.go` doctor message
 
-- [ ] **Step 1: Centralize `OMG_*` parsing**
+- [ ] **Step 1: Centralize `LAZYGROK_*` parsing**
 
-- [ ] **Step 2: `session-start` prints warning if `bin/omg-hook-*` missing or not executable**
+- [ ] **Step 2: `session-start` prints warning if `bin/lazygrok-hook-*` missing or not executable**
 
 - [ ] **Step 3: Rebuild stripped binaries, document ~30MB total in CONTRIBUTING**
 

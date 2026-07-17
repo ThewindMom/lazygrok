@@ -68,7 +68,7 @@ tasks:
       - lefthook install
 
   build:hooks:
-    desc: Cross-compile bin/omg-hook-* (linux/darwin/windows)
+    desc: Cross-compile bin/lazygrok-hook-* (linux/darwin/windows)
     cmds:
       - bash scripts/build-hook.sh
 
@@ -98,9 +98,9 @@ tasks:
       - grok plugin install "{{.ROOT_DIR}}" --trust
 
   dev:update:
-    desc: Refresh installed oh-my-grok from registry or path
+    desc: Refresh installed lazygrok from registry or path
     cmds:
-      - grok plugin update oh-my-grok
+      - grok plugin update lazygrok
 
   dev:env:
     desc: Print exports for manual shells (eval "$(task dev:env --silent)")

@@ -19,7 +19,7 @@ Call `lsp` MCP tools through the tool interface; `lsp.*`/`mcp__lsp__*` are tool-
 
 ## Config
 
-Project config lives at `.omg/lsp-config.json`; user config lives at `~/.grok/lsp-config.json`.
+Project config lives at `.lazygrok/lsp-config.json`; user config lives at `~/.grok/lsp-config.json`.
 
 ```json
 {

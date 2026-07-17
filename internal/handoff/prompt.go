@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/skillgate"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/skillgate"
 )
 
 var handoffRE = regexp.MustCompile(`(?i)^/?handoff(?:\s|$)`)
@@ -26,9 +26,9 @@ Timestamp: ` + ts + `
 ## EXECUTE NOW
 
 PHASE 0: Validate there is meaningful context to hand off.
-PHASE 1: Gather todos, .omg/ state, git status/diff, AGENTS.md.
+PHASE 1: Gather todos, .lazygrok/ state, git status/diff, AGENTS.md.
 PHASE 2–3: Emit the HANDOFF CONTEXT block (verbatim user requests; max 10 key files).
-Save copy to .omg/handoffs/handoff-<timestamp>.md
+Save copy to .lazygrok/handoffs/handoff-<timestamp>.md
 PHASE 4: Tell the user how to paste into a **new Grok session**.
 
 Do not start unrelated work until the handoff is delivered.

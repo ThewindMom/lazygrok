@@ -27,7 +27,7 @@ rg -q 'WORKSPACE_AGENTS' "${tmpdir}/out.json" \
   || { echo "expected WORKSPACE_AGENTS in output"; cat "${tmpdir}/out.json"; exit 1; }
 rg -q 'Use rg not grep' "${tmpdir}/out.json" \
   || { echo "expected AGENTS.md body"; cat "${tmpdir}/out.json"; exit 1; }
-rg -q 'OMG_PLUGIN_RULE' "${tmpdir}/out.json" \
+rg -q 'LAZYGROK_PLUGIN_RULE' "${tmpdir}/out.json" \
   || { echo "expected plugin rules injection"; cat "${tmpdir}/out.json"; exit 1; }
 rg -q 'agent-skill-gate' "${tmpdir}/out.json" \
   || { echo "expected 00-agent-skill-gate rule"; cat "${tmpdir}/out.json"; exit 1; }

@@ -1,6 +1,6 @@
 # Intent Gate (Phase 0)
 
-Modeled on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) Sisyphus **Phase 0 — Intent Gate**. The `user-prompt.sh` hook may inject `<INTENT_GATE>` banners from keyword detection (`OMG_INTENT_GATE=0` disables).
+Modeled on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) Sisyphus **Phase 0 — Intent Gate**. The `user-prompt.sh` hook may inject `<INTENT_GATE>` banners from keyword detection (`LAZYGROK_INTENT_GATE=0` disables).
 
 ## Step 0: Verbalize intent (before acting)
 

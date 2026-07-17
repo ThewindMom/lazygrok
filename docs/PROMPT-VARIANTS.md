@@ -1,6 +1,6 @@
 # Prompt Variants
 
-oh-my-grok supports prompt variants for different model families. Each variant
+lazygrok supports prompt variants for different model families. Each variant
 adjusts the agent's communication style and delegation patterns to match the
 model's strengths.
 

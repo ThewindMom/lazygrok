@@ -29,7 +29,7 @@ Create a concise, durable handoff for context restoration.
 
 ## Format
 
-Write to `.omg/handoff.md`:
+Write to `.lazygrok/handoff.md`:
 
 ```markdown
 # Handoff

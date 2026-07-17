@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
 var (
@@ -156,7 +156,7 @@ func metaSkillPath() string {
 		return ""
 	}
 	for _, e := range entries {
-		if !e.IsDir() || !strings.HasPrefix(e.Name(), "oh-my-grok") {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "lazygrok") {
 			continue
 		}
 		p := filepath.Join(plugins, e.Name(), "skills", "agent-skill-gate", "SKILL.md")
@@ -346,7 +346,7 @@ func BuildSessionContextMessage(sessionID string, maxLines int) string {
 	if len(catalog) == 0 {
 		meta := metaSkillPath()
 		if meta == "" {
-			meta = "agent-skill-gate (oh-my-grok plugin)"
+			meta = "agent-skill-gate (lazygrok plugin)"
 		}
 		lines = append(lines, "Catalog empty — run `grok inspect` or Read "+meta)
 	} else {

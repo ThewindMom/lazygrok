@@ -1,6 +1,6 @@
 # Agent Catalog
 
-oh-my-grok provides 9 specialist agents, all discovered as real Grok plugin agents.
+lazygrok provides 9 specialist agents, all discovered as real Grok plugin agents.
 
 ## Coordinators (can spawn subagents)
 
@@ -24,7 +24,7 @@ oh-my-grok provides 9 specialist agents, all discovered as real Grok plugin agen
 ### Prometheus
 - **Role**: Strategic read-only planner
 - **Capabilities**: Read/search/research, plan-state tool
-- **Use**: Creating decision-complete plans under `.omg/plans/`
+- **Use**: Creating decision-complete plans under `.lazygrok/plans/`
 
 ### Metis
 - **Role**: Plan gap analyst

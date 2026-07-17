@@ -1,6 +1,6 @@
 ---
 name: teammode
-description: "Team orchestration: run a named team of cooperating Grok subagents with durable, script-managed state. MUST USE when the user asks Grok to create, run, coordinate, inspect, archive, or delete a team of subagents/sessions, or to work on something as a team in parallel. The main session is always the leader; members are defined by a concrete part, ownership area, or perspective - never a vague job role; a bundled cross-platform script writes the .omg/teams state plus an auto-generated member field manual. Use a team when the work is not perfectly isolated but parallelizing helps, or when a task still needs exploration under a clear goal; use plain subagents when scope is perfectly isolated or the goal is ambiguous. Triggers: team mode, teammode, make a team, run as a team, team of agents, coordinate subagents, parallel subagents, archive the team, delete the team."
+description: "Team orchestration: run a named team of cooperating Grok subagents with durable, script-managed state. MUST USE when the user asks Grok to create, run, coordinate, inspect, archive, or delete a team of subagents/sessions, or to work on something as a team in parallel. The main session is always the leader; members are defined by a concrete part, ownership area, or perspective - never a vague job role; a bundled cross-platform script writes the .lazygrok/teams state plus an auto-generated member field manual. Use a team when the work is not perfectly isolated but parallelizing helps, or when a task still needs exploration under a clear goal; use plain subagents when scope is perfectly isolated or the goal is ambiguous. Triggers: team mode, teammode, make a team, run as a team, team of agents, coordinate subagents, parallel subagents, archive the team, delete the team."
 ---
 
 # Teammode
@@ -81,7 +81,7 @@ node "<skill-root>/scripts/team.mjs" delete       --team <session_id> [--force]
 node "<skill-root>/scripts/team.mjs" status       --team <session_id>
 ```
 
-`init` creates `.omg/teams/{session_id}/` containing `team.json` (the single durable state file:
+`init` creates `.lazygrok/teams/{session_id}/` containing `team.json` (the single durable state file:
 team id, the main-session leader, the member roster, status, worktree config, and a lifecycle
 log), `guide.md` (the auto-generated member field manual), and `artifacts/` (a shared exchange
 space). `{session_id}` is the leader's Grok session id when you can pass it via `--session`;
@@ -138,7 +138,7 @@ current branch with a merge commit (never a squash or rebase); resolve any confl
 
 ## Run a ulw-plan in parallel
 
-When a decision-complete plan already exists at `.omg/plans/<slug>.md` (from ulw-plan), execute its
+When a decision-complete plan already exists at `.lazygrok/plans/<slug>.md` (from ulw-plan), execute its
 parallel waves as a team instead of one todo at a time. Map it directly:
 - one wave's independent todos -> one member each; the todo's scope/files become that member's `focus`,
   and its acceptance criteria + QA become the member's `deliverable`.
@@ -160,7 +160,7 @@ then delete the team state. A finished team that is never disbanded is a leak.
   tear down each member subagent with `kill_command_or_subagent(task_id="...")`, then `archive` flips
   the team and all members to archived. If a teardown tool is unavailable, record that in the team log
   and tell the user - never pretend a member was archived.
-- `delete` removes `.omg/teams/{session_id}` and refuses while the team is unarchived or any member
+- `delete` removes `.lazygrok/teams/{session_id}` and refuses while the team is unarchived or any member
   is still active unless `--force`.
 - When the work wraps up, land it the way the user asked: `integrate --team <id>` for a direct merge
   commit, or push each member branch and open a PR. Then `worktree-remove` each worktree, archive, and

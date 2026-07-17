@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/config"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/config"
+	"lazygrok/internal/hookenv"
 )
 
 var errorPattern = regexp.MustCompile(`(?m)^(?:error|warning|information|hint)\[[^\]\r\n]+\] \(\d+:\d+:`)
@@ -22,7 +22,7 @@ func StashPath(sessionID string) string {
 	return filepath.Join(hookenv.GrokHome(), "state", "lsp-diagnostics", sessionID+".json")
 }
 
-// EnforceEnabled reports whether LSP stop enforcement is on (OMG_LSP_ENFORCE, default on).
+// EnforceEnabled reports whether LSP stop enforcement is on (LAZYGROK_LSP_ENFORCE, default on).
 func EnforceEnabled() bool {
 	return config.LSPEnforceEnabled()
 }

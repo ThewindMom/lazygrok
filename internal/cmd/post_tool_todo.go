@@ -3,8 +3,8 @@ package cmd
 import (
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/boulder"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/boulder"
+	"lazygrok/internal/hookenv"
 	"github.com/spf13/cobra"
 )
 

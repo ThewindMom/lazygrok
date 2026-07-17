@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mihazs/oh-my-grok/internal/core/continuation"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/hookio"
+	"lazygrok/internal/core/continuation"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/hookio"
 	"github.com/spf13/cobra"
 )
 
-// stopContinuationCmd implements the `omg-hook stop-continuation` subcommand.
+// stopContinuationCmd implements the `lazygrok-hook stop-continuation` subcommand.
 // It writes the explicit stop marker and pauses any active continuation loop
 // by delegating to continuation.StopContinuation.
 func stopContinuationCmd() *cobra.Command {

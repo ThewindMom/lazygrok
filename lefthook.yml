@@ -6,4 +6,4 @@ min_version: 1.6.0
 pre-commit:
   commands:
     rebuild-hook-binaries:
-      run: bash scripts/build-hook.sh && git add bin/omg-hook-linux-amd64 bin/omg-hook-linux-arm64 bin/omg-hook-darwin-amd64 bin/omg-hook-darwin-arm64 bin/omg-hook-windows-amd64.exe
+      run: bash scripts/build-hook.sh && git add bin/lazygrok-hook-linux-amd64 bin/lazygrok-hook-linux-arm64 bin/lazygrok-hook-darwin-amd64 bin/lazygrok-hook-darwin-arm64 bin/lazygrok-hook-windows-amd64.exe

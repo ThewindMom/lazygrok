@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
 var hashRefRE = regexp.MustCompile(`([0-9]+)#([ZPMQVRWSNKTXJBYH]{2})`)

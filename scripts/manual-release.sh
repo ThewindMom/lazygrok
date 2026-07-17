@@ -24,13 +24,13 @@ NOTES_FILE="$(mktemp)"
 trap 'rm -f "$NOTES_FILE"' EXIT
 
 {
-  echo "# oh-my-grok $TAG"
+  echo "# lazygrok $TAG"
   echo
   echo "## Install"
   echo
   echo '```bash'
-  echo "grok plugin install github:mihazs/oh-my-grok@${TAG} --trust"
-  echo "grok plugin enable oh-my-grok"
+  echo "grok plugin install github:mihazs/lazygrok@${TAG} --trust"
+  echo "grok plugin enable lazygrok"
   echo '```'
   echo
   awk -v ver="$VERSION" '

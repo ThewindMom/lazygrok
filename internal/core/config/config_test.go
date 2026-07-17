@@ -65,9 +65,9 @@ func TestLoadDefaults(t *testing.T) {
 
 func TestLoadWorkspaceConfig(t *testing.T) {
 	ws := t.TempDir()
-	omgDir := filepath.Join(ws, ".omg")
-	os.MkdirAll(omgDir, 0o755)
-	os.WriteFile(filepath.Join(omgDir, "config.jsonc"), []byte(`{
+	lazygrokDir := filepath.Join(ws, ".lazygrok")
+	os.MkdirAll(lazygrokDir, 0o755)
+	os.WriteFile(filepath.Join(lazygrokDir, "config.jsonc"), []byte(`{
 		// workspace override
 		"hashlineMode": "strict",
 		"maxContinuations": 50,
@@ -87,7 +87,7 @@ func TestLoadWorkspaceConfig(t *testing.T) {
 
 func TestLoadUserConfig(t *testing.T) {
 	userHome := t.TempDir()
-	userCfgDir := filepath.Join(userHome, "oh-my-grok")
+	userCfgDir := filepath.Join(userHome, "lazygrok")
 	os.MkdirAll(userCfgDir, 0o755)
 	os.WriteFile(filepath.Join(userCfgDir, "config.jsonc"), []byte(`{
 		"maxContinuations": 10,
@@ -104,14 +104,14 @@ func TestLoadUserConfig(t *testing.T) {
 
 func TestWorkspaceOverridesUser(t *testing.T) {
 	userHome := t.TempDir()
-	userCfgDir := filepath.Join(userHome, "oh-my-grok")
+	userCfgDir := filepath.Join(userHome, "lazygrok")
 	os.MkdirAll(userCfgDir, 0o755)
 	os.WriteFile(filepath.Join(userCfgDir, "config.jsonc"), []byte(`{"maxContinuations": 10}`), 0o644)
 
 	ws := t.TempDir()
-	omgDir := filepath.Join(ws, ".omg")
-	os.MkdirAll(omgDir, 0o755)
-	os.WriteFile(filepath.Join(omgDir, "config.jsonc"), []byte(`{"maxContinuations": 99}`), 0o644)
+	lazygrokDir := filepath.Join(ws, ".lazygrok")
+	os.MkdirAll(lazygrokDir, 0o755)
+	os.WriteFile(filepath.Join(lazygrokDir, "config.jsonc"), []byte(`{"maxContinuations": 99}`), 0o644)
 
 	cfg, err := Load(ws, userHome)
 	if err != nil {
@@ -124,12 +124,12 @@ func TestWorkspaceOverridesUser(t *testing.T) {
 
 func TestEnvOverridesAll(t *testing.T) {
 	ws := t.TempDir()
-	omgDir := filepath.Join(ws, ".omg")
-	os.MkdirAll(omgDir, 0o755)
-	os.WriteFile(filepath.Join(omgDir, "config.jsonc"), []byte(`{"maxContinuations": 50}`), 0o644)
+	lazygrokDir := filepath.Join(ws, ".lazygrok")
+	os.MkdirAll(lazygrokDir, 0o755)
+	os.WriteFile(filepath.Join(lazygrokDir, "config.jsonc"), []byte(`{"maxContinuations": 50}`), 0o644)
 
-	os.Setenv("OMG_MAX_CONTINUATIONS", "5")
-	defer os.Unsetenv("OMG_MAX_CONTINUATIONS")
+	os.Setenv("LAZYGROK_MAX_CONTINUATIONS", "5")
+	defer os.Unsetenv("LAZYGROK_MAX_CONTINUATIONS")
 
 	cfg, err := Load(ws, t.TempDir())
 	if err != nil {
@@ -142,9 +142,9 @@ func TestEnvOverridesAll(t *testing.T) {
 
 func TestUnknownKeys(t *testing.T) {
 	ws := t.TempDir()
-	omgDir := filepath.Join(ws, ".omg")
-	os.MkdirAll(omgDir, 0o755)
-	os.WriteFile(filepath.Join(omgDir, "config.jsonc"), []byte(`{
+	lazygrokDir := filepath.Join(ws, ".lazygrok")
+	os.MkdirAll(lazygrokDir, 0o755)
+	os.WriteFile(filepath.Join(lazygrokDir, "config.jsonc"), []byte(`{
 		"hashlineMode": "off",
 		"bogusKey": true,
 		"anotherUnknown": "value",
@@ -165,9 +165,9 @@ func TestUnknownKeys(t *testing.T) {
 
 func TestJSONCComments(t *testing.T) {
 	ws := t.TempDir()
-	omgDir := filepath.Join(ws, ".omg")
-	os.MkdirAll(omgDir, 0o755)
-	os.WriteFile(filepath.Join(omgDir, "config.jsonc"), []byte(`{
+	lazygrokDir := filepath.Join(ws, ".lazygrok")
+	os.MkdirAll(lazygrokDir, 0o755)
+	os.WriteFile(filepath.Join(lazygrokDir, "config.jsonc"), []byte(`{
 		// line comment
 		"hashlineMode": "off", /* block comment */
 		"maxContinuations": 7,
@@ -187,9 +187,9 @@ func TestJSONCComments(t *testing.T) {
 
 func TestTrailingComma(t *testing.T) {
 	ws := t.TempDir()
-	omgDir := filepath.Join(ws, ".omg")
-	os.MkdirAll(omgDir, 0o755)
-	os.WriteFile(filepath.Join(omgDir, "config.jsonc"), []byte(`{
+	lazygrokDir := filepath.Join(ws, ".lazygrok")
+	os.MkdirAll(lazygrokDir, 0o755)
+	os.WriteFile(filepath.Join(lazygrokDir, "config.jsonc"), []byte(`{
 		"hashlineMode": "strict",
 		"maxContinuations": 3,
 	}`), 0o644)
@@ -205,9 +205,9 @@ func TestTrailingComma(t *testing.T) {
 
 func TestInvalidValue(t *testing.T) {
 	ws := t.TempDir()
-	omgDir := filepath.Join(ws, ".omg")
-	os.MkdirAll(omgDir, 0o755)
-	os.WriteFile(filepath.Join(omgDir, "config.jsonc"), []byte(`{"hashlineMode": "bogus"}`), 0o644)
+	lazygrokDir := filepath.Join(ws, ".lazygrok")
+	os.MkdirAll(lazygrokDir, 0o755)
+	os.WriteFile(filepath.Join(lazygrokDir, "config.jsonc"), []byte(`{"hashlineMode": "bogus"}`), 0o644)
 
 	cfg, err := Load(ws, t.TempDir())
 	if err != nil {
@@ -229,14 +229,14 @@ func TestMissingFile(t *testing.T) {
 }
 
 func TestDeprecatedEnvCompat(t *testing.T) {
-	os.Setenv("OMG_HASHLINE", "off")
-	defer os.Unsetenv("OMG_HASHLINE")
+	os.Setenv("LAZYGROK_HASHLINE", "off")
+	defer os.Unsetenv("LAZYGROK_HASHLINE")
 
 	cfg, err := Load(t.TempDir(), t.TempDir())
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 	if cfg.HashlineMode != HashlineOff {
-		t.Errorf("OMG_HASHLINE=off should set mode to off: got %q", cfg.HashlineMode)
+		t.Errorf("LAZYGROK_HASHLINE=off should set mode to off: got %q", cfg.HashlineMode)
 	}
 }

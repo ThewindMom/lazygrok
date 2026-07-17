@@ -8,9 +8,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/agents"
-	"github.com/mihazs/oh-my-grok/internal/core/config"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/agents"
+	"lazygrok/internal/core/config"
+	"lazygrok/internal/hookenv"
 	"github.com/spf13/cobra"
 )
 
@@ -116,7 +116,7 @@ func runDoctor() error {
 	if entries, err := os.ReadDir(binDir); err == nil {
 		binaries := []string{}
 		for _, e := range entries {
-			if !e.IsDir() && (strings.HasPrefix(e.Name(), "omg-hook-") || strings.HasPrefix(e.Name(), "omg-mcp-")) {
+			if !e.IsDir() && (strings.HasPrefix(e.Name(), "lazygrok-hook-") || strings.HasPrefix(e.Name(), "lazygrok-mcp-")) {
 				binaries = append(binaries, e.Name())
 			}
 		}

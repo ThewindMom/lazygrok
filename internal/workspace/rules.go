@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
 func maxBytes(name string, fallback int) int {
@@ -94,7 +94,7 @@ func Collect(workspace string) string {
 					continue
 				}
 				tag := fmtPluginRule(name, trunc)
-				block := tag + "\n" + body + "\n</OMG_PLUGIN_RULE>"
+				block := tag + "\n" + body + "\n</LAZYGROK_PLUGIN_RULE>"
 				parts = append(parts, block)
 				used += len(block)
 			}
@@ -116,9 +116,9 @@ func fmtWorkspaceAgents(rel string, trunc bool) string {
 
 func fmtPluginRule(name string, trunc bool) string {
 	if trunc {
-		return `<OMG_PLUGIN_RULE file="rules/` + name + `" truncated="true">`
+		return `<LAZYGROK_PLUGIN_RULE file="rules/` + name + `" truncated="true">`
 	}
-	return `<OMG_PLUGIN_RULE file="rules/` + name + `">`
+	return `<LAZYGROK_PLUGIN_RULE file="rules/` + name + `">`
 }
 
 func min(a, b int) int {

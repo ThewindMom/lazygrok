@@ -2,7 +2,7 @@ __pycache__/
 *.pyc
 .DS_Store
 *.bak
-.omg/
+.lazygrok/
 
 # Go module vendor (never at repo root — conflicts with MCP vendor/)
 vendor/github.com/

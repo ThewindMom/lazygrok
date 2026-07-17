@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
 func TestMatchUnloadedSkills(t *testing.T) {

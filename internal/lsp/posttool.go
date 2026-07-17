@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
 var (
@@ -137,7 +137,7 @@ func toolsModule() string {
 }
 
 func runDiagnostics(absPath string) (string, error) {
-	if mock := os.Getenv("OMG_LSP_MOCK_DIAG"); mock != "" {
+	if mock := os.Getenv("LAZYGROK_LSP_MOCK_DIAG"); mock != "" {
 		return mock, nil
 	}
 	mod := toolsModule()

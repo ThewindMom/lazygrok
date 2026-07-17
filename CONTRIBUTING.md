@@ -1,18 +1,18 @@
 # Contributing
 
-Thank you for helping improve oh-my-grok.
+Thank you for helping improve lazygrok.
 
 ## Relationship to oh-my-openagent
 
 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) (omo) is the upstream inspiration for Ralph loops, boulder/todos, handoff, and skill-gate patterns.
 
-**oh-my-grok complements omo — it does not replace it.**
+**lazygrok complements omo — it does not replace it.**
 
-| | oh-my-grok | oh-my-openagent |
+| | lazygrok | oh-my-openagent |
 |--|------------|-----------------|
 | Harness | Grok Build CLI | OpenCode, Codex, multi-harness |
-| Workspace state | `.omg/` | `.omo/` |
-| Install | `grok plugin install github:mihazs/oh-my-grok` | npm / bun installers |
+| Workspace state | `.lazygrok/` | `.omo/` |
+| Install | `grok plugin install github:mihazs/lazygrok` | npm / bun installers |
 
 When porting behavior from omo, adapt paths and hooks for Grok’s plugin model. Do not copy OpenCode-specific assumptions into this repo.
 
@@ -57,7 +57,7 @@ for t in hooks/test-*.sh; do
 done
 ```
 
-Committed `bin/omg-hook-*` total ~30MB across five platforms (linux/darwin amd64+arm64, windows amd64).
+Committed `bin/lazygrok-hook-*` total ~30MB across five platforms (linux/darwin amd64+arm64, windows amd64).
 
 4. Optional: `grok plugin validate .` (requires Grok CLI; not run in CI).
 5. Use the PR template checklist.
@@ -78,7 +78,7 @@ Do **not** bump `plugin.json` version on feature PRs — release-please updates 
 
 The script tags `HEAD`, pushes the tag, and creates/updates the GitHub Release from the CHANGELOG section.
 
-Current release: [v0.1.0](https://github.com/mihazs/oh-my-grok/releases/tag/v0.1.0).
+Current release: [v0.1.0](https://github.com/mihazs/lazygrok/releases/tag/v0.1.0).
 
 See [README.md](README.md).
 
@@ -87,10 +87,10 @@ See [README.md](README.md).
 GitHub description and topics are not stored in git. After major positioning changes, update via:
 
 ```bash
-gh repo edit mihazs/oh-my-grok \
-  --description "oh-my-grok: Essential productivity plugin for Grok Build CLI — skill gate, Ralph & Ultrawork loops, todo/boulder continuation, handoff, unified Stop chain (oh-my-openagent inspired)" \
-  --homepage "https://github.com/mihazs/oh-my-grok"
-# Topics: grok-build grok-plugin oh-my-grok grok-cli ralph-loop agentic-workflow ai-coding productivity multi-agent xai
+gh repo edit mihazs/lazygrok \
+  --description "lazygrok: Essential productivity plugin for Grok Build CLI — skill gate, Ralph & Ultrawork loops, todo/boulder continuation, handoff, unified Stop chain (oh-my-openagent inspired)" \
+  --homepage "https://github.com/mihazs/lazygrok"
+# Topics: grok-build grok-plugin lazygrok grok-cli ralph-loop agentic-workflow ai-coding productivity multi-agent xai
 ```
 
 ## Agent contributors

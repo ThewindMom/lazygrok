@@ -1,12 +1,12 @@
 # Configuration Reference
 
-oh-my-grok uses typed JSONC configuration with documented precedence.
+lazygrok uses typed JSONC configuration with documented precedence.
 
 ## Precedence (highest first)
 
-1. **Environment overrides** (`OMG_*` variables)
-2. **Workspace config**: `.omg/config.jsonc` in the workspace root
-3. **User config**: `~/.grok/oh-my-grok/config.jsonc` (or `$GROK_HOME/oh-my-grok/config.jsonc`)
+1. **Environment overrides** (`LAZYGROK_*` variables)
+2. **Workspace config**: `.lazygrok/config.jsonc` in the workspace root
+3. **User config**: `~/.grok/lazygrok/config.jsonc` (or `$GROK_HOME/lazygrok/config.jsonc`)
 4. **Built-in defaults**
 
 ## File format
@@ -70,14 +70,14 @@ Configuration files use JSONC (JSON with comments and trailing commas):
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OMG_HASHLINE` | Hashline mode (`off`, `prefer`, `strict`) | `prefer` |
-| `OMG_INTENT_GATE` | Enable intent gate | `true` |
-| `OMG_LSP_ENFORCE` | Enable LSP stop enforcement | `false` |
-| `OMG_MAX_CONTINUATIONS` | Max continuation iterations | `25` |
-| `OMG_COOLDOWN_SECONDS` | Continuation cooldown | `10` |
-| `OMG_RALPH` | Enable Ralph loop | `true` |
-| `OMG_ULTRAWORK` | Enable Ultrawork | `true` |
-| `OMG_CONTINUATION` | Enable continuation | `true` |
+| `LAZYGROK_HASHLINE` | Hashline mode (`off`, `prefer`, `strict`) | `prefer` |
+| `LAZYGROK_INTENT_GATE` | Enable intent gate | `true` |
+| `LAZYGROK_LSP_ENFORCE` | Enable LSP stop enforcement | `false` |
+| `LAZYGROK_MAX_CONTINUATIONS` | Max continuation iterations | `25` |
+| `LAZYGROK_COOLDOWN_SECONDS` | Continuation cooldown | `10` |
+| `LAZYGROK_RALPH` | Enable Ralph loop | `true` |
+| `LAZYGROK_ULTRAWORK` | Enable Ultrawork | `true` |
+| `LAZYGROK_CONTINUATION` | Enable continuation | `true` |
 
 ## Unknown keys
 
@@ -85,4 +85,4 @@ Unknown configuration keys produce diagnostics rather than silently changing beh
 
 ## Invalid values
 
-Invalid values fail validation with a precise message. Use `omg-hook doctor` to check configuration validity.
+Invalid values fail validation with a precise message. Use `lazygrok-hook doctor` to check configuration validity.

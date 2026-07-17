@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
 const (
@@ -15,7 +15,7 @@ const (
 	continuationCooldownMs   = 5000
 	maxConsecutiveFailures   = 5
 	abortWindowMs            = 3000
-	todoMirrorDir            = ".omg/todos"
+	todoMirrorDir            = ".lazygrok/todos"
 )
 
 var incompleteStatuses = map[string]struct{}{
@@ -182,7 +182,7 @@ func recordTodoContinuationFire(sessionID string) {
 	writeEnforcerState(sessionID, state)
 }
 
-// MirrorTodos writes .omg/todos/<session>.json.
+// MirrorTodos writes .lazygrok/todos/<session>.json.
 func MirrorTodos(workspace, sessionID string, todos []map[string]any) {
 	if workspace == "" {
 		return

@@ -59,10 +59,10 @@ When exploration is exhausted and the unknowns are answered, record the gate in 
 Fan out read-only research before deciding. Every spawn names DELIVERABLE / SCOPE / VERIFY inside the prompt, states the role inside the prompt (and passes `subagent_type` as a routing hint - do not assume it alone selected a role), and starts the child with only the prompt unless full parent history is truly required:
 
 ```
-spawn_subagent(subagent_type="oh-my-grok:explore", background=true, prompt="TASK: act as an explorer. DELIVERABLE: ... SCOPE: ... VERIFY: ...")
+spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: act as an explorer. DELIVERABLE: ... SCOPE: ... VERIFY: ...")
 ```
 
-Roles: `oh-my-grok:explore` (internal patterns/conventions/tests), `oh-my-grok:librarian` (external docs/contracts), `oh-my-grok:metis` (gap analysis), `oh-my-grok:momus` (high-accuracy plan review). Full spawn/wait/fallback discipline is in `references/full-workflow.md`.
+Roles: `lazygrok:explore` (internal patterns/conventions/tests), `lazygrok:librarian` (external docs/contracts), `lazygrok:metis` (gap analysis), `lazygrok:momus` (high-accuracy plan review). Full spawn/wait/fallback discipline is in `references/full-workflow.md`.
 
 ## Stop rules
 

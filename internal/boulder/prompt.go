@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/ralph"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/ralph"
 )
 
 var (
@@ -81,7 +81,7 @@ func ClearContinuationStopped(workspace, sessionID string) {
 	_ = os.WriteFile(mp, append(out, '\n'), 0o644)
 }
 
-// ClearBoulder removes .omg/boulder.json in workspace.
+// ClearBoulder removes .lazygrok/boulder.json in workspace.
 func ClearBoulder(workspace string) {
 	if workspace == "" {
 		return

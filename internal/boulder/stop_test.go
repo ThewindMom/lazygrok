@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mihazs/oh-my-grok/internal/boulder"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/boulder"
+	"lazygrok/internal/hookenv"
 )
 
 func TestShouldSkipTodoContinuationCooldown(t *testing.T) {

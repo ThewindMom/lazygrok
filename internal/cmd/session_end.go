@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"github.com/mihazs/oh-my-grok/internal/boulder"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/lsp"
-	"github.com/mihazs/oh-my-grok/internal/skillgate"
-	"github.com/mihazs/oh-my-grok/internal/usingpowers"
+	"lazygrok/internal/boulder"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/lsp"
+	"lazygrok/internal/skillgate"
+	"lazygrok/internal/usingpowers"
 	"github.com/spf13/cobra"
 )
 

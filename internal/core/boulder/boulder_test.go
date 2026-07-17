@@ -7,7 +7,7 @@ import (
 func TestCreateWork(t *testing.T) {
 	ws := t.TempDir()
 	bs, _ := Load(ws)
-	wr := bs.CreateWork("test objective", ".omg/plans/test.md", "session1")
+	wr := bs.CreateWork("test objective", ".lazygrok/plans/test.md", "session1")
 
 	if wr.ID == "" {
 		t.Error("work ID should not be empty")
@@ -204,7 +204,7 @@ func TestTaskDependencies(t *testing.T) {
 func TestFormatSummary(t *testing.T) {
 	ws := t.TempDir()
 	bs, _ := Load(ws)
-	wr := bs.CreateWork("test objective", ".omg/plans/test.md", "session1")
+	wr := bs.CreateWork("test objective", ".lazygrok/plans/test.md", "session1")
 	wr.AddTask("t1", "task 1", nil)
 	wr.UpdateTaskStatus("t1", TaskComplete)
 

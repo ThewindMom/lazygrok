@@ -1,5 +1,5 @@
 // Package state provides atomic, versioned, file-locked persistence for
-// oh-my-grok state files. It supports schema migrations, corruption recovery,
+// lazygrok state files. It supports schema migrations, corruption recovery,
 // and session/workspace scoping.
 //
 // State files are JSON with a schemaVersion field. Writes are atomic:
@@ -57,7 +57,7 @@ func Write(path string, data []byte) error {
 		return fmt.Errorf("create dir: %w", err)
 	}
 
-	tmp, err := os.CreateTemp(dir, ".omg-tmp-*")
+	tmp, err := os.CreateTemp(dir, ".lazygrok-tmp-*")
 	if err != nil {
 		return fmt.Errorf("create temp: %w", err)
 	}

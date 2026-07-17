@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/config"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/config"
+	"lazygrok/internal/hookenv"
 )
 
 // PlanModeActive reports whether Prometheus plan mode is enabled.
@@ -40,10 +40,10 @@ func DenyIfPlanMode(ev hookenv.Event) string {
 		return ""
 	}
 	rel := normalizeRelPath(path, ev.WorkspaceRoot)
-	if strings.HasPrefix(rel, ".omg/") && strings.HasSuffix(rel, ".md") {
+	if strings.HasPrefix(rel, ".lazygrok/") && strings.HasSuffix(rel, ".md") {
 		return ""
 	}
-	return "Prometheus plan mode: only .omg/**/*.md writes allowed; blocked: " + path
+	return "Prometheus plan mode: only .lazygrok/**/*.md writes allowed; blocked: " + path
 }
 
 func pickPath(block map[string]any) string {

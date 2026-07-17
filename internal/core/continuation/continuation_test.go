@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mihazs/oh-my-grok/internal/core/config"
+	"lazygrok/internal/core/config"
 )
 
 func TestStartAndEvaluateLoop(t *testing.T) {
@@ -258,7 +258,7 @@ func TestStateFileAtomic(t *testing.T) {
 	StartLoop(ws, "ralph", "test", "DONE", "session1", cfg)
 
 	// Verify state file exists and is valid JSON
-	path := filepath.Join(ws, ".omg", "continuation.json")
+	path := filepath.Join(ws, ".lazygrok", "continuation.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("state file should exist: %v", err)

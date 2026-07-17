@@ -23,11 +23,11 @@ date -u +"%Y-%m-%dT%H:%M:%SZ" > "${GROK_HOME:-$HOME/.grok}/state/stop-continuati
 
 ## Step 2: Pause the continuation loop
 
-If `.omg/continuation.json` exists in the workspace root, update it to
+If `.lazygrok/continuation.json` exists in the workspace root, update it to
 set `paused: true` and `pauseReason: "explicit stop by user"`:
 
 ```bash
-if [ -f ".omg/continuation.json" ]; then
+if [ -f ".lazygrok/continuation.json" ]; then
   # Use a tool edit or write the file with paused: true
 fi
 ```

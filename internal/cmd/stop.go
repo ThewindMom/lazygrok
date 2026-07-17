@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mihazs/oh-my-grok/internal/boulder"
-	coreboulder "github.com/mihazs/oh-my-grok/internal/core/boulder"
-	"github.com/mihazs/oh-my-grok/internal/core/config"
-	"github.com/mihazs/oh-my-grok/internal/core/continuation"
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
-	"github.com/mihazs/oh-my-grok/internal/hookio"
-	"github.com/mihazs/oh-my-grok/internal/lsp"
-	"github.com/mihazs/oh-my-grok/internal/ralph"
-	"github.com/mihazs/oh-my-grok/internal/stoppending"
+	"lazygrok/internal/boulder"
+	coreboulder "lazygrok/internal/core/boulder"
+	"lazygrok/internal/core/config"
+	"lazygrok/internal/core/continuation"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/hookio"
+	"lazygrok/internal/lsp"
+	"lazygrok/internal/ralph"
+	"lazygrok/internal/stoppending"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +40,7 @@ func stopCmd() *cobra.Command {
 					os.Exit(0)
 				}
 			} else {
-				fmt.Fprintf(os.Stderr, "omg-hook: config load failed: %v\n", err)
+				fmt.Fprintf(os.Stderr, "lazygrok-hook: config load failed: %v\n", err)
 			}
 
 			// 2. core/boulder: active work record with incomplete tasks

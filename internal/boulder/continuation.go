@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
-const continuationMarkerDir = ".omg/run-continuation"
+const continuationMarkerDir = ".lazygrok/run-continuation"
 
 // AutoContinuePaused reports whether /stop-continuation paused auto-continue.
 func AutoContinuePaused(workspace, sessionID string) bool {

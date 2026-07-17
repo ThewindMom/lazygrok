@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Port IntentGate, Hash-Anchored edits, AST-Grep MCP, Todo Enforcer hardening, Prometheus planner (with subagents), and LSP integration from oh-my-openagent into oh-my-grok as Grok-native hooks, skills, bundled MCP, and plugin agents.
+**Goal:** Port IntentGate, Hash-Anchored edits, AST-Grep MCP, Todo Enforcer hardening, Prometheus planner (with subagents), and LSP integration from oh-my-openagent into lazygrok as Grok-native hooks, skills, bundled MCP, and plugin agents.
 
-**Architecture:** Extend the existing merged `user-prompt.sh` / unified `pre-tool-mutate.sh` / `stop-chain.sh` patterns; persist session state under `~/.grok/state/` and workspace state under `.omg/`; bundle MCP servers in `vendor/` + `.mcp.json`. Grok cannot replace the Edit tool or inject PostToolUse context—hashline and LSP use cache + next-prompt/Stop injection instead.
+**Architecture:** Extend the existing merged `user-prompt.sh` / unified `pre-tool-mutate.sh` / `stop-chain.sh` patterns; persist session state under `~/.grok/state/` and workspace state under `.lazygrok/`; bundle MCP servers in `vendor/` + `.mcp.json`. Grok cannot replace the Edit tool or inject PostToolUse context—hashline and LSP use cache + next-prompt/Stop injection instead.
 
 **Tech Stack:** Bash (`set -euo pipefail`), Python 3 (`omo_state.py`, `hashline.py`), Node MCP runtimes (vendored from omo), Grok plugin hooks/skills/rules/agents.
 
@@ -48,7 +48,7 @@
 | `hooks/test-prometheus.sh` | Plan mode + boulder |
 | `hooks/test-hashline.sh` | Hash compute + deny stale |
 | `hooks/test-lsp.sh` | Diagnostics stash + stop |
-| `docs/configuration.md` | `OMG_*` env flags |
+| `docs/configuration.md` | `LAZYGROK_*` env flags |
 
 ---
 
@@ -95,7 +95,7 @@ echo "intent-gate: OK"
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /home/mihazs/Dev/oh-my-grok
+cd /home/mihazs/Dev/lazygrok
 export GROK_PLUGIN_ROOT="$(pwd)"
 bash hooks/test-intent-gate.sh
 ```
@@ -109,7 +109,7 @@ Expected: FAIL (`intent-gate.sh` missing or no `INTENT_GATE` in output)
 # IntentGate keyword detector (omo keyword-detector port for Grok UserPromptSubmit).
 
 intent_gate_disabled() {
-  case "${OMG_INTENT_GATE:-1}" in
+  case "${LAZYGROK_INTENT_GATE:-1}" in
     0|false|no|off) return 0 ;;
     *) return 1 ;;
   esac
@@ -372,14 +372,14 @@ export GROK_SESSION_ID="test-prom-$$"
 tmpdir="$(mktemp -d)"
 export GROK_WORKSPACE_ROOT="$tmpdir"
 trap 'rm -rf "$tmpdir"' EXIT
-mkdir -p "$tmpdir/.omg/plans"
+mkdir -p "$tmpdir/.lazygrok/plans"
 
 printf '%s\n' '{"hookEventName":"UserPromptSubmit","prompt":"/plan add OAuth"}' \
   | GROK_HOOK_EVENT=user_prompt_submit bash "${HOOKS_DIR}/run-hook.sh" user-prompt.sh >"${tmpdir}/plan.json"
 rg -q 'PROMETHEUS_PLAN_MODE' "${tmpdir}/plan.json" || { cat "${tmpdir}/plan.json"; exit 1; }
 
-# Deny write outside .omg during plan mode
-export OMG_PLAN_MODE=1
+# Deny write outside .lazygrok during plan mode
+export LAZYGROK_PLAN_MODE=1
 printf '%s\n' '{"hookEventName":"PreToolUse","toolName":"Write","toolInput":{"path":"src/foo.ts","contents":"x"}}' \
   | GROK_HOOK_EVENT=pre_tool_use bash "${HOOKS_DIR}/run-hook.sh" pre-tool-mutate.sh >"${tmpdir}/deny.json" || true
 rg -q '"decision":"deny"' "${tmpdir}/deny.json" || { cat "${tmpdir}/deny.json"; exit 1; }
@@ -420,8 +420,8 @@ collect_user_prompt_prometheus() {
     prometheus_plan_mode_on
     cat <<'EOF'
 <PROMETHEUS_PLAN_MODE>
-You are in planning mode. ONLY create or edit files under `.omg/` (plans, drafts).
-Interview the user, then Task(metis-consultant) for gaps, write plan to `.omg/plans/<name>.md`, optional Task(momus-reviewer).
+You are in planning mode. ONLY create or edit files under `.lazygrok/` (plans, drafts).
+Interview the user, then Task(metis-consultant) for gaps, write plan to `.lazygrok/plans/<name>.md`, optional Task(momus-reviewer).
 Implementation starts only after `/start-work <plan-file>`.
 </PROMETHEUS_PLAN_MODE>
 EOF
@@ -438,7 +438,7 @@ EOF
 }
 
 prometheus_handle_start_work() {
-  # Parse plan path from prompt; write .omg/boulder.json via python inline (reuse BOULDER schema)
+  # Parse plan path from prompt; write .lazygrok/boulder.json via python inline (reuse BOULDER schema)
   prometheus_plan_mode_off
   printf '%s\n' '<PROMETHEUS_PLAN_MODE>Start-work: boulder.json activated. Execute the plan.</PROMETHEUS_PLAN_MODE>'
 }
@@ -461,9 +461,9 @@ if not path:
 rel = path
 if workspace and path.startswith(workspace):
     rel = path[len(workspace):].lstrip("/")
-if rel.startswith(".omg/") and rel.endswith(".md"):
+if rel.startswith(".lazygrok/") and rel.endswith(".md"):
     raise SystemExit(0)
-print(f"Prometheus plan mode: only .omg/**/*.md writes allowed; blocked: {path}")
+print(f"Prometheus plan mode: only .lazygrok/**/*.md writes allowed; blocked: {path}")
 raise SystemExit(2)
 PY
 }
@@ -479,7 +479,7 @@ Body: 5-step workflow from omo `packages/prompts-core/prompts/prometheus/default
 
 - [ ] **Step 4: Create agents**
 
-`agents/prometheus-planner.md` — copy structure from `~/.grok/bundled/agents/plan.md`; `permission_mode: plan`; prompt: read-only, `.omg` only.
+`agents/prometheus-planner.md` — copy structure from `~/.grok/bundled/agents/plan.md`; `permission_mode: plan`; prompt: read-only, `.lazygrok` only.
 
 `agents/metis-consultant.md` — gap analysis, returns questions list.
 
@@ -579,7 +579,7 @@ git commit -m "feat(mcp): bundle ast-grep and lsp-tools MCP servers"
 Use mock runner in test:
 
 ```bash
-export OMG_LSP_MOCK_DIAG='error[typescript] (1) at 1:1: syntax error'
+export LAZYGROK_LSP_MOCK_DIAG='error[typescript] (1) at 1:1: syntax error'
 ```
 
 - [ ] **Step 2: Implement `hooks/lib/lsp.sh`**
@@ -587,7 +587,7 @@ export OMG_LSP_MOCK_DIAG='error[typescript] (1) at 1:1: syntax error'
 - `lsp_stash_path()` → `$GROK_HOME/state/lsp-diagnostics/$session.json`
 - `lsp_run_diagnostics(file)` → call `node "$GROK_PLUGIN_ROOT/vendor/lsp-tools-mcp/dist/cli.js" diagnostics "$file"` or mock env
 - `collect_lsp_context()` → read stash, emit `<LSP_DIAGNOSTICS>...</LSP_DIAGNOSTICS>`
-- `evaluate_lsp_stop(stdin)` → if errors remain and `OMG_LSP_ENFORCE!=0`, print block reason
+- `evaluate_lsp_stop(stdin)` → if errors remain and `LAZYGROK_LSP_ENFORCE!=0`, print block reason
 
 - [ ] **Step 3: `hooks/post-tool-lsp.sh`**
 
@@ -687,7 +687,7 @@ git commit -m "feat(hashline): port line hash computation from hashline-core"
 
 - [ ] **Step 1: Extend `post-tool-read.sh`**
 
-After skill marking, if `OMG_HASHLINE!=0` and path is under workspace and not `SKILL.md`, read file from disk, build `{line: hash}` map, write to `$GROK_HOME/state/hashline/$session/$(sha256 path).json`.
+After skill marking, if `LAZYGROK_HASHLINE!=0` and path is under workspace and not `SKILL.md`, read file from disk, build `{line: hash}` map, write to `$GROK_HOME/state/hashline/$session/$(sha256 path).json`.
 
 - [ ] **Step 2: `hooks/lib/hashline.sh`**
 
@@ -706,7 +706,7 @@ Order: prometheus deny → hashline validate → skill-gate.
 
 - [ ] **Step 5: Skill + docs**
 
-`skills/hashline-edit/SKILL.md`; `docs/configuration.md` entries: `OMG_HASHLINE`, `OMG_INTENT_GATE`, `OMG_LSP_ENFORCE`.
+`skills/hashline-edit/SKILL.md`; `docs/configuration.md` entries: `LAZYGROK_HASHLINE`, `LAZYGROK_INTENT_GATE`, `LAZYGROK_LSP_ENFORCE`.
 
 - [ ] **Step 6: Full smoke suite**
 
@@ -745,7 +745,7 @@ Add PostToolUse: post-tool-lsp.
 
 - [ ] **Step 2: Update `ROADMAP.md`** — move shipped items from Mid term.
 
-- [ ] **Step 3: Update `README.md` feature table** — link to `docs/configuration.md` for `OMG_*` flags.
+- [ ] **Step 3: Update `README.md` feature table** — link to `docs/configuration.md` for `LAZYGROK_*` flags.
 
 - [ ] **Step 4: Update `AGENTS.md` decision table** — new libs and test scripts.
 

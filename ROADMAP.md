@@ -1,18 +1,18 @@
 # Roadmap
 
-oh-my-grok targets **Grok Build CLI** only. It **complements** [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) (OpenCode / Codex / multi-harness) — do not treat this repo as a fork or replacement.
+lazygrok targets **Grok Build CLI** only. It **complements** [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) (OpenCode / Codex / multi-harness) — do not treat this repo as a fork or replacement.
 
 ## Shipped
 
 - Plugin-only install (hooks, skills, rules, bundled MCP)
 - Skill gate, Ralph / ultrawork loops, todo + boulder continuation, handoff
-- **IntentGate** — keyword modes on UserPromptSubmit (`OMG_INTENT_GATE`)
-- **Hashline** — read cache + PreToolUse stale `LINE#ID` guard (`OMG_HASHLINE`)
+- **IntentGate** — keyword modes on UserPromptSubmit (`LAZYGROK_INTENT_GATE`)
+- **Hashline** — read cache + PreToolUse stale `LINE#ID` guard (`LAZYGROK_HASHLINE`)
 - **Prometheus** — `/plan`, plan-mode md-only guard, `/start-work` boulder bootstrap
-- **LSP** — post-edit diagnostics stash + Stop enforcement (`OMG_LSP_ENFORCE`)
+- **LSP** — post-edit diagnostics stash + Stop enforcement (`LAZYGROK_LSP_ENFORCE`)
 - **ast-grep MCP** — vendored `vendor/ast-grep-mcp` (structural search skill)
 - **Todo enforcer** — 5s continuation cooldown + 3s abort window on Stop
-- `.omg/` workspace state (parallel to omo `.omo/`)
+- `.lazygrok/` workspace state (parallel to omo `.omo/`)
 - Merged `UserPromptSubmit`, unified Stop chain
 - CI hook smoke tests + release-please
 

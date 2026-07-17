@@ -19,7 +19,7 @@ Create a handoff document for session continuity.
 
 ## Write handoff
 
-Write the handoff to `.omg/handoff.md` with the following structure:
+Write the handoff to `.lazygrok/handoff.md` with the following structure:
 
 ```markdown
 # Handoff

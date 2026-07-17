@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mihazs/oh-my-grok/internal/hookenv"
+	"lazygrok/internal/hookenv"
 )
 
 const todoContinuationPrompt = `[TODO CONTINUATION]
@@ -23,7 +23,7 @@ You have an active work plan with incomplete tasks. Continue working.
 RULES:
 - FIRST: Read the plan file NOW. If the last completed task is still unchecked, mark it ` + "`- [x]`" + ` IMMEDIATELY before anything else
 - Proceed without asking for permission
-- Use the notepad at .omg/notepads/{plan_name}/ to record learnings
+- Use the notepad at .lazygrok/notepads/{plan_name}/ to record learnings
 - Do not stop until all tasks are complete
 - If a task is blocked, edit the plan and change that checkbox from ` + "`- [ ]`" + ` to ` + "`- [~]`" + ` via a real file edit`
 

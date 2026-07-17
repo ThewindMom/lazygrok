@@ -3,7 +3,7 @@ package hashline_test
 import (
 	"testing"
 
-	"github.com/mihazs/oh-my-grok/internal/hashline"
+	"lazygrok/internal/hashline"
 )
 
 func TestComputeLineHashGoldenHello(t *testing.T) {

@@ -39,7 +39,7 @@ Map which tasks depend on others:
 
 ## Step 5: Create the plan
 
-Write a brief plan to `.omg/drafts/ulw-plan.md`:
+Write a brief plan to `.lazygrok/drafts/ulw-plan.md`:
 
 ```markdown
 # Ultrawork Plan
