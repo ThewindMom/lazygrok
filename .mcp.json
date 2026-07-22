@@ -2,27 +2,51 @@
   "mcpServers": {
     "hashline": {
       "command": "bash",
-      "args": ["${GROK_PLUGIN_ROOT}/hooks/run-mcp.sh", "hashline"]
+      "args": [
+        "${GROK_PLUGIN_ROOT}/hooks/run-mcp.sh",
+        "hashline"
+      ]
     },
     "lsp": {
       "command": "bash",
-      "args": ["${GROK_PLUGIN_ROOT}/hooks/run-mcp.sh", "lsp"]
+      "args": [
+        "${GROK_PLUGIN_ROOT}/hooks/run-mcp.sh",
+        "lsp"
+      ]
     },
     "lazygrok-lsp": {
       "command": "node",
-      "args": ["${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/lsp/dist/cli.js", "mcp"]
+      "args": [
+        "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/lsp/dist/cli.js",
+        "mcp"
+      ]
     },
     "lazygrok-lsp-tools": {
       "command": "node",
-      "args": ["${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/lsp-tools-mcp/dist/cli.js", "mcp"]
+      "args": [
+        "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/lsp-tools-mcp/dist/cli.js",
+        "mcp"
+      ]
     },
     "lazygrok-lsp-daemon": {
       "command": "node",
-      "args": ["${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/lsp-daemon/dist/cli.js", "mcp"]
+      "args": [
+        "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/lsp-daemon/dist/cli.js",
+        "mcp"
+      ]
     },
     "lazygrok-codegraph": {
       "command": "node",
-      "args": ["${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/codegraph/dist/cli.js", "mcp"]
+      "args": [
+        "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/codegraph/dist/cli.js",
+        "mcp"
+      ]
+    },
+    "grep_app": {
+      "url": "https://mcp.grep.app"
+    },
+    "context7": {
+      "url": "https://mcp.context7.com/mcp"
     }
   }
 }
