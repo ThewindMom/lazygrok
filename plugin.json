@@ -1,15 +1,25 @@
 {
   "name": "lazygrok",
-  "version": "0.3.0",
+  "version": "0.2.1",
   "description": "LazyGrok — Grok-native port of lazycodex/oh-my-openagent. Specialist agents, hashline MCP, skill gate, Ralph & Ultrawork loops, todo/boulder continuation, handoff, deterministic hook pipelines, 15 lazycodex hook components, 5 MCP servers, 22 skills.",
-  "skills": ["./skills", "./vendor/superpowers/skills", "./vendor/omo-skills", "./vendor/lazygrok-skills", "./vendor/lazygrok-hooks"],
+  "skills": [
+    "./skills",
+    "./vendor/superpowers/skills",
+    "./vendor/omo-skills",
+    "./vendor/lazygrok-skills",
+    "./vendor/lazygrok-hooks"
+  ],
   "author": {
     "name": "mihazs"
   },
   "homepage": "https://github.com/mihazs/lazygrok",
   "repository": "https://github.com/mihazs/lazygrok",
   "license": "MIT",
-  "categories": ["productivity", "workflow", "loops"],
+  "categories": [
+    "productivity",
+    "workflow",
+    "loops"
+  ],
   "keywords": [
     "grok-build",
     "grok-plugin",
