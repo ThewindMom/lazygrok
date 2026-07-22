@@ -5,6 +5,7 @@ import (
 	"lazygrok/internal/hookenv"
 	"lazygrok/internal/lsp"
 	"lazygrok/internal/skillgate"
+	"lazygrok/internal/spawnguard"
 	"lazygrok/internal/usingpowers"
 	"github.com/spf13/cobra"
 )
@@ -26,6 +27,7 @@ func sessionEndCmd() *cobra.Command {
 			usingpowers.CleanupSession(sid)
 			boulder.CleanupOMOSession(ws, sid)
 			lsp.CleanupSession(sid)
+			spawnguard.CleanupSession(sid)
 			return nil
 		},
 	}

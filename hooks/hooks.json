@@ -98,7 +98,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Write|StrReplace|EditNotebook|Delete|search_replace|write",
+        "matcher": "Write|StrReplace|EditNotebook|Delete|search_replace|write|spawn_subagent|spawn_agent|task",
         "hooks": [
           {
             "type": "command",

@@ -13,6 +13,7 @@ import (
 	"lazygrok/internal/lsp"
 	"lazygrok/internal/ralph"
 	"lazygrok/internal/stoppending"
+	"lazygrok/internal/ulwbridge"
 	"github.com/spf13/cobra"
 )
 
@@ -57,6 +58,12 @@ func stopCmd() *cobra.Command {
 			}
 
 			// --- LEGACY pipeline (kept for backward compatibility) ---
+
+			// ULW-Loop evidence bridge: check for incomplete ulw-loop goals
+			if msg := ulwbridge.EvaluateStop(ws, sid); msg != "" {
+				hookio.EmitStopBlock(w, msg)
+				os.Exit(0)
+			}
 
 			if block, msg := ralph.EvaluateStop(ev); block {
 				hookio.EmitStopBlock(w, msg)

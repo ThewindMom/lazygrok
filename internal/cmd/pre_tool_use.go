@@ -7,6 +7,7 @@ import (
 	"lazygrok/internal/hookenv"
 	"lazygrok/internal/prometheus"
 	"lazygrok/internal/skillgate"
+	"lazygrok/internal/spawnguard"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +22,9 @@ func preToolUseCmd() *cobra.Command {
 			hookenv.ApplyEvent(ev)
 			w := os.Stdout
 
+			if reason := spawnguard.EvaluatePreToolUse(ev); reason != "" {
+				denyPreTool(w, reason, "Spawn guard: fan-out limit reached.")
+			}
 			if reason := prometheus.DenyIfPlanMode(ev); reason != "" {
 				denyPreTool(w, reason, "Prometheus plan mode: only .lazygrok/**/*.md writes allowed.")
 			}
