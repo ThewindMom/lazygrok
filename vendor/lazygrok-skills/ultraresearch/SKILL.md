@@ -49,6 +49,18 @@ The research is done when all of these hold:
 - Every claim in the deliverable cites a source or a verification artifact.
 - The session journal reconstructs what was searched, found, and expanded, wave by wave.
 
+## Epistemic instrumentation
+
+Saturation is not just more searching; it is a knowledge-production protocol. The session journal must make the path from observation to claim to verdict auditable. The orchestrator owns these artifacts:
+
+- `intent-diff.md` — one row per expected truth derived from the user intent, design/spec text, branch history, or authoritative docs. Required fields: `intent_id`, expected truth, observed reality, diff, violated invariant, intent source, supporting observations, status (`true`, `violated`, or `unknown`), and linked claim ids.
+- `claim-graph.md` — the single claim store; one node per claim. Required fields: `claim_id`, statement, claim type, risk tier, scope, intent ids, supporting observations, contradicting observations, independent observation groups, convergence status, counter-search result, primary source backing, dependencies, status (`supported`, `partial`, `refuted`, or `unresolved`), and final synthesis location. High-risk non-code nodes that clear the Phase 3b gate are mirrored into a `verified-claims` digest section at the top of the file — the sole allowlist the synthesis draws non-code claims from.
+- `observation-manifest.md` — one row per observation. Required fields: `observation_id`, source path or URL, evidence layer, observer group, independence basis, observer, `observed_at`, `valid_at` or `claim_valid_at`, artifact path, quote or line anchor, and contamination notes.
+- `verification-economics.md` — one row per proof decision. Required fields: claim, risk, error cost, verification cost/time, chosen verification path, defer/verify decision, outcome, and residual risk.
+- `cause-disappearance.md` — one row per causal finding. Required fields: cause id, expected truth, previous observation, `last_seen`, disconfirming observation, replacement cause if any, current status, and whether the violation is no longer observed.
+
+Observation candidates and claim candidates travel back from workers as message text. The orchestrator writes the instrumentation artifacts, links candidates into the intent diff and claim graph, and records where each observation entered the synthesis. A conclusion is not ready for final materials until its expected truth/reality diff is closed or marked unknown, its claim node exists, and its independent-observation convergence status is supported or explicitly excepted.
+
 ## Run the swarm as a cooperating team
 
 Saturation research is the textbook case for a cooperating team, not isolated fire-and-forget workers: a lead one worker surfaces almost always reshapes what another should search next. So when your harness gives you real cooperating members — Codex: the `teammode` skill (`spawn_subagent` threads); OpenCode: `team_mode` — run this swarm as a team. Fall back to the background-worker swarm below only when team mode is unavailable, or the axes are genuinely independent with no cross-pollination expected.
@@ -177,6 +189,27 @@ Reply with: the exact code, the full output, environment (OS, runtime, dependenc
 
 Journal each verdict to `verify-<slug>.md`.
 
+## Phase 3b — Lock non-code claims through the claim graph
+
+Code settles code-shaped claims (Phase 3). Numeric, market-share, legal, dated, causal, and financial claims cannot be run — so they pass through a data-flow-lock instead: the synthesis may assert a high-risk non-code claim **only** if it cleared this gate, and the gate's output is the sole allowlist the synthesis draws from. Skip the gate and there is nothing to synthesize — the lock is self-enforcing.
+
+The claim graph is orchestrator-owned. Workers only return verified-claim markers, observation candidates, and claim candidates as message text, the same channel as EXPAND markers — never a file. As leads resolve, you record one node per asserted claim in `claim-graph.md` and compute its status; workers report claim candidates in their replies, and you decide. The graph is the single claim store: final synthesis may not draw from free-form claims that skipped it.
+
+A high-risk claim clears the gate to `verified-claims` only when all hold:
+
+- **>= 2 independent source domains** corroborate it (two pages on the same domain count once).
+- **>= 2 independent observation groups** converge on it, unless the graph records why a primary-only source is the correct single-source exception.
+- **One counter-search** actively looked for a refutation and did not find a stronger one.
+- **A primary source** (the standard, filing, dataset, or first-party doc) backs it, not only secondary commentary.
+- **Temporal evidence is explicit**: each supporting observation records `observed_at` and either `valid_at` or `claim_valid_at`, so branch-only, historical, release, and current-runtime claims cannot be conflated.
+
+Anything that fails goes to an `Unresolved` (insufficient evidence) or `Refuted` (counter-search won) annex — abstention is a correct outcome, not a gap to paper over. Record each gate outcome on the claim node itself — risk tier, independent source domains, counter-search result, primary source backing, and status — and mirror the cleared nodes into the `verified-claims` digest section at the top of `claim-graph.md`. Worker reply marker (message text, same channel as EXPAND):
+
+```
+## CLAIMS
+- CLAIM: <non-code assertion> — RISK: high|normal — SOURCES: <domain1, domain2> — COUNTER: <refutation search result> — PRIMARY: <primary source or none>
+```
+
 ## Phase 4 — Synthesize
 
 After convergence and all verifications, re-read the whole journal and write `SYNTHESIS.md`:
@@ -189,15 +222,16 @@ Workers: <total> · Waves: <count> · Sources: <count> · Verifications: <count>
 ## Findings by theme        — per theme: consensus, evidence links, key quote (<20 words, attributed), verified yes/no
 ## Codebase findings        — absolute paths with line references
 ## Sources (ranked)         — URL, what it contains, reliability, access date
-## Verified claims          — claim | verdict | verify-<slug>.md
+## Verified claims          — code: claim | verdict | verify-<slug>.md · non-code: only rows cleared into verified-claims
 ## Contradictions           — source A vs source B, resolution with evidence
-## Gaps                     — what saturation could not answer
+## Gaps                     — what saturation could not answer · unresolved/refuted claim-graph nodes
 ## Expansion trace          — per wave: workers → markers; convergence reason
+## Epistemic instrumentation — intent-vs-reality diff closure, claim graph coverage, observation manifest coverage, independent-observation convergence, verification economics summary, cause-disappearance records
 ```
 
 Deliver the synthesis with inline `[Source N]` citations on every claim. When no report was requested, this is the deliverable.
 
-## Phase 5 — Report (only when requested)
+## Phase 5 — Final materials
 
 Format by the user's words: "report" / "document" → Markdown (default) · "pdf" → HTML first, then weasyprint (`uv run --with weasyprint python`) · "slides" / "presentation" / "deck" → python-pptx · "html" / "webpage" → standalone HTML.
 
