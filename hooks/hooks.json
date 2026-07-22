@@ -52,14 +52,7 @@
       },
       {
         "matcher": "^startup$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/scripts/auto-update.mjs\" hook session-start",
-            "timeout": 5,
-            "statusMessage": "(OmO) Checking Auto Update"
-          }
-        ]
+        "hooks": []
       }
     ],
     "UserPromptSubmit": [

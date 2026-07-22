@@ -8,7 +8,7 @@ user_invocable: false
 
 # LSP tools (MCP `lsp`)
 
-Bundled server: `node ${GROK_PLUGIN_ROOT}/vendor/lsp-tools-mcp/dist/cli.js mcp`
+Bundled server: `node ${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/lsp-tools-mcp/dist/cli.js mcp`
 
 ## When to use
 
