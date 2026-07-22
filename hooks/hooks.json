@@ -128,6 +128,17 @@
             "statusMessage": "(OmO) Enforcing Unlimited Goal Budget"
           }
         ]
+      },
+      {
+        "matcher": "^spawn_subagent$|^spawn_agent$|^task$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" ulw-loop pre-tool-use-spawn",
+            "timeout": 5,
+            "statusMessage": "(lazygrok) Guarding Ulw-Loop Spawns"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -266,6 +277,16 @@
             "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" start-work-continuation stop",
             "timeout": 10,
             "statusMessage": "(OmO) Checking Start-Work Continuation"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" ulw-loop stop",
+            "timeout": 10,
+            "statusMessage": "(lazygrok) Checking Ulw-Loop Resume"
           }
         ]
       }
