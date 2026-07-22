@@ -19,3 +19,6 @@ vendor/lsp-tools-mcp/*
 !vendor/lazygrok-hooks/node_modules/
 !vendor/lazygrok-hooks/node_modules/@code-yeongyu/
 !vendor/lazygrok-hooks/node_modules/@code-yeongyu/lsp-daemon
+# comment-checker binary installed via scripts/install-comment-checker.sh
+# (native binary, 50MB+, platform-specific — not committed)
+vendor/lazygrok-hooks/comment-checker/node_modules/

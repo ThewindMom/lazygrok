@@ -1,11 +1,13 @@
 package lsp
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"lazygrok/internal/hookenv"
 )
@@ -129,7 +131,7 @@ func toolsModule() string {
 	if err != nil {
 		return ""
 	}
-	mod := filepath.Join(root, "vendor", "lsp-tools-mcp", "dist", "tools.js")
+	mod := filepath.Join(root, "vendor", "lazygrok-hooks", "lsp-tools-mcp", "dist", "tools.js")
 	if _, err := os.Stat(mod); err != nil {
 		return ""
 	}
@@ -149,8 +151,9 @@ func runDiagnostics(absPath string) (string, error) {
 	}
 	script := `
 import { pathToFileURL } from "node:url";
-import { executeLspDiagnostics } from pathToFileURL(process.argv[2]).href;
-const filePath = process.argv[3];
+const mod = await import(pathToFileURL(process.argv[1]).href);
+const executeLspDiagnostics = mod.executeLspDiagnostics;
+const filePath = process.argv[2];
 try {
   const result = await executeLspDiagnostics({ filePath, severity: "error" });
   const text = result.content.map((block) => block.text).join("\n").trim();
@@ -161,10 +164,23 @@ try {
   process.exit(1);
 }
 `
-	cmd := exec.Command("node", "--input-type=module", "-e", script, mod, absPath)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "node", "--input-type=module", "-e", script, mod, absPath)
+	cmd.Env = append(os.Environ(), "CODEX_HOME="+codexHome())
 	cmd.Stderr = nil
 	out, err := cmd.Output()
 	return string(out), err
+}
+
+func codexHome() string {
+	if ch := os.Getenv("CODEX_HOME"); ch != "" {
+		return ch
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".codex")
+	}
+	return ""
 }
 
 const cleanText = "No diagnostics found"

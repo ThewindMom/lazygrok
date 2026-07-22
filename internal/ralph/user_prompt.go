@@ -79,7 +79,7 @@ type loopArgs struct {
 }
 
 func matchedLoopCommand(prompt string) bool {
-	re := regexp.MustCompile(`(?i)^/?(?:ralph-loop|ulw-loop|ultrawork)\b`)
+	re := regexp.MustCompile(`(?i)^/?(?:ralph-loop|ulw-loop|ultrawork)\b|^ulw\s`)
 	return re.MatchString(prompt)
 }
 
@@ -97,7 +97,7 @@ func parseLoopArgs(text string) *loopArgs {
 			ultrawork = true
 			rest = strings.TrimSpace(m2[1])
 		} else {
-			m3 := regexp.MustCompile(`(?is)^ultrawork\s+(.+)$`).FindStringSubmatch(text)
+			m3 := regexp.MustCompile(`(?is)^(?:ultrawork|ulw)\s+(.+)$`).FindStringSubmatch(text)
 			if m3 == nil {
 				return nil
 			}
