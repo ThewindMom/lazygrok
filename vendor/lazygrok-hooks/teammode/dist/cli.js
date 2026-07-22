@@ -41,24 +41,42 @@ async function runTeammodeHookCli(stdin, stdout) {
 }
 function threadTitleReminder(threadReference) {
   const id = formatIdentifier(threadReference.id);
-  return threadReference.kind === "thread" ? `THREAD ID ${id}: CALL codex_app.set_thread_title NOW. USE THE REAL TASK/ROLE.` : `PENDING WORKTREE ID ${id}: CALL codex_app.set_thread_title AS SOON AS THREAD ID EXISTS. USE THE REAL TASK/ROLE.`;
+  return threadReference.kind === "thread" ? `THREAD ID ${id}: CALL codex_app.set_thread_title NOW. USE THE REAL TASK/ROLE.` : `PENDING WORKTREE ID ${id}: WORKTREE THREAD IS NOT READY YET. DO NOT bind-thread OR SEND THE MEMBER BOOTSTRAP UNTIL A REAL THREAD ID EXISTS. THEN CALL codex_app.set_thread_title USING THE REAL TASK/ROLE.`;
 }
 function formatIdentifier(value) {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length <= 200 ? normalized : `${normalized.slice(0, 197)}...`;
 }
 function extractThreadCreationReference(toolResponse) {
-  if (!isRecord(toolResponse))
+  const response = parseToolResponseRecord(toolResponse);
+  if (response === null)
     return null;
-  const threadId = toolResponse["threadId"];
+  const threadId = response["threadId"];
   if (typeof threadId === "string" && threadId.trim().length > 0) {
     return { kind: "thread", id: threadId };
   }
-  const pendingWorktreeId = toolResponse["pendingWorktreeId"];
+  const pendingWorktreeId = response["pendingWorktreeId"];
   if (typeof pendingWorktreeId === "string" && pendingWorktreeId.trim().length > 0) {
     return { kind: "pendingWorktree", id: pendingWorktreeId };
   }
   return null;
+}
+function parseToolResponseRecord(toolResponse) {
+  if (isRecord(toolResponse))
+    return toolResponse;
+  if (typeof toolResponse !== "string")
+    return null;
+  const trimmed = toolResponse.trim();
+  if (trimmed.length === 0)
+    return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    return isRecord(parsed) ? parsed : null;
+  } catch (error) {
+    if (error instanceof SyntaxError)
+      return null;
+    return null;
+  }
 }
 function isPostToolUsePayload(value) {
   if (!isRecord(value))

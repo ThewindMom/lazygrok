@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 
-// components/lazygrok-executor-verify/src/cli.ts
+// components/lazycodex-executor-verify/src/cli.ts
 import { existsSync, mkdirSync, readFileSync as readFileSync2, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { stdin as processStdin, stdout as processStdout } from "node:process";
 
-// components/lazygrok-executor-verify/src/codex-hook.ts
+// components/lazycodex-executor-verify/src/codex-hook.ts
 import { lstatSync as nodeLstatSync, realpathSync as nodeRealpathSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 
-// components/lazygrok-executor-verify/src/directive.ts
+// components/lazycodex-executor-verify/src/directive.ts
 import { readFileSync } from "node:fs";
 var LAZYCODEX_EXECUTOR_VERIFY_DIRECTIVE = readFileSync(new URL("../directive.md", import.meta.url), "utf8");
 function renderDirective(attempts, lastAssistantMessage) {
   return LAZYCODEX_EXECUTOR_VERIFY_DIRECTIVE.replaceAll("{{ATTEMPT_COUNT}}", String(attempts)).replaceAll("{{LAST_ASSISTANT_MESSAGE}}", lastAssistantMessage ?? "(last_assistant_message was omitted)");
 }
 
-// components/lazygrok-executor-verify/src/state.ts
+// components/lazycodex-executor-verify/src/state.ts
 import { join } from "node:path";
 var MAX_ATTEMPTS = 3;
 function readAttemptState(cwd, sessionId, agentId, fs) {
@@ -49,7 +49,7 @@ function getStatePath(cwd, sessionId, agentId) {
   return join(getStateDir(cwd), `${sanitizeKey(sessionId)}-${sanitizeKey(agentId)}.json`);
 }
 function getStateDir(cwd) {
-  return join(cwd, ".omo", "lazygrok-executor-verify");
+  return join(cwd, ".omo", "lazycodex-executor-verify");
 }
 function sanitizeKey(value) {
   const sanitized = value.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -62,15 +62,19 @@ function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// components/lazygrok-executor-verify/src/types.ts
+// components/lazycodex-executor-verify/src/types.ts
 var SUBAGENT_STOP_EVENT = "SubagentStop";
 
-// components/lazygrok-executor-verify/src/codex-hook.ts
-var LAZYCODEX_EXECUTOR_AGENT = "lazygrok-executor";
+// components/lazycodex-executor-verify/src/codex-hook.ts
+var RECEIPT_ENFORCED_AGENTS = new Set([
+  "lazycodex-worker-low",
+  "lazycodex-worker-medium",
+  "lazycodex-worker-high"
+]);
 function runSubagentStopHook(input, fs) {
   if (!isSubagentStopInput(input))
     return "";
-  if (input.agent_type !== LAZYCODEX_EXECUTOR_AGENT)
+  if (!RECEIPT_ENFORCED_AGENTS.has(input.agent_type))
     return "";
   if (transcriptHasContextPressureMarker(input.transcript_path, fs))
     return "";
@@ -172,7 +176,7 @@ function isRecord2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// components/lazygrok-executor-verify/src/cli.ts
+// components/lazycodex-executor-verify/src/cli.ts
 var nodeFileSystem = {
   existsSync,
   mkdirSync,
@@ -187,7 +191,7 @@ var subcommand = process.argv[3];
 if (command === "hook" && subcommand === "subagent-stop") {
   await runHookCli();
 } else {
-  process.stderr.write(`Usage: lazygrok-executor-verify hook subagent-stop
+  process.stderr.write(`Usage: lazycodex-executor-verify hook subagent-stop
 `);
   process.exitCode = 1;
 }

@@ -2710,6 +2710,11 @@ function isDirectory(path) {
 
 // ../../rules-engine/src/engine/finder.ts
 var WINDOWS_GIT_BASH_BUNDLED_RULE_PATH = "bundled-rules/windows-git-bash.md";
+var HEPHAESTUS_BUNDLED_RULE_PREFIX = "bundled-rules/hephaestus/";
+var HEPHAESTUS_DEFAULT_VARIANT_FILE = "gpt-5.5.md";
+var HEPHAESTUS_MODEL_VARIANT_FILES = [
+  ["gpt-5.6", "gpt-5.6.md"]
+];
 function findRuleCandidates(options) {
   const skipUserHome = options.skipUserHome ?? false;
   const disabledSources = options.disabledSources ?? new Set;
@@ -2722,7 +2727,8 @@ function findRuleCandidates(options) {
     disabledSources,
     ...options.cache === undefined ? {} : { cache: options.cache },
     ...options.pluginRoot === undefined ? {} : { pluginRoot: options.pluginRoot },
-    ...options.platform === undefined ? {} : { platform: options.platform }
+    ...options.platform === undefined ? {} : { platform: options.platform },
+    ...options.model === undefined ? {} : { model: options.model }
   };
   candidates.push(...findPluginBundledCandidates(pluginBundledOptions));
   if (!skipUserHome) {
@@ -2748,14 +2754,25 @@ function findPluginBundledCandidates(options = {}) {
       isSingleFile: false,
       relativePath: toRelativePath(pluginRoot, scannedFile.path)
     };
-    if (isPluginBundledCandidateEnabled(candidate, platform)) {
+    if (isPluginBundledCandidateEnabled(candidate, platform, options.model)) {
       candidates.push(candidate);
     }
   }
   return candidates;
 }
-function isPluginBundledCandidateEnabled(candidate, platform) {
-  return candidate.relativePath !== WINDOWS_GIT_BASH_BUNDLED_RULE_PATH || platform === "win32";
+function isPluginBundledCandidateEnabled(candidate, platform, model) {
+  if (candidate.relativePath === WINDOWS_GIT_BASH_BUNDLED_RULE_PATH) {
+    return platform === "win32";
+  }
+  if (candidate.relativePath.startsWith(HEPHAESTUS_BUNDLED_RULE_PREFIX)) {
+    return candidate.relativePath === `${HEPHAESTUS_BUNDLED_RULE_PREFIX}${hephaestusVariantFileForModel(model)}`;
+  }
+  return true;
+}
+function hephaestusVariantFileForModel(model) {
+  const normalizedModel = (model ?? "").toLowerCase();
+  const matched = HEPHAESTUS_MODEL_VARIANT_FILES.find(([family]) => normalizedModel.includes(family));
+  return matched === undefined ? HEPHAESTUS_DEFAULT_VARIANT_FILE : matched[1];
 }
 function findProjectCandidates(projectRoot, targetFile, disabledSources, cache) {
   const rootDirectory = resolve6(projectRoot);
@@ -2939,14 +2956,17 @@ function isDedupedRootSingleFile(candidate, rootSingleFileSelected) {
   return rootSingleFileSelected && isRootSingleFile(candidate);
 }
 // ../../rules-engine/src/engine/truncator.ts
+var NEVER_TRUNCATED_RULE_PATHS = new Set([
+  "bundled-rules/hephaestus.md",
+  "bundled-rules/hephaestus/gpt-5.5.md",
+  "bundled-rules/hephaestus/gpt-5.6.md"
+]);
 function truncationNotice(relativePath) {
   return TRUNCATION_NOTICE.replace("{path}", relativePath);
 }
 function isNeverTruncatedRule(relativePath) {
-  const normalized = relativePath.replace(/\\/g, "/");
-  const segments = normalized.split("/").filter((segment) => segment.length > 0);
-  const filename = segments.at(-1) ?? normalized;
-  return filename.toLowerCase() === "hephaestus.md";
+  const normalized = relativePath.replace(/\\/g, "/").toLowerCase();
+  return NEVER_TRUNCATED_RULE_PATHS.has(normalized);
 }
 function safeSliceEnd(body, end) {
   if (end <= 0) {
@@ -3069,12 +3089,7 @@ function orderStaticRules(rules) {
   return [...hephaestusRules, ...otherRules];
 }
 function isHephaestusRule(rule) {
-  return displayFilename(rule).toLowerCase() === "hephaestus.md";
-}
-function displayFilename(rule) {
-  const normalizedPath = rule.relativePath.length > 0 ? rule.relativePath : rule.path;
-  const segments = normalizedPath.replace(/\\/g, "/").split("/").filter((segment) => segment.length > 0);
-  return segments.at(-1) ?? normalizedPath;
+  return isNeverTruncatedRule(rule.relativePath.length > 0 ? rule.relativePath : rule.path);
 }
 function uniqueRulesByBody(rules) {
   const uniqueRules = [];
@@ -3403,7 +3418,7 @@ function uniqueStrings2(values) {
 }
 
 // components/rules/src/dynamic-target-fingerprints.ts
-function fingerprintDynamicTargets(cwd, targetPaths, config) {
+function fingerprintDynamicTargets(cwd, targetPaths, config, model) {
   const disabledSources = disabledSourcesFromConfig(config);
   const discoveryCache = createRuleDiscoveryCache();
   const cwdProjectRoot = findProjectRoot(cwd);
@@ -3418,6 +3433,9 @@ function fingerprintDynamicTargets(cwd, targetPaths, config) {
     if (disabledSources !== undefined) {
       findOptions.disabledSources = disabledSources;
     }
+    if (model !== undefined) {
+      findOptions.model = model;
+    }
     const candidates = findRuleCandidates(findOptions);
     const candidateFingerprint = sortCandidates(candidates).map(fingerprintCandidate).join("\x01");
     const cacheKey = dynamicTargetCacheKey(targetPath);
@@ -3427,6 +3445,7 @@ function fingerprintDynamicTargets(cwd, targetPaths, config) {
       fingerprint: hashContent([
         "v1",
         config.enabledSources === "auto" ? "auto" : config.enabledSources.join(","),
+        model ?? "",
         projectRoot ?? "",
         cacheKey,
         candidateFingerprint
@@ -3835,6 +3854,17 @@ var POST_COMPACT_MIN_RESERVED_TOKENS = 8000;
 var POST_COMPACT_MIN_GUIDE_CHARS = 500;
 var FALLBACK_CONTEXT_WINDOW_TOKENS = 200000;
 var MODEL_CONTEXT_BUDGETS = [
+  { slug: "gpt-5.6-sol", contextWindowTokens: 372000, effectivePercent: DEFAULT_EFFECTIVE_CONTEXT_WINDOW_PERCENT },
+  {
+    slug: "gpt-5.6-terra",
+    contextWindowTokens: 372000,
+    effectivePercent: DEFAULT_EFFECTIVE_CONTEXT_WINDOW_PERCENT
+  },
+  {
+    slug: "gpt-5.6-luna",
+    contextWindowTokens: 372000,
+    effectivePercent: DEFAULT_EFFECTIVE_CONTEXT_WINDOW_PERCENT
+  },
   { slug: "gpt-5.5", contextWindowTokens: 272000, effectivePercent: DEFAULT_EFFECTIVE_CONTEXT_WINDOW_PERCENT },
   { slug: "gpt-5.4-mini", contextWindowTokens: 272000, effectivePercent: DEFAULT_EFFECTIVE_CONTEXT_WINDOW_PERCENT },
   {
@@ -3910,11 +3940,11 @@ import { readFileSync as readFileSync4 } from "node:fs";
 import { dirname as dirname7 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var componentRoot = dirname7(dirname7(fileURLToPath2(import.meta.url)));
-function createRulesEngine(options, config = configFromEnvironment(options.env)) {
+function createRulesEngine(options, config = configFromEnvironment(options.env), model) {
   const platform = options.platform ?? process.platform;
   const pluginRoot = options.env?.["PLUGIN_ROOT"] ?? process.env["PLUGIN_ROOT"] ?? componentRoot;
   return createEngine(config, {
-    findCandidates: (finderOptions) => findRuleCandidates({ ...finderOptions, platform, pluginRoot }),
+    findCandidates: (finderOptions) => findRuleCandidates({ ...finderOptions, platform, pluginRoot, ...model === undefined ? {} : { model } }),
     findProjectRoot,
     readFile: (path) => {
       try {
@@ -3927,7 +3957,7 @@ function createRulesEngine(options, config = configFromEnvironment(options.env))
 }
 
 // components/rules/src/static-injection.ts
-import { existsSync as existsSync5 } from "node:fs";
+import { existsSync as existsSync4 } from "node:fs";
 
 // components/rules/src/post-compact-directive.ts
 var DIRECTIVE_HEADER = [
@@ -3965,96 +3995,6 @@ function buildPostCompactReadDirective(rulePaths, maxChars) {
 `)}${DIRECTIVE_FOOTER}`;
 }
 
-// components/rules/src/sparkshell-awareness.ts
-import { existsSync as existsSync4 } from "node:fs";
-import { join as join7 } from "node:path";
-var SPARKSHELL_AWARENESS_MARKER = "## Sparkshell Runtime";
-var SPARKSHELL_AWARENESS_DEDUP_KEY = "__omo_sparkshell_awareness__";
-function isCodexAppServerActive(env = process.env) {
-  const originator = env["CODEX_INTERNAL_ORIGINATOR_OVERRIDE"]?.toLowerCase() ?? "";
-  const bundleIdentifier = env["__CFBundleIdentifier"]?.toLowerCase() ?? "";
-  const shellActive = isTruthy2(env["CODEX_SHELL"]);
-  return shellActive && (originator.includes("codex desktop") || originator.includes("codex app") || bundleIdentifier === "com.openai.codex");
-}
-function isSparkShellAppServerConfigured(env = process.env) {
-  const codexSocketPath = env["CODEX_APP_SERVER_SOCKET"]?.trim() ?? "";
-  const omoSocketPath = env["OMO_SPARKSHELL_APP_SERVER_SOCKET"]?.trim() ?? "";
-  return codexSocketPath.length > 0 || omoSocketPath.length > 0;
-}
-function resolveOmoInvocation(env = process.env, deps = {}) {
-  const fileExists = deps.fileExists ?? existsSync4;
-  const platform = deps.platform ?? process.platform;
-  const binNames = platform === "win32" ? ["omo.cmd", "omo.exe", "omo"] : ["omo"];
-  const pathDelimiter = platform === "win32" ? ";" : ":";
-  const pathEntries = (env["PATH"] ?? "").split(pathDelimiter).filter((entry) => entry.trim().length > 0);
-  for (const pathEntry of pathEntries) {
-    for (const binName of binNames) {
-      if (fileExists(join7(pathEntry, binName)))
-        return "omo";
-    }
-  }
-  for (const candidateDir of omoCandidateBinDirs(env)) {
-    for (const binName of binNames) {
-      const candidate = join7(candidateDir, binName);
-      if (fileExists(candidate))
-        return candidate;
-    }
-  }
-  return null;
-}
-function omoCandidateBinDirs(env) {
-  const dirs = [];
-  const localBinDir = env["CODEX_LOCAL_BIN_DIR"]?.trim() ?? "";
-  if (localBinDir.length > 0)
-    dirs.push(localBinDir);
-  const home = env["HOME"]?.trim() || env["USERPROFILE"]?.trim() || "";
-  const codexHome = env["CODEX_HOME"]?.trim() || (home.length > 0 ? join7(home, ".codex") : "");
-  if (codexHome.length > 0)
-    dirs.push(join7(codexHome, "bin"));
-  if (home.length > 0)
-    dirs.push(join7(home, ".local", "bin"));
-  return dirs;
-}
-function getSparkShellRuntimeAwareness(env = process.env, deps = {}) {
-  const override = env["OMO_SPARKSHELL_AWARENESS"] ?? env["LAZYCODEX_SPARKSHELL_AWARENESS"];
-  if (isFalsy(override)) {
-    return "";
-  }
-  if (!isTruthy2(override) && !isCodexAppServerActive(env) && !isSparkShellAppServerConfigured(env)) {
-    return "";
-  }
-  const resolved = resolveOmoInvocation(env, deps);
-  const invocation = resolved ?? (isTruthy2(override) ? "omo" : null);
-  if (invocation === null) {
-    return "";
-  }
-  const command = /\s/.test(invocation) ? `"${invocation}"` : invocation;
-  return [
-    SPARKSHELL_AWARENESS_MARKER,
-    "",
-    `- Prefer \`${command} sparkshell <command>\` for repo inspection, CLI smoke tests, git/history checks, and bounded verification before falling back to raw shell commands.`,
-    `- Use \`${command} sparkshell --shell '<command>'\` only when shell metacharacters are required.`,
-    `- Use \`${command} sparkshell --tmux-pane <pane-id> --tail-lines 400\` to inspect an existing tmux pane. Tail lines must stay between 100 and 1000.`,
-    "- When no native sidecar or appserver is available, Sparkshell silently falls back to raw command execution. `OMO_SPARKSHELL_BIN` selects a native sidecar path.",
-    "- When `CODEX_THREAD_ID` identifies a Codex session, Sparkshell feeds recent session context (first/latest user request + last 5 conversation messages) into oversized-output condensation for relevance ranking, but never appends that context to command output. `OMO_SPARKSHELL_SESSION_CONTEXT=0` disables the lookup.",
-    `- Route potentially huge output (full log files, big diffs, \`cat\`/\`grep\` over large artifacts) through \`${command} sparkshell\` instead of reading it raw: oversized output is condensed to a budget while preserving error signatures, repeated patterns, session-goal-relevant lines, and head/tail. Tune with \`--budget <chars>\`; disable with \`OMO_SPARKSHELL_CONDENSE=0\`.`,
-    "- Oversized output is first summarized by the spark model (`codex exec`, default `gpt-5.3-codex-spark`) fed with the shell output plus session context: the summary keeps selected output as-is (no masking) and ends with a `[sparkshell caption]` line describing what ran, what the full output contained, and which lines were omitted. `OMO_SPARKSHELL_SPARK=0` skips the model and uses deterministic condensation directly."
-  ].join(`
-`);
-}
-function isTruthy2(value) {
-  if (value === undefined) {
-    return false;
-  }
-  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
-}
-function isFalsy(value) {
-  if (value === undefined) {
-    return false;
-  }
-  return ["0", "false", "no", "off"].includes(value.trim().toLowerCase());
-}
-
 // components/rules/src/transcript-rule-filter.ts
 function filterRulesAlreadyInTranscript(rules, transcriptPath, markInjected, options = {}) {
   if (rules.length === 0 || transcriptPath === null) {
@@ -4079,8 +4019,8 @@ function filterRulesNotInTranscriptText(rules, transcriptText, markInjected) {
 }
 function isRuleAlreadyInTranscript(rule, transcriptText) {
   const staticReferenceNeedles = [
-    `- [${displayFilename2(rule)}]{${rule.path}}`,
-    `- [${displayFilename2(rule)}]{${rule.realPath}}`
+    `- [${displayFilename(rule)}]{${rule.path}}`,
+    `- [${displayFilename(rule)}]{${rule.realPath}}`
   ];
   if (staticReferenceNeedles.some((needle) => transcriptText.includes(needle))) {
     return true;
@@ -4096,7 +4036,7 @@ function isRuleAlreadyInTranscript(rule, transcriptText) {
   ].filter((marker) => marker !== null);
   return markers.some((marker) => transcriptText.includes(marker));
 }
-function displayFilename2(rule) {
+function displayFilename(rule) {
   const normalizedPath = rule.relativePath.length > 0 ? rule.relativePath : rule.path;
   const segments = normalizedPath.replace(/\\/g, "/").split("/").filter((segment) => segment.length > 0);
   return segments.at(-1) ?? normalizedPath;
@@ -4124,15 +4064,14 @@ function runStaticInjection(cwd, transcriptPath, eventName, cachePath, options, 
     });
   }
   const effectiveConfig = eventName === "UserPromptSubmit" ? withPromptBudget(config) : config;
-  const engine = createRulesEngine(options, effectiveConfig);
+  const engine = createRulesEngine(options, effectiveConfig, model);
   hydrateEngineState(engine, cachePath);
   engine.state.cwd = cwd;
   const loaded = engine.loadStaticRules(cwd);
   const rules = filterRulesAlreadyInTranscript(loaded.rules.filter((rule) => !engine.isStaticInjected(rule)), transcriptPath, (rule) => {
     engine.markStaticInjected(rule);
   }, transcriptSearchOptions);
-  const sparkshellAwareness = engine.state.staticDedup.has(SPARKSHELL_AWARENESS_DEDUP_KEY) ? "" : getSparkShellRuntimeAwareness(options.env);
-  if (rules.length === 0 && sparkshellAwareness.length === 0) {
+  if (rules.length === 0) {
     persistEngineState(engine, cachePath);
     return "";
   }
@@ -4140,18 +4079,15 @@ function runStaticInjection(cwd, transcriptPath, eventName, cachePath, options, 
   for (const rule of rules) {
     engine.markStaticInjected(rule);
   }
-  if (sparkshellAwareness.length > 0) {
-    engine.state.staticDedup.add(SPARKSHELL_AWARENESS_DEDUP_KEY);
-  }
   persistEngineState(engine, cachePath);
-  return formatAdditionalContextOutput(eventName, combineStaticContext(block, sparkshellAwareness));
+  return formatAdditionalContextOutput(eventName, block);
 }
 function runPostCompactRecovery(input) {
   const effectiveConfig = withPostCompactBudget(input.config, {
     model: input.model,
     transcriptPath: input.transcriptPath
   });
-  const engine = createRulesEngine(input.options, effectiveConfig);
+  const engine = createRulesEngine(input.options, effectiveConfig, input.model);
   hydrateEngineState(engine, input.cachePath);
   engine.state.cwd = input.cwd;
   const loaded = engine.loadStaticRules(input.cwd);
@@ -4160,8 +4096,7 @@ function runPostCompactRecovery(input) {
     engine.markStaticInjected(rule);
   });
   const dynamicRulePaths = recoverDynamicRulePaths(engine, transcriptText, loaded.rules);
-  const sparkshellAwareness = engine.state.staticDedup.has(SPARKSHELL_AWARENESS_DEDUP_KEY) ? "" : getSparkShellRuntimeAwareness(input.options.env);
-  if (missingRules.length === 0 && dynamicRulePaths.length === 0 && sparkshellAwareness.length === 0) {
+  if (missingRules.length === 0 && dynamicRulePaths.length === 0) {
     persistEngineState(engine, input.cachePath, input.channel);
     return "";
   }
@@ -4172,11 +4107,8 @@ function runPostCompactRecovery(input) {
   for (const rule of missingRules) {
     engine.markStaticInjected(rule);
   }
-  if (sparkshellAwareness.length > 0) {
-    engine.state.staticDedup.add(SPARKSHELL_AWARENESS_DEDUP_KEY);
-  }
   persistEngineState(engine, input.cachePath, input.channel);
-  return formatAdditionalContextOutput(input.eventName, combineStaticContext(bodyBlock, directive, sparkshellAwareness));
+  return formatAdditionalContextOutput(input.eventName, combineStaticContext(bodyBlock, directive));
 }
 function readRecoveryTranscriptText(transcriptPath) {
   if (transcriptPath === null) {
@@ -4200,7 +4132,7 @@ function recoverDynamicRulePaths(engine, transcriptText, staticRules) {
       if (transcriptText !== null && transcriptText.includes(rulePath)) {
         continue;
       }
-      if (!existsSync5(rulePath)) {
+      if (!existsSync4(rulePath)) {
         continue;
       }
       recoveredPaths.add(rulePath);
@@ -4218,7 +4150,7 @@ function combineStaticContext(...blocks) {
 }
 
 // components/rules/src/tool-paths.ts
-import { existsSync as existsSync6, statSync as statSync6 } from "node:fs";
+import { existsSync as existsSync5, statSync as statSync6 } from "node:fs";
 import { isAbsolute as isAbsolute4, resolve as resolve10 } from "node:path";
 var COMMAND_TOOL_NAMES = new Set(["bash", "shell_command", "exec_command"]);
 var TRACKED_TOOL_NAMES = new Set([
@@ -4329,7 +4261,7 @@ function resolvePath(cwd, filePath) {
 }
 function isExistingFile(filePath) {
   try {
-    return existsSync6(filePath) && statSync6(filePath).isFile();
+    return existsSync5(filePath) && statSync6(filePath).isFile();
   } catch {
     return false;
   }
@@ -4453,14 +4385,14 @@ async function runPostToolUseHook(input, options = {}) {
     return "";
   }
   const dynamicConfig = withDynamicBudget(config);
-  const engine = createRulesEngine(options, completedPostCompactKind !== undefined ? withPostCompactBudget(dynamicConfig, { model: input.model, transcriptPath: input.transcript_path }) : dynamicConfig);
+  const engine = createRulesEngine(options, completedPostCompactKind !== undefined ? withPostCompactBudget(dynamicConfig, { model: input.model, transcriptPath: input.transcript_path }) : dynamicConfig, input.model);
   hydrateEngineState(engine, cachePath);
   debugTimer.lap("hydrate", {
     dynamicDedupScopes: engine.state.dynamicDedup.size,
     dynamicTargetFingerprints: engine.state.dynamicTargetFingerprints.size,
     staticDedup: engine.state.staticDedup.size
   });
-  const dynamicTargetFingerprints = fingerprintDynamicTargets(input.cwd, targetPaths, config);
+  const dynamicTargetFingerprints = fingerprintDynamicTargets(input.cwd, targetPaths, config, input.model);
   debugTimer.lap("fingerprint", { fingerprints: dynamicTargetFingerprints.length });
   const pendingTargetFingerprints = dynamicTargetFingerprints.filter((target) => engine.state.dynamicTargetFingerprints.get(target.cacheKey) !== target.fingerprint);
   debugTimer.lap("pending", { pending: pendingTargetFingerprints.length });

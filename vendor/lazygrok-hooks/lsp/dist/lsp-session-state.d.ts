@@ -1,12 +1,8 @@
-export interface DiagnosticsObservation {
-    readonly filePath: string;
-    readonly unavailable: boolean;
-}
+import type { PostEditNotConfiguredCache } from "@oh-my-opencode/lsp-core/post-edit";
 export declare function sessionIdFrom(input: {
     readonly session_id?: unknown;
 }): string | undefined;
-export declare function shouldSkipUnavailableLspDiagnostics(filePath: string, sessionId: string | undefined): boolean;
-export declare function recordLspDiagnosticsObservations(sessionId: string | undefined, observations: readonly DiagnosticsObservation[]): void;
+export declare function readLspPostEditCache(sessionId: string | undefined): PostEditNotConfiguredCache;
+export declare function writeLspPostEditCache(sessionId: string | undefined, cache: PostEditNotConfiguredCache): void;
 export declare function markLspSessionCompacted(sessionId: string | undefined): void;
-export declare function isUnavailableLspDiagnostics(diagnostics: string): boolean;
 export declare function isLspDaemonUnreachableDiagnostics(diagnostics: string): boolean;

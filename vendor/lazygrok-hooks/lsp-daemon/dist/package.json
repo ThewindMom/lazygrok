@@ -1,6 +1,6 @@
 {
 	"name": "@code-yeongyu/lsp-daemon",
-	"version": "4.12.1",
+	"version": "0.1.0",
 	"type": "module",
 	"private": true
 }

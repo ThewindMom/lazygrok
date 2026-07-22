@@ -1,5 +1,4 @@
 import { stdin as processStdin } from "node:process";
-import { disposeDefaultLspManager } from "@code-yeongyu/lsp-daemon";
 import { isRecord, runLspPostCompactHook, runLspPostToolUseHook } from "./codex-hook.js";
 export async function runPostToolUseHookCli(stdin = processStdin) {
     await runHookCli((input) => runLspPostToolUseHook(input), stdin);
@@ -21,9 +20,6 @@ async function runHookCli(runHook, stdin) {
     catch {
         // LSP feedback is best-effort: stderr or a non-zero exit here surfaces as harness noise on every edit.
         return;
-    }
-    finally {
-        await disposeDefaultLspManager().catch(() => undefined);
     }
 }
 async function readStdin(stdin) {

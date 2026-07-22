@@ -3,11 +3,15 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { renderDirective } from "./directive.js";
 import { clearAttemptState, MAX_ATTEMPTS, readAttemptState, writeAttemptState } from "./state.js";
 import { SUBAGENT_STOP_EVENT } from "./types.js";
-const LAZYGROK_EXECUTOR_AGENT = "lazygrok-executor";
+const RECEIPT_ENFORCED_AGENTS = new Set([
+    "lazycodex-worker-low",
+    "lazycodex-worker-medium",
+    "lazycodex-worker-high",
+]);
 export function runSubagentStopHook(input, fs) {
     if (!isSubagentStopInput(input))
         return "";
-    if (input.agent_type !== LAZYGROK_EXECUTOR_AGENT)
+    if (!RECEIPT_ENFORCED_AGENTS.has(input.agent_type))
         return "";
     if (transcriptHasContextPressureMarker(input.transcript_path, fs))
         return "";

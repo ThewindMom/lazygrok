@@ -31,7 +31,7 @@ export function getStatePath(cwd, sessionId, agentId) {
     return join(getStateDir(cwd), `${sanitizeKey(sessionId)}-${sanitizeKey(agentId)}.json`);
 }
 function getStateDir(cwd) {
-    return join(cwd, ".omo", "lazygrok-executor-verify");
+    return join(cwd, ".omo", "lazycodex-executor-verify");
 }
 function sanitizeKey(value) {
     const sanitized = value.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");

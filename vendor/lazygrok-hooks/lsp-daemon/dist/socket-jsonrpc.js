@@ -15,7 +15,12 @@ export function createLineDecoder(onMessage, onParseError) {
                         onMessage(JSON.parse(raw));
                     }
                     catch (error) {
-                        onParseError?.(raw, error);
+                        if (error instanceof Error) {
+                            onParseError?.(raw, error);
+                        }
+                        else {
+                            throw error;
+                        }
                     }
                 }
                 index = buffer.indexOf("\n");

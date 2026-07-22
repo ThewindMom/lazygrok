@@ -35,7 +35,7 @@
           {
             "type": "command",
             "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" telemetry session-start",
-            "timeout": 5,
+            "timeout": 15,
             "statusMessage": "(OmO) Recording Session Telemetry"
           }
         ]
@@ -45,7 +45,7 @@
           {
             "type": "command",
             "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" codegraph session-start",
-            "timeout": 5,
+            "timeout": 15,
             "statusMessage": "(OmO) Checking CodeGraph Bootstrap"
           }
         ]
@@ -400,6 +400,7 @@
         ]
       },
       {
+        "matcher": "manual|auto",
         "hooks": [
           {
             "type": "command",

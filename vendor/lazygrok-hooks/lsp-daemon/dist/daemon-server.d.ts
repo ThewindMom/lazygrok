@@ -1,5 +1,6 @@
 import { type Server } from "node:net";
 import type { DaemonPaths } from "./paths.js";
+export { DaemonAlreadyRunningError, DaemonStartupDeferredError } from "./ownership.js";
 export interface DaemonServerOptions {
     idleShutdownMs?: number;
     idleCheckIntervalMs?: number;

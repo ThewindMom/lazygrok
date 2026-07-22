@@ -1,6 +1,6 @@
 {
-	"name": "@code-yeongyu/codex-lazygrok-executor-verify",
-	"version": "4.12.1",
+	"name": "@code-yeongyu/codex-lazycodex-executor-verify",
+	"version": "4.19.1",
 	"description": "Codex SubagentStop evidence verifier for LazyCodex executor completions.",
 	"type": "module",
 	"packageManager": "npm@11.12.1",
@@ -8,12 +8,12 @@
 	"keywords": [
 		"codex",
 		"codex-plugin",
-		"lazygrok",
+		"lazycodex",
 		"hooks",
 		"evidence"
 	],
 	"bin": {
-		"lazygrok-executor-verify": "./dist/cli.js"
+		"lazycodex-executor-verify": "./dist/cli.js"
 	},
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",

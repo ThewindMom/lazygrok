@@ -1,0 +1,20 @@
+{
+  "version": "2026-07-22.grok-4.5-default",
+  "current": {
+    "model": "grok-4.5",
+    "model_context_window": 256000
+  },
+  "roles": {
+    "default": {
+      "model": "grok-4.5",
+      "model_context_window": 256000
+    },
+    "verifier": {
+      "model": "grok-4.5"
+    },
+    "worker": {
+      "model": "grok-4.5"
+    }
+  },
+  "note": "Grok-adapted model catalog. Grok uses config.toml [subagents.models] for routing. This file is for reference/compatibility only."
+}
