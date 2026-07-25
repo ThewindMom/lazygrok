@@ -20,11 +20,12 @@ echo "== grok inspect (hooks) ==" | tee -a "$LOG"
 import json, sys
 d = json.load(sys.stdin)
 hooks = d.get('hooks', [])
-targets = [h.get('target', '') for h in hooks]
-if any('pre-tool-use' in t for t in targets):
-    print('OK: PreToolUse skill-gate hook registered (%d hooks)' % len(hooks))
+hook_files = [h.get('target', '') for h in hooks if h.get('hookType') == 'file']
+manifests = [json.load(open(path)) for path in hook_files]
+if any('PreToolUse' in manifest.get('hooks', {}) for manifest in manifests):
+    print('OK: PreToolUse skill-gate hook registered (%d plugin manifests)' % len(manifests))
 else:
-    print('FAIL: pre-tool-use not in inspect hooks')
+    print('FAIL: PreToolUse not in registered plugin hook manifests')
     for h in hooks:
         print(' -', h.get('event'), h.get('target'))
     sys.exit(1)

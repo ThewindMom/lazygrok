@@ -18,8 +18,8 @@ test -f "$bundled" || {
   exit 1
 }
 
-grok plugin validate "$ROOT" | rg -q '2 skill dir' || {
-  echo "plugin.json should declare 2 skill directories"
+grok plugin validate "$ROOT" | rg -q '5 skill dir' || {
+  echo "plugin.json should declare 5 skill directories"
   grok plugin validate "$ROOT"
   exit 1
 }
