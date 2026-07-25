@@ -89,10 +89,24 @@ HEAVY: spawn the `plan` agent with the gathered context, follow its
 wave order and parallel grouping exactly, and run the verification it
 specifies. LIGHT: plan directly in the notepad.
 
-## 1. Create the goal with binding success criteria
-Call `update_goal` (or open your reply with a `# Goal` block treated as
-binding) using exactly `objective`. Do not include `status`. Goals are
-unlimited; never invent a numeric budget or limit.
+## 1. Register the binding goal (Grok-native channels)
+Register the goal before other work. Use the first channel that exists;
+do not narrate missing tools (never say "No update_goal tool available").
+
+Priority (silent):
+1. If host tool `update_goal` is in your tool list → call it with
+   `objective` only (no `status`, no budget fields).
+2. Else if host tool `create_goal` is in your tool list → call it with
+   `objective` only.
+3. **Default on Grok:** open the reply with a binding `# Goal` markdown
+   block (objective + criteria below). This is the normal path when the
+   host does not inject goal tools (common with workflows enabled) —
+   not a defect and not a fallback apology.
+4. Prefer also registering durable structured goals via the ulw-loop CLI
+   when available (see skill `ulw-evidence`): create-goals / record-evidence
+   / checkpoint. CLI state outlives context; `# Goal` binds the turn.
+
+Goals are unlimited; never invent a numeric budget or limit.
 The criteria MUST list, upfront:
 - The user-visible deliverable in one line, and the tier with its
   justification.

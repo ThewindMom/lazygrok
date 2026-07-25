@@ -118,14 +118,27 @@ A known procedure — however many steps — and questions about work you
 are delegating never justify a planner: plan directly in the notepad.
 Never spawn `plan` before the discovery wave has returned.
 
-## 1. Create the goal with binding success criteria
-You MUST register the goal with the `update_goal` tool — NOT prose,
-NOT the notepad, NOT the plan: the registered goal is the binding
-contract for the whole run, and skipping it is a defect. Call it with
-exactly `objective`; do not include `status`. Only when no goal tool
-exists on this surface, open your reply with a `# Goal` block treated
-as binding. Goals are unlimited; never invent a numeric budget or
-limit.
+## 1. Register the binding goal (Grok-native channels)
+You MUST register a binding goal before other work — NOT only in the
+notepad or plan. Skipping registration is a defect. Use the first
+channel that exists; do **not** narrate missing tools (never tell the
+user "No update_goal tool available").
+
+Priority (silent):
+1. If host tool `update_goal` is in your tool list → call it with
+   `objective` only (no `status`, no budget fields).
+2. Else if host tool `create_goal` is in your tool list → call it with
+   `objective` only.
+3. **Default on Grok:** open the reply with a binding `# Goal` markdown
+   block (objective + criteria below). This is the normal path when the
+   host does not inject goal tools (common with workflows enabled) —
+   not a defect.
+4. Prefer also registering durable structured goals via the ulw-loop CLI
+   when available (skill `ulw-evidence`): create-goals, then
+   record-evidence / checkpoint as criteria pass. CLI state outlives
+   context; `# Goal` binds the turn.
+
+Goals are unlimited; never invent a numeric budget or limit.
 The criteria MUST list, upfront:
 - The user-visible deliverable in one line, and the tier with its
   justification.
@@ -362,7 +375,7 @@ Spawn every independent child for the current wave first. After the wave
 is launched, run `get_command_or_subagent_output` for each spawned child until
 each reaches terminal status (`completed`, `failed`, `blocked`, or
 explicitly recorded inconclusive) before any dependent `todo_write`
-transition, `create_goal` continuation, implementation tool call, plan
+transition, goal-status update, implementation tool call, plan
 drafting, approval-gate work, PR handoff, or final response. A timeout is
 not terminal status.
 Do not write the final answer, PR handoff, or completion summary while

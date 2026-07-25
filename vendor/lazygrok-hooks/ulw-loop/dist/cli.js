@@ -2800,10 +2800,11 @@ MANDATORY BOOTSTRAP: do all three steps, in order, before anything else.
 1. First user-visible line this turn MUST be exactly:
 \`ULTRAWORK MODE ENABLED!\`
 
-2. Call \`create_goal\` NOW with \`objective\` set to the user's request.
-Send \`objective\` only: no \`status\`, no budget fields. If the
-\`create_goal\` tool is unavailable, open your reply with a binding
-\`# Goal\` block instead. Never skip this step.
+2. Register the binding goal NOW (silent — never narrate missing tools):
+If host tool \`update_goal\` or \`create_goal\` is in your tool list,
+call it with \`objective\` only (no status/budget). Otherwise open with
+a binding \`# Goal\` block — that is the normal Grok path, not a defect.
+Prefer also \`ulw-loop create-goals\` when the CLI is available.
 
 3. Read the FULL ultrawork directive NOW, before any other tool call,
 plan, or edit. It is the \`ultrawork\` skill, stored at:

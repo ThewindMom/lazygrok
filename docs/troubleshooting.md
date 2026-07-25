@@ -47,6 +47,14 @@ Hooks deny `Write` / `StrReplace` / `Delete` until at least one catalog `SKILL.m
 
 Grok may show `<skill_information>` in the prompt — that is **not** loaded skill content. lazygrok injects `<AGENT_SKILL_GATE_PROACTIVE>` on each turn with **Read** paths; follow those before other tools. There is no Skill tool in Grok (use Read on `SKILL.md`). Update the plugin and reload hooks (`grok plugin install` + new session).
 
+## Ultrawork says "No update_goal tool available"
+
+Expected on Grok when background workflows are on: the host often does **not**
+inject model-facing `update_goal` / `create_goal`. Ultrawork should open with a
+binding `# Goal` block and optionally use the ulw-loop CLI (`ulw-evidence`
+skill) for durable criteria/evidence. Do not disable workflows solely to force
+the legacy tool unless you need that host path.
+
 ## Ralph / ultrawork stops and asks "next phase?" instead of continuing
 
 The Stop hook must see the workspace (stdin `workspaceRoot`/`cwd` or `GROK_WORKSPACE_ROOT`) and a routine stop reason (`EndTurn`, `completed`, etc.). If the loop never started, run `/ralph-loop` or `/ulw-loop` again after `grok plugin update lazygrok` and start a **new session** (or Hooks reload).

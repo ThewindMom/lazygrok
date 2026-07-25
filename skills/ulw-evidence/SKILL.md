@@ -14,10 +14,25 @@ The vendored `ulw-loop` CLI (`vendor/lazygrok-hooks/ulw-loop/dist/cli.js`)
 provides structured goal tracking with evidence recording. Use it during
 ultrawork loops to make completion evidence-driven.
 
+## Why this matters on Grok
+
+Grok often does **not** inject host tools `update_goal` / `create_goal`
+(especially when background workflows are on). That is normal — not a
+plugin bug. On Grok:
+
+1. Bind the turn with a `# Goal` markdown block (required by ultrawork).
+2. Use **this CLI** for durable criteria + evidence that survive compaction.
+3. If `update_goal` happens to appear in the tool list, you may also call it;
+   never block work waiting for it, and never narrate its absence.
+
+`omo ulw-loop …` is equivalent when `omo` is on PATH and has the subcommand.
+
 ## CLI location
 
 ```bash
+# Prefer plugin-root path (always works when lazygrok is installed)
 ULW_CLI="node ${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js"
+# Or: omo ulw-loop …
 ```
 
 State is stored in `.omo/ulw-loop/<session-id>/` (or `.lazygrok/ulw-loop/`
