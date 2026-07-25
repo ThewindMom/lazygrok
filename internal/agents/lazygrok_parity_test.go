@@ -93,7 +93,7 @@ func TestLazygrokMcpServersRegistered(t *testing.T) {
 	expected := []string{
 		"hashline", "lsp",
 		"lazygrok-lsp", "lazygrok-lsp-tools", "lazygrok-lsp-daemon",
-		"lazygrok-codegraph", "lazygrok-git-bash",
+		"lazygrok-codegraph", "git_bash",
 	}
 	for _, name := range expected {
 		if _, ok := mcp.McpServers[name]; !ok {
