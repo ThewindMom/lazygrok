@@ -37,10 +37,10 @@ Spawn all three in parallel.
 ## The three prompts
 
 ```
-task(subagent_type="oracle", load_skills=[], run_in_background=true,
-     prompt="[CONTEXT: bug description + evidence captured so far, verbatim, with file:line refs]
+spawn_subagent(subagent_type="lazygrok:oracle", background=true,
+     prompt="TASK: Oracle Triple framing A — OBVIOUS-BUT-MISSED. DELIVERABLE: three candidate causes ranked by likelihood.
+     [CONTEXT: bug description + evidence captured so far, verbatim, with file:line refs]
 
-     Framing A — OBVIOUS-BUT-MISSED.
      What is the most embarrassing, most obvious cause that a senior engineer would spot in 30 seconds and we've overlooked? Consider:
      - typos, off-by-one
      - wrong variable name / wrong constant / wrong import
@@ -51,10 +51,10 @@ task(subagent_type="oracle", load_skills=[], run_in_background=true,
 
      Give me exactly three candidate causes ranked by likelihood, with one sentence each explaining why our evidence is consistent with each.")
 
-task(subagent_type="oracle", load_skills=[], run_in_background=true,
-     prompt="[CONTEXT: bug description + evidence captured so far]
+spawn_subagent(subagent_type="lazygrok:oracle", background=true,
+     prompt="TASK: Oracle Triple framing B — SYSTEM-BOUNDARY. DELIVERABLE: three boundary candidate causes.
+     [CONTEXT: bug description + evidence captured so far]
 
-     Framing B — SYSTEM-BOUNDARY.
      What if the bug is NOT in the code we've been reading, but at a boundary? Consider:
      - third-party SDK behavior that contradicts its docs
      - middleware that mutates the request or response
@@ -67,10 +67,10 @@ task(subagent_type="oracle", load_skills=[], run_in_background=true,
 
      Give me three candidate causes, each naming the specific boundary and the specific contract assumption that might be violated.")
 
-task(subagent_type="oracle", load_skills=[], run_in_background=true,
-     prompt="[CONTEXT: bug description + evidence captured so far]
+spawn_subagent(subagent_type="lazygrok:oracle", background=true,
+     prompt="TASK: Oracle Triple framing C — INVARIANT-VIOLATION. DELIVERABLE: five assumptions + falsification queries.
+     [CONTEXT: bug description + evidence captured so far]
 
-     Framing C — INVARIANT-VIOLATION.
      Which invariants that we've been ASSUMING TRUE might actually be false?
      Enumerate the five assumptions most load-bearing to our current hypotheses, then for each:
      - describe the smallest runtime query that would falsify it
@@ -78,6 +78,8 @@ task(subagent_type="oracle", load_skills=[], run_in_background=true,
 
      We want at least one of these queries to be decisive.")
 ```
+
+Collect all three with `get_command_or_subagent_output(task_ids=[...])` before synthesizing.
 
 ---
 

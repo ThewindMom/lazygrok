@@ -22,13 +22,19 @@ Default max iterations: **500** (vs 100 for `/ralph-loop`).
 ## Flow
 
 1. Work until fully done → output `<promise>DONE</promise>` (not final).
-2. Stop hook enters **verification** — you must run a verifier subagent (default: `code-reviewer`).
+2. Stop hook enters **verification** — you must run a verifier subagent (default: `lazygrok:lazygrok-code-reviewer`).
 3. Verifier must end with:
    ```text
    Agent: oracle
    <promise>VERIFIED</promise>
    ```
 4. Only then does the loop clear and the session may stop.
+
+Example verifier spawn:
+
+```text
+spawn_subagent(subagent_type="lazygrok:lazygrok-code-reviewer", prompt="Review that the objective is fully met with fresh evidence; end with Agent: oracle and <promise>VERIFIED</promise> if approved.")
+```
 
 ## If verification fails
 

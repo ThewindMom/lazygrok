@@ -46,9 +46,9 @@ Generate hierarchical AGENTS.md files. Root + complexity-scored subdirectories.
 4. **Review** - Deduplicate, trim, validate
 
 <critical>
-**TodoWrite ALL phases. Mark in_progress → completed in real-time.**
+**todo_write ALL phases. Mark in_progress → completed in real-time.**
 ```
-TodoWrite([
+todo_write([
   { id: "discovery", content: "Fire explore agents + LSP/codegraph map + read existing", status: "pending", priority: "high" },
   { id: "scoring", content: "Score directories, determine locations", status: "pending", priority: "high" },
   { id: "generate", content: "Generate AGENTS.md files (root + subdirs)", status: "pending", priority: "high" },

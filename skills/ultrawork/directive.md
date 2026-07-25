@@ -37,7 +37,7 @@ mid-task. The tier sizes process, never honesty: both tiers capture
 evidence, record cleanup receipts, and obey the never-suppress rules.
 
 LIGHT — the deliverable follows a known pattern with no open design
-decisions (one-spot bugfix, an endpoint following an existing
+decisions (one-spot bug fix, an endpoint following an existing
 pattern, a validation rule, a query tweak, copy/constants, launching
 or steering another session): plan directly in the notepad; 1-2
 success criteria (happy path + the riskiest edge); one real-surface
@@ -60,7 +60,7 @@ exercises the surface; capture the artifact.
      xterm.js web terminal (see the TUI visual QA note below). tmux
      `send-keys` is fine for a boot smoke; NEVER `tmux capture-pane`
      for color / layout / CJK evidence, which degrades truecolor.
-  3. Browser use — in Codex, use `browser:control-in-app-browser`
+  3. Browser use — in Grok, use the playwright MCP tools
      first when available and no authenticated/persistent user browser
      profile is required. Otherwise use Chrome to drive the REAL page;
      if Chrome is not available, download and use agent-browser
@@ -198,7 +198,7 @@ state from the notepad; do not re-plan from scratch or re-run completed
 steps.
 
 ## 3. Register obsessive todos via `todo_write`
-The todo tool is Codex `todo_write` — your live, user-visible
+The todo tool is Grok `todo_write` — your live, user-visible
 checklist. Translate every action from the plan into one `todo_write`
 step — one step per atomic work unit: an edit plus its verification, a
 QA scenario run, a teardown. Keep each step small enough to finish
@@ -235,8 +235,8 @@ or native artifacts / citations must be preserved.
 - **SYMBOLS REQUIRE LSP** — definitions, references, rename impact,
   workspace symbols, and diagnostics use the available `lsp_*` tools, not
   text search. Run diagnostics after edits and treat errors as blocking.
-- Repo text / filenames / history / bounded shell output → `rg`,
-  `rg --files`, `git`, and native utilities; narrow output in-program.
+- Repo text / filenames / history / bounded shell output → `grep`,
+  `list_dir`, `git`, and native utilities; narrow output in-program.
 - Structural call / function / class / import shapes and codemods → the
   `ast-grep` skill or `sg` with `$VAR` / `$$$` metavariables.
 When discovery needs multiple angles or the module layout is
@@ -329,28 +329,22 @@ calls the harness allows, and do independent root work while the
 command runs. If two consecutive checks show no state change, double
 the wait before the next check or switch to a completion signal.
 
-# Codex subagent reliability
+# Subagent reliability
 Every `spawn_subagent` message is self-contained and starts with
 `TASK: <imperative assignment>`, then names `DELIVERABLE`, `SCOPE`,
 `VERIFY`, and `STOP WHEN` — the observable condition that ends the
 child's run; a child without a stop condition wanders past its goal.
-State that it is an executable assignment, not a context handoff. Use `fork_context: false` unless full history is truly
-required; paste only the context the child needs. Full-history forks can
-make the child continue old parent context instead of the delegated task.
-If your tool list has a flat `spawn_agent` with a required `task_name` instead of `multi_agent_v1.*` (`multi_agent_v2`), rewrite: `fork_context: false` becomes `fork_turns: "none"`, `send_input` becomes `send_message`, finished agents end on their own (no `close_agent`; `followup_task` re-tasks, `interrupt_agent` stops), and `wait_agent` takes only `timeout_ms`, returning on any child mailbox activity.
+State that it is an executable assignment, not a context handoff. Use
+no context fork unless full history is truly required; paste only the
+context the child needs. Full-history forks can make the child continue
+old parent context instead of the delegated task.
 
-# TOML-backed subagent routing compatibility
-Installed role TOMLs (`~/.grok/installed-plugins/lazygrok-*/` agent types) bind ONLY via `subagent_type`.
-`spawn_subagent` exposes `subagent_type`; the deployed
-`multi_agent_v2` `collaboration.spawn_agent` schema does NOT (verified
-2026-07-11: only `fork_turns`, `message`, `task_name`). On a v2 surface,
-omit `subagent_type`, describe the role and difficulty tier inside
-`message`, and expect the session model for children. Difficulty tiers
-when `subagent_type` IS exposed: low -> `lazygrok:lazygrok-executor`
-(grok-4.5), medium -> `lazygrok:lazygrok-executor`
-(grok-4.5), high -> `lazygrok:lazygrok-executor` (grok-4.5);
-explorer/librarian carry their own TOMLs (gpt-5.6-luna/low). Difficulty
-(model power) is orthogonal to LIGHT/HEAVY rigor (process size).
+# Subagent routing
+Installed agent types bind ONLY via `subagent_type`.
+`spawn_subagent` exposes `subagent_type`; always pass the matching
+type (e.g. `lazygrok:lazygrok-executor`, `lazygrok:lazygrok-code-reviewer`,
+`lazygrok:explore`). Difficulty (model power) is orthogonal to
+LIGHT/HEAVY rigor (process size).
 
 Treat child status as a progress signal, not a timeout counter. For
 work likely to exceed one wait cycle, tell the child to send
@@ -363,7 +357,7 @@ Fallback only when the child is completed without the
 deliverable, ack-only, or no longer running. If that followup is still
 silent or ack-only, record the result as inconclusive, do not count it
 as approval/pass, close it if safe, and respawn a smaller
-no-context-fork task with the missing deliverable.
+no context fork (default) task with the missing deliverable.
 
 # Subagent-dependent transition barrier
 Do not mark an `todo_write` step `completed` while an active child owns
@@ -395,10 +389,10 @@ diff, run diagnostics, confirm each criterion's evidence, and state in
 one line why the tier held.
 
 Procedure (NON-NEGOTIABLE):
-1. Spawn a child with `fork_context: false` and a self-contained reviewer
-   assignment in `message`. The `spawn_subagent` schema cannot select a
-   TOML-backed reviewer role, so paste the reviewer requirements into
-   the message.
+1. Spawn a child with no context fork and a self-contained reviewer
+   assignment in `prompt`. Pass the reviewer requirements into
+   the prompt. Prefer `subagent_type="lazygrok:lazygrok-code-reviewer"`
+   (or gate/qa reviewers when applicable).
    Pass: goal, success-criteria, scenario evidence, full diff, notepad
    path.
 2. Verify each reviewer concern yourself. A concern blocks only when
@@ -421,7 +415,7 @@ Atomic, Conventional Commits (`<type>(<scope>): <imperative>` — feat /
 fix / refactor / test / docs / chore / build / ci / perf). One logical
 change per commit; each commit builds + tests green on its own. No WIP
 on the final branch. If a plan file exists, final commit footer:
-`Plan: .omo/plans/<slug>.md`. Do NOT auto-`git commit` unless the user
+`Plan: .lazygrok/plans/<slug>.md`. Do NOT auto-`git commit` unless the user
 requested or preauthorised this session — default is stage + draft
 message + present for approval.
 

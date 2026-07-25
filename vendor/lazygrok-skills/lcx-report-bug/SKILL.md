@@ -32,7 +32,7 @@ Create or prepare a GitHub issue or PR that includes:
 ## Required Workflow
 
 1. Read the user's bug report and identify the affected surface: LazyCodex installer, Codex plugin, skill, hook, MCP, CLI alias, GitHub marketplace sync, or web/docs.
-2. Invoke `$omo:debugging` for the investigation. If Codex exposes only unqualified skill names in the current session, invoke `$debugging` and state that it is the OMO debugging skill.
+2. Open the debugging skill with `read_file` on its `SKILL.md` (plugin path under `vendor/lazygrok-skills/debugging/SKILL.md` or the equivalent installed skill path) and follow its investigation methodology.
 3. Materialize the latest LazyCodex and upstream Codex sources under `/tmp` before deciding ownership. Re-sync on every run so a cached checkout cannot go stale — stale source produces wrong routing and dead line references:
 
 ```bash
@@ -204,23 +204,16 @@ gh pr create --repo openai/codex --title "<clear title>" "${LABEL_ARGS[@]}" --bo
 
 After creating or commenting, return the issue or PR URL and a short summary of the evidence used.
 
-## Browser use fallback
+## Browser fallback (playwright / agent-browser)
 
-If `gh` is unavailable, unauthenticated, or blocked, use Browser Use against the real GitHub page:
+If `gh` is unavailable, unauthenticated, or blocked, drive a real browser via the **playwright** MCP tools or **agent-browser** against the real GitHub page:
 
 1. Open the new issue page for the selected repo: `https://github.com/code-yeongyu/lazycodex/issues/new` or `https://github.com/openai/codex/issues/new`.
 2. Fill the title and body from the template.
 3. Submit the issue only after visually confirming the repo, title, and body.
 4. Capture the resulting issue URL.
 
-## Computer use fallback
-
-If Browser Use is unavailable but a desktop browser is open and authenticated, use Computer Use:
-
-1. Navigate to the new issue page for the selected repo: `https://github.com/code-yeongyu/lazycodex/issues/new` or `https://github.com/openai/codex/issues/new`.
-2. Fill the title and body.
-3. Verify the target repository and final text before submission.
-4. Submit and capture the issue URL.
+If playwright MCP is unavailable, fall back to **agent-browser** (or an equivalent controlled browser CLI) with the same steps — do not invent Computer Use / Browser Use tool calls.
 
 ## Stop Conditions
 

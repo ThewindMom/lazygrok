@@ -1,39 +1,40 @@
 ---
 name: start-work
-description: "Execute a Prometheus work plan in Codex with Boulder state, evidence ledger updates, worktree discipline, parallel subagents, and Stop-hook continuation. Use after planning when the user says start work, execute plan, continue plan, resume plan, or asks to run a .omo/plans plan."
+description: "Execute a Prometheus work plan in Grok with Boulder state, evidence ledger updates, worktree discipline, parallel subagents, and Stop-hook continuation. Use after planning when the user says start work, execute plan, continue plan, resume plan, or asks to run a .lazygrok/plans plan."
 ---
 
-## Codex Harness Tool Compatibility
+## Grok Harness Tool Compatibility
 
-This skill may include examples copied from the OpenCode harness. In Codex, do not call OpenCode-only tools such as `spawn_subagent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Codex native tools:
+This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools. `spawn_subagent` **is** native on Grok — use it directly.
 
-| OpenCode example | Codex tool to use |
+| OpenCode example | Grok tool to use |
 | --- | --- |
-| `spawn_subagent(subagent_type="explore", ...)` | `spawn_subagent({"message":"TASK: act as an explorer. ...","subagent_type":"explorer","background":true})` |
-| `spawn_subagent(subagent_type="librarian", ...)` | `spawn_subagent({"message":"TASK: act as a librarian. ...","subagent_type":"librarian","background":true})` |
-| `task(subagent_type="plan", ...)` | `spawn_subagent({"message":"TASK: act as a planning agent. ...","subagent_type":"plan","background":true})` |
-| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","subagent_type":"lazygrok-gate-reviewer","background":true})` |
-| `task(category="...", ...)` for implementation or QA | `spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":true})` |
-| `background_output(task_id="...")` | `get_command_or_subagent_output(...)` for mailbox signals |
-| `team_*(...)` | Use Codex native subagents via `spawn_subagent`, `spawn_subagent`, `get_command_or_subagent_output`, and `kill_command_or_subagent` |
+| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: act as an explorer. ...")` |
+| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent(subagent_type="lazygrok:librarian", background=true, prompt="TASK: act as a librarian. ...")` |
+| `task(subagent_type="plan", ...)` | `spawn_subagent(subagent_type="lazygrok:prometheus", background=true, prompt="TASK: act as a planning agent. ...")` |
+| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent(subagent_type="lazygrok:oracle", background=true, prompt="TASK: act as a rigorous reviewer. ...")` |
+| `task(category="...", ...)` for implementation or QA | `spawn_subagent(subagent_type="lazygrok:hephaestus", background=true, prompt="TASK: act as an implementation or QA worker. ...")` |
+| `background_output(task_id="...")` | `get_command_or_subagent_output(task_ids=["..."])` |
+| `background_cancel(taskId="...")` | `kill_command_or_subagent(task_id="...")` |
+| `team_*(...)` | Use Grok native subagents via `spawn_subagent` with `background: true`, then `get_command_or_subagent_output` and `kill_command_or_subagent` |
 
-Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into the lazygrok plugin agents directory: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `subagent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `subagent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
+Role-specific behavior must be described in a self-contained `prompt`. The child starts with only the prompt (no parent history); there is no fork-context concept in Grok. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `prompt`. lazygrok installs these selectable agent roles into `~/.grok/agents/`: `explore`, `librarian`, `prometheus`, `momus`, `metis`, `hephaestus`, `oracle`, and `atlas` - pass the matching name as `subagent_type` (e.g. `lazygrok:hephaestus`) so the child gets that role's model and instructions. If the spawn tool exposes no `subagent_type` parameter, omit it and describe the role inside `prompt`. If a code block below conflicts with this section, this section wins.
 
-For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `get_command_or_subagent_output` timeout only means no new mailbox update arrived. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
+For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `get_command_or_subagent_output` timeout only means no new output arrived. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
 
 ## ABSOLUTE RULE: YOU ARE AN ORCHESTRATOR — NEVER THE IMPLEMENTER
 
-**YOU DO NOT WRITE CODE. YOU DO NOT EDIT PRODUCT FILES. YOU DO NOT RUN QA YOURSELF. EVERY unit of implementation, test, QA, and review work MUST be delegated to a spawned subagent. NO EXCEPTIONS.** Your hands touch only plan selection, `.omo/` state (Boulder, ledger, plan checkboxes), decomposition, dispatch, verdicts, and evidence records. About to edit a product file or run an implementation command yourself? **STOP. SPAWN A WORKER INSTEAD.** Orchestrate at **MAXIMUM PARALLELISM**: every independent unit runs concurrently; only named dependencies serialize.
+**YOU DO NOT WRITE CODE. YOU DO NOT EDIT PRODUCT FILES. YOU DO NOT RUN QA YOURSELF. EVERY unit of implementation, test, QA, and review work MUST be delegated to a spawned subagent. NO EXCEPTIONS.** Your hands touch only plan selection, `.lazygrok/` state (Boulder, ledger, plan checkboxes), decomposition, dispatch, verdicts, and evidence records. About to edit a product file or run an implementation command yourself? **STOP. SPAWN A WORKER INSTEAD.** Orchestrate at **MAXIMUM PARALLELISM**: every independent unit runs concurrently; only named dependencies serialize.
 
-## Codex Subagent Reliability
+## Grok Subagent Reliability
 
-Every `spawn_subagent` message is a self-contained executable assignment: `TASK: <imperative assignment>`, then `DELIVERABLE`, `SCOPE`, and `VERIFY`, with role instructions inside `message`. Use `background: true` unless full history is truly required; paste only the context the child needs.
+Every `spawn_subagent` prompt is a self-contained executable assignment: `TASK: <imperative assignment>`, then `DELIVERABLE`, `SCOPE`, and `VERIFY`, with role instructions inside `prompt`. Use `background: true`; paste only the context the child needs.
 
-Plan and reviewer agents may run for a long time: spawn them in the background, keep doing independent root work, and poll with short `get_command_or_subagent_output` cycles — never a single long blocking wait. A timeout only means no new mailbox update arrived; treat a running child as alive. Require `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. Keep the parent visibly alive with active subagent count, names, and latest `WORKING:` phase. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running — then record inconclusive (never a pass), close if safe, and respawn a smaller `background: true` task with the missing deliverable.
+Plan and reviewer agents may run for a long time: spawn them in the background, keep doing independent root work, and poll with short `get_command_or_subagent_output` cycles — never a single long blocking wait. A timeout only means no new output arrived; treat a running child as alive. Require `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. Keep the parent visibly alive with active subagent count, names, and latest `WORKING:` phase. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running — then record inconclusive (never a pass), close if safe, and respawn a smaller `background: true` task with the missing deliverable.
 
 # start-work
 
-Execute a Prometheus work plan until every top-level checkbox is complete. This skill pairs with the Codex `Stop` / `SubagentStop` continuation hook (`components/start-work-continuation`), which re-injects the next turn while `.omo/boulder.json` says this `codex:<session_id>` still has unchecked plan work.
+Execute a Prometheus work plan until every top-level checkbox is complete. This skill pairs with the Grok session continuation hook (`components/start-work-continuation`), which re-injects the next turn while `.lazygrok/boulder.json` says this `grok:<session_id>` still has unchecked plan work.
 
 ## Usage
 
@@ -41,13 +42,13 @@ Execute a Prometheus work plan until every top-level checkbox is complete. This 
 $start-work [plan-name] [--worktree <absolute-path>]
 ```
 
-- `plan-name` (optional): a full or partial file stem under `.omo/plans/`.
+- `plan-name` (optional): a full or partial file stem under `.lazygrok/plans/`.
 - `--worktree` (optional): only when the user explicitly asks for a separate git worktree.
 
 ## Phase 1: Select the plan
 
-1. Read `.omo/boulder.json` if it exists.
-2. List Prometheus plan files under `.omo/plans/`.
+1. Read `.lazygrok/boulder.json` if it exists.
+2. List Prometheus plan files under `.lazygrok/plans/`.
 3. If `plan-name` was provided, select the matching plan.
 4. If exactly one active or paused Boulder work exists for this session, resume it.
 5. If no active work exists and exactly one plan exists, select it.
@@ -59,14 +60,14 @@ $start-work [plan-name] [--worktree <absolute-path>]
 When the user explicitly said `start work` / `$start-work` and no selectable plan exists, treat that phrase as approval: bootstrap `ulw-plan` to create the approved plan before execution and implementation, instead of stalling or asking for generic approval again. A brief or notes file without waves, checkboxes, and acceptance criteria is NOT decision-complete — enter this bootstrap too.
 
 1. Invoke the `ulw-plan` skill from the current request and require its dynamic adversarial workflow: collect, verify, design, adversarial plan-review, synthesize.
-2. The generated Prometheus plan must be saved under `.omo/plans/<slug>.md` before implementation or Boulder state writes that point at plan work.
+2. The generated Prometheus plan must be saved under `.lazygrok/plans/<slug>.md` before implementation or Boulder state writes that point at plan work.
 3. Use maximum safe parallelism in the generated plan: independent files/tasks fan out; same-file writes, shared state, and named dependencies serialize.
 4. Preserve safety boundaries. Ask one focused question only when the objective is missing, destructive, or has a safety/product ambiguity that repository exploration cannot resolve.
 5. After the plan exists, continue directly to Phase 2.
 
 ## Phase 2: Create or update Boulder state
 
-Write `.omo/boulder.json` before implementation starts. Prefix session ids with `codex:` so the continuation hook can identify its own session.
+Write `.lazygrok/boulder.json` before implementation starts. Prefix session ids with `grok:` so the continuation hook can identify its own Grok session.
 
 ```json
 {
@@ -75,9 +76,9 @@ Write `.omo/boulder.json` before implementation starts. Prefix session ids with 
   "works": {
     "<work-id>": {
       "work_id": "<work-id>",
-      "active_plan": ".omo/plans/<plan-name>.md",
+      "active_plan": ".lazygrok/plans/<plan-name>.md",
       "plan_name": "<plan-name>",
-      "session_ids": ["codex:<session_id>"],
+      "session_ids": ["grok:<session_id>"],
       "status": "active",
       "worktree_path": null
     }
@@ -105,8 +106,7 @@ Each sub-task message must include:
 5. One Manual-QA channel, named with the exact tool and exact invocation (the literal `curl`, `send-keys`, `page.click`, payload, selectors, and the binary observable that decides PASS/FAIL), not "verify it works". A LIGHT checkbox needs one real-surface proof of its deliverable, and auxiliary surfaces (CLI stdout, DB state diff, parsed config dump) are first-class when the surface is CLI- or data-shaped:
    - HTTP call: `curl -i` against the live endpoint.
    - tmux: a `tmux` session driven with `send-keys`, dumped via `capture-pane`.
-   - Browser use: drive the real page with Chrome, or agent-browser (https://github.com/vercel-labs/agent-browser) when Chrome is unavailable.
-   - Computer use: OS-level GUI automation against the running desktop app when the surface is not a page.
+   - Browser use: drive the real page with playwright MCP, or agent-browser (https://github.com/vercel-labs/agent-browser) when playwright is unavailable. Do not use Codex-only `computer_use`.
 6. The adversarial classes that apply to this sub-task (from the 9 ultraqa classes) and how each is probed.
 7. Required artifact path and cleanup receipt.
 
@@ -122,7 +122,7 @@ For each checkbox, complete all five gates before marking it done:
 4. Adversarial QA: exercise every class the Phase 3 trigger map marks applicable and capture the observable result for each.
 5. Cleanup: register every QA resource teardown as its own todo when spawned (QA scripts, tmux assets, browser sessions, PIDs, ports, containers, temp dirs), execute each, and capture the receipt. No QA asset is left running.
 
-Append evidence to `.omo/start-work/ledger.jsonl`, one JSON object per line. Include at least `event`, `plan`, `task`, `session_id`, `commands`, `artifact`, `adversarial_classes`, and `cleanup` fields. `adversarial_classes` lists each probed class with its observable result and each ruled-out class with a one-line reason.
+Append evidence to `.lazygrok/start-work/ledger.jsonl`, one JSON object per line. Include at least `event`, `plan`, `task`, `session_id`, `commands`, `artifact`, `adversarial_classes`, and `cleanup` fields. `adversarial_classes` lists each probed class with its observable result and each ruled-out class with a one-line reason.
 
 ### Sisyphus-style completion contract
 
@@ -170,11 +170,11 @@ When all top-level checkboxes in `## TODOs` and `## Final Verification Wave` are
 1. Run the plan's final verification commands.
 2. Complete the **Global Review and Debugging Gate** before any completion claim, PR handoff, or branch handoff:
    - Invoke the `review-work` skill with the final diff, changed files, user goal, constraints, run command, and verification evidence. All five review lanes must return PASS. A timeout, missing deliverable, ack-only child, `BLOCKED:`, or inconclusive lane is a gate failure, not approval.
-   - Run a debugging-oriented runtime audit even when the review passes: name at least three plausible failure hypotheses for the changed surface, run the distinguishing checks against the actual artifact, and append the ruled-out or confirmed result to `.omo/start-work/ledger.jsonl`.
+   - Run a debugging-oriented runtime audit even when the review passes: name at least three plausible failure hypotheses for the changed surface, run the distinguishing checks against the actual artifact, and append the ruled-out or confirmed result to `.lazygrok/start-work/ledger.jsonl`.
    - If any review lane or debugging hypothesis fails, invoke the `debugging` skill, confirm root cause with runtime evidence, add the minimal failing test or reproduction, fix it, rerun the affected verification, then rerun the Global Review and Debugging Gate.
-   - Evidence hygiene is mandatory: redact or mask secrets and sensitive user data before writing `.omo/start-work/ledger.jsonl`, a PR body, or a handoff. Never include raw tokens, credentials, auth headers, cookies, API keys, env dumps, private logs, or PII; use concise summaries, lengths, hashes, or short non-sensitive prefixes instead.
+   - Evidence hygiene is mandatory: redact or mask secrets and sensitive user data before writing `.lazygrok/start-work/ledger.jsonl`, a PR body, or a handoff. Never include raw tokens, credentials, auth headers, cookies, API keys, env dumps, private logs, or PII; use concise summaries, lengths, hashes, or short non-sensitive prefixes instead.
    - If the work includes creating, updating, or handing off a PR, refresh `git status` and the PR/branch state after the gate, and include only redacted review/debugging evidence in the PR body or handoff.
-3. If worktree mode was used, sync `.omo/` state back to the main repo, merge or hand off exactly as requested, and remove the worktree only after successful merge or explicit handoff.
+3. If worktree mode was used, sync `.lazygrok/` state back to the main repo, merge or hand off exactly as requested, and remove the worktree only after successful merge or explicit handoff.
 4. Remove or mark the Boulder work as completed.
 5. Print an `ORCHESTRATION COMPLETE` block with the plan path, verification commands, Global Review and Debugging Gate verdict, artifacts, and cleanup receipts.
 
@@ -186,5 +186,5 @@ When all top-level checkboxes in `## TODOs` and `## Final Verification Wave` are
 - **NO DIRECT IMPLEMENTATION BY THE ORCHESTRATOR.** Root NEVER edits product files, writes tests, or runs QA itself — a spawned worker does.
 - No completion claim while an applicable ultraqa adversarial class was never probed. Each applicable class needs a captured observable result; each skipped class needs a one-line not-applicable reason in the ledger.
 - No `ORCHESTRATION COMPLETE`, final response, PR creation, or PR handoff before the Global Review and Debugging Gate passes with recorded evidence.
-- No unprefixed session ids in Boulder state. Codex sessions are always `codex:<session_id>`.
+- No unprefixed session ids in Boulder state. Grok sessions are always `grok:<session_id>`.
 - No stale-memory execution. The plan and ledger are the durable source of truth.

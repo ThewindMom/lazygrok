@@ -67,7 +67,7 @@ Each phase has exactly one reference. Read it as you enter the phase — not in 
 | 0 | **Environment assessment** — know the runtime, ports, symbols, env vars, watchers before attaching | [references/methodology/00-setup.md](references/methodology/00-setup.md) |
 | 1 | **Journal setup** — single `.debug-journal.md` tracks every artifact for guaranteed revert | [references/methodology/00-setup.md](references/methodology/00-setup.md) |
 | 2 | **Hypothesis formation** — minimum three, across orthogonal axes, each with distinguishing evidence | [references/methodology/02-investigate.md](references/methodology/02-investigate.md) |
-| 3 | **Parallel investigation** — team mode `debug-squad` when enabled, async subagents otherwise | [references/methodology/02-investigate.md](references/methodology/02-investigate.md) |
+| 3 | **Parallel investigation** — parallel `spawn_subagent` workers (`debug-squad` roles); `team_*` is n/a on Grok | [references/methodology/02-investigate.md](references/methodology/02-investigate.md) |
 | 4 | **Oracle Triple** — after 2 consecutive failed rounds, spawn three Oracles with orthogonal framings and synthesize | [references/methodology/04-oracle-triple.md](references/methodology/04-oracle-triple.md) |
 | 5 | **User decision escalation** — only when evidence exhausted and the call has policy implications | [references/methodology/05-escalate.md](references/methodology/05-escalate.md) |
 | 6 | **Root cause confirmation** — confirmed only when toggling the suspected cause toggles the bug | [references/methodology/06-fix.md](references/methodology/06-fix.md) |

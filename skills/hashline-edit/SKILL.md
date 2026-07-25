@@ -1,18 +1,20 @@
 ---
 name: hashline-edit
 description: >
-  Hash-anchored StrReplace edits using LINE#ID tags from Read output. PreToolUse
+  Hash-anchored search_replace edits using LINE#ID tags from read_file output. PreToolUse
   blocks stale anchors when the file changed since the last cached read.
 user_invocable: false
 ---
 
 # Hashline edits (LINE#ID)
 
-lazygrok caches per-line hashes after each workspace **Read**. Use those tags in `StrReplace` `old_string` when you need precise, conflict-safe edits.
+lazygrok caches per-line hashes after each workspace **read_file**. Use those tags in `search_replace` `old_string` when you need precise, conflict-safe edits.
+
+Optional: the **hashline** MCP server (`hashline_read`, `hashline_edit`) provides the same LINE#ID anchors and anchor-based edits when available — prefer it for multi-line structural edits; otherwise use `read_file` + `search_replace` with tags from the cache.
 
 ## Format
 
-Each line from Read is tagged as:
+Each line from read_file is tagged as:
 
 ```text
 {line}#{hash}|{content}
@@ -26,14 +28,14 @@ Example: `11#XJ|  console.log("hi");` → anchor `11#XJ` (omit `|content` in `ol
 
 ## Workflow
 
-1. **Read** the target file (hooks refresh the hashline cache).
+1. **read_file** the target file (hooks refresh the hashline cache), or call MCP `hashline_read`.
 2. Copy the smallest set of `LINE#ID` anchors you need into `old_string`.
-3. **StrReplace** once per logical change batch; re-read before a second edit on the same file.
-4. If PreToolUse denies with “stale LINE#ID”, **Read** again and use the updated tags from the error or fresh read.
+3. **search_replace** once per logical change batch (or MCP `hashline_edit`); re-read before a second edit on the same file.
+4. If PreToolUse denies with “stale LINE#ID”, **read_file** again and use the updated tags from the error or fresh read.
 
 ## Rules
 
-- Anchors in `old_string` must match the **last Read cache** for that path.
+- Anchors in `old_string` must match the **last read_file cache** for that path.
 - Whitespace in `old_string` must still match file content; hashes only guard line identity.
 - SKILL.md reads are not cached — use normal edits for skills.
 - Disable validation: `LAZYGROK_HASHLINE=0`.

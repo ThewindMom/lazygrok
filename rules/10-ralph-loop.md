@@ -12,7 +12,7 @@ Modeled on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) `r
 
 ## Ultrawork verification
 
-After `<promise>DONE</promise>`, run `task(subagent_type="code-reviewer", ...)` (override via `RALPH_ORACLE_SUBAGENT`). Verifier output must include `Agent: oracle` and `<promise>VERIFIED</promise>`.
+After `<promise>DONE</promise>`, run `spawn_subagent(subagent_type="lazygrok:lazygrok-code-reviewer", ...)` (override via `RALPH_ORACLE_SUBAGENT`). Verifier output must include `Agent: oracle` and `<promise>VERIFIED</promise>`.
 
 ## While active
 

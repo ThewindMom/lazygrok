@@ -1,6 +1,6 @@
 ---
 name: lsp-setup
-description: "Configure a Language Server (LSP) for a specific language so editor/agent tooling — diagnostics, go-to-definition, find-references, rename — works. Use when you need to: configure LSP, lsp setup, set up or install a language server, fix 'no LSP server configured' / 'server not installed', choose between servers (basedpyright vs pyright vs ty vs ruff), or wire .codex/lsp-client.json / .opencode/lsp.json. 언어서버 설정. Routes by file extension to references/<language>/README.md for the exact builtin server, per-OS install commands (macOS/Linux/Windows), config snippets for both config files, initialization options, alternatives, and troubleshooting. Ships scripts: detect-lsp.ts (scan a project for languages + each server's install/config status) and verify-lsp.ts (run a real diagnostics roundtrip). Covers typescript, python, go, rust, c/c++, java, kotlin, c#/razor, swift, ruby, php, dart, elixir, zig, lua, bash, yaml, terraform, haskell, julia."
+description: "Configure a Language Server (LSP) for a specific language so editor/agent tooling — diagnostics, go-to-definition, find-references, rename — works. Use when you need to: configure LSP, lsp setup, set up or install a language server, fix 'no LSP server configured' / 'server not installed', choose between servers (basedpyright vs pyright vs ty vs ruff), or wire .lazygrok/lsp.json / .codex/lsp-client.json / .opencode/lsp.json. 언어서버 설정. Routes by file extension to references/<language>/README.md for the exact builtin server, per-OS install commands (macOS/Linux/Windows), config snippets for config files, initialization options, alternatives, and troubleshooting. Ships scripts: detect-lsp.ts (scan a project for languages + each server's install/config status) and verify-lsp.ts (run a real diagnostics roundtrip). Covers typescript, python, go, rust, c/c++, java, kotlin, c#/razor, swift, ruby, php, dart, elixir, zig, lua, bash, yaml, terraform, haskell, julia."
 ---
 
 # LSP Setup
@@ -78,8 +78,9 @@ file extension. Write config only to: pick between competing servers, set a
 `priority`, pass `initialization` options, override `extensions`, set `env`, or
 `disable` a server.
 
-Two project-scoped config files, **identical JSON shape**:
+Project-scoped config files, **identical JSON shape** across harnesses:
 
+- **Grok Build / lazygrok** → `.lazygrok/lsp.json` (preferred project path); plugin-bundled LSP wiring also lives under the installed plugin (`vendor/lazygrok-hooks/lsp*`, MCP `lazygrok-lsp` / `lazygrok-lsp-daemon`). User override: `LSP_TOOLS_MCP_USER_CONFIG` or `~/.lazygrok/lsp.json` when present.
 - Codex harness → `.codex/lsp-client.json` (user: `~/.codex/lsp-client.json`)
 - OpenCode/omo harness → `.opencode/lsp.json` (also `.omo/lsp.json`)
 
@@ -100,12 +101,12 @@ Two project-scoped config files, **identical JSON shape**:
 
 Rules enforced by `config-loader.ts`:
 
-- In a **project** config (`.codex/lsp-client.json`, `.opencode/lsp.json`) an
+- In a **project** config (`.lazygrok/lsp.json`, `.codex/lsp-client.json`, `.opencode/lsp.json`) an
   entry whose id is a **builtin** server inherits `command` automatically — you
   only override `extensions` / `priority` / `initialization`. A non-builtin id
   in a project config is **ignored**.
 - To define a **fully custom** (non-builtin) server with its own `command`, put
-  it in the **user** config (`~/.codex/lsp-client.json`, or the path set by
+  it in the **user** config (`~/.lazygrok/lsp.json`, `~/.codex/lsp-client.json`, or the path set by
   `LSP_TOOLS_MCP_USER_CONFIG`), where `command` + `extensions` are honored.
 - Project entries win over user entries; both win over builtin defaults.
 

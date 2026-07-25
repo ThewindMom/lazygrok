@@ -1,17 +1,24 @@
 ---
 name: teammode
-description: "Team orchestration: run a named team of cooperating Grok subagents with durable, script-managed state. MUST USE when the user asks Grok to create, run, coordinate, inspect, archive, or delete a team of subagents/sessions, or to work on something as a team in parallel. The main session is always the leader; members are defined by a concrete part, ownership area, or perspective - never a vague job role; a bundled cross-platform script writes the .lazygrok/teams state plus an auto-generated member field manual. Use a team when the work is not perfectly isolated but parallelizing helps, or when a task still needs exploration under a clear goal; use plain subagents when scope is perfectly isolated or the goal is ambiguous. Triggers: team mode, teammode, make a team, run as a team, team of agents, coordinate subagents, parallel subagents, archive the team, delete the team."
+description: "Grok: n/a — use parallel spawn_subagent. Team orchestration skill is NOT runnable on Grok Build (requires multi_agent_v2/codex_app). On Grok, do not run this skill — fan out with parallel spawn_subagent, self-contained prompts, and an orchestrator journal instead. Historical triggers: team mode, teammode, make a team, run as a team, team of agents, coordinate subagents, parallel subagents, archive the team, delete the team."
 ---
 
 # Teammode
 
-> **Note: Codex concept, adapted for Grok.** This skill originates from a Codex-centric model of
+> **ON GROK BUILD: this skill is NOT runnable.**
+>
+> It requires Codex `multi_agent_v2` / `codex_app` team transport (durable threads / team lifecycle). **Status: n_a / broken on Grok.** Prior “adapted for Grok” wording below does **not** make full teammode runnable — Grok has no substitute for that transport.
+>
+> **Do not execute the teammode lifecycle below on Grok.** Keep this skill for reference only.
+>
+> **Grok alternative:** parallel `spawn_subagent` with self-contained prompts and an orchestrator journal (leader tracks member task ids, status, and findings in chat or under `.lazygrok/`). Collect with `get_command_or_subagent_output`; tear down with `kill_command_or_subagent`. That is a different model — not full teammode.
+
+> **Note: Codex concept (reference only on Grok).** This skill originates from a Codex-centric model of
 > durable "threads". Grok has no first-class thread concept; parallel work in Grok is done via
 > `spawn_subagent` with `background: true`, then collecting results with
 > `get_command_or_subagent_output(task_ids=[...])` and tearing down with
-> `kill_command_or_subagent(task_id="...")`. The orchestration concepts below (leader, members,
-> worktrees, durable state on disk) still apply, but each "member" is a backgrounded Grok
-> subagent rather than a Codex thread.
+> `kill_command_or_subagent(task_id="...")`. The orchestration concepts below are historical reference;
+> do not run the full teammode lifecycle on Grok.
 
 Run a named team of cooperating Grok subagents under one leader, with durable state on disk.
 This workflow is inspired by the lifecycle concerns in the

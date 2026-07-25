@@ -1,9 +1,17 @@
 ---
 name: teammode
-description: "Codex-only team orchestration: run a named team of cooperating Codex threads with durable, script-managed state. MUST USE when the user asks Codex to create, run, coordinate, inspect, archive, or delete a team of threads/sessions, or to work on something as a team in parallel. The main session is always the leader; members are defined by a concrete part, ownership area, or perspective - never a vague job role; a bundled cross-platform script writes the .omo/teams state plus an auto-generated member field manual. Use a team when the work is not perfectly isolated but parallelizing helps, or when a task still needs exploration under a clear goal; use plain subagents when scope is perfectly isolated or the goal is ambiguous. Triggers: team mode, teammode, make a team, run as a team, team of agents, coordinate threads, parallel Codex threads, archive the team, delete the team."
+description: "Grok: n/a — use parallel spawn_subagent. Codex-only team orchestration (NOT runnable on Grok Build): run a named team of cooperating Codex threads with durable, script-managed state. Requires multi_agent_v2/codex_app. On Grok, do not run this skill — fan out with parallel spawn_subagent, self-contained prompts, and an orchestrator journal instead. Historical triggers: team mode, teammode, make a team, run as a team, team of agents, coordinate threads, parallel Codex threads, archive the team, delete the team."
 ---
 
 # Teammode
+
+> **ON GROK BUILD: this skill is NOT runnable.**
+>
+> It requires Codex `multi_agent_v2` / `codex_app` team transport (durable threads, bind/title/archive thread tools). **Status: n_a / broken on Grok.**
+>
+> **Do not execute the teammode lifecycle below on Grok.** Keep this skill for reference only.
+>
+> **Grok alternative:** parallel `spawn_subagent` with self-contained prompts and an orchestrator journal (leader tracks member task ids, status, and findings in chat or under `.lazygrok/`). Collect with `get_command_or_subagent_output`; tear down with `kill_command_or_subagent`. That is a different model — not full teammode.
 
 Run a named team of cooperating Codex threads under one leader, with durable state on disk.
 This is a Codex-only workflow. It is inspired by the lifecycle concerns in the

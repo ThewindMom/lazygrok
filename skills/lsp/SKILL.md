@@ -6,17 +6,19 @@ description: >
 user_invocable: false
 ---
 
-# LSP tools (MCP `lsp`)
+# LSP tools (MCP `lsp` / `lazygrok-lsp`)
 
 Bundled server: `node ${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/lsp-tools-mcp/dist/cli.js mcp`
 
+On Grok, call tools from the **`lsp`** or **`lazygrok-lsp`** MCP servers (not `CallMcpTool`).
+
 ## When to use
 
-- **After** `Write` / `StrReplace` on code files — check for new errors
+- **After** `write` / `search_replace` on code files — check for new errors
 - Go to definition, find references, document symbols
 - Safe renames (`prepare_rename` → `rename`)
 
-## Tools (via `CallMcpTool`, server `lsp`)
+## Tools (MCP servers `lsp` / `lazygrok-lsp`)
 
 | Tool | Purpose |
 |------|---------|

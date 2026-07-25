@@ -41,66 +41,51 @@ If two hypotheses have identical distinguishing evidence, they aren't actually d
 
 Branch depending on what's available.
 
-### Path A: Team mode ENABLED
+### Path A: Parallel investigation (Grok default)
 
-When the `team_*` tools are present, create a **debug-squad** team and split investigation across members working on different evidence sources. This is the right default whenever you have ≥3 hypotheses and any of them would take >10 minutes to investigate single-threaded.
+`team_*` tools are **n/a on Grok**. When you have ≥3 hypotheses and any of them would take >10 minutes to investigate single-threaded, fan out **parallel `spawn_subagent` workers** and keep the journal in the Lead. Prefer state under `.lazygrok/` (not `~/.omo/teams/`).
 
-**Team spec** — write to `~/.omo/teams/debug-squad/config.json`:
+**Worker roles** — spawn one background subagent per evidence lane (cap ~4 concurrent):
 
-```json
-{
-  "name": "debug-squad",
-  "lead": { "kind": "subagent_type", "subagent_type": "sisyphus" },
-  "members": [
-    {
-      "kind": "category",
-      "category": "deep",
-      "prompt": "You are the Runtime State Inspector. Your job: attach to the live process, hit breakpoints, read program state (variables, heap, goroutines, stack, registers depending on runtime), and report observed values verbatim. Never guess — if you don't see the value, say so. Report back via team_send_message with file:line / address references and captured values. Never edit source code. Never run git commands. If you need an instrumentation statement added (breakpoint(), debugger;, dbg!, etc.), ask the Lead first."
-    },
-    {
-      "kind": "category",
-      "category": "deep",
-      "prompt": "You are the Log Archaeologist. Your job: grep server logs, stderr streams, SDK-internal debug output (DEBUG env, RUST_LOG, GODEBUG, PYTHONASYNCIODEBUG), and correlate timestamps. Produce a timeline of events with latencies. Flag anything that looks like a silent catch, a swallowed rejection, a panic recovered-and-ignored, a success response that contains failure signals (HTTP 200 with empty body, stopReason=error, exit 0 with error-in-stdout). Never edit source code."
-    },
-    {
-      "kind": "category",
-      "category": "deep",
-      "prompt": "You are the Reproduction Engineer. Your job: build the smallest reliable repro — a curl command, a vitest/pytest/go test, a tmux script, a Playwright script for browser bugs, a pwntools script for binary targets. It must reproduce on first try and be copy-pasteable by the Lead. Document exact input, expected output, observed output. Save repro artifacts under /tmp/ and tell the Lead to journal them. If the bug is browser-based you MUST use Playwright CLI — do not simulate with curl."
-    },
-    {
-      "kind": "category",
-      "category": "deep",
-      "prompt": "You are the Trace Correlator. Your job: take findings from the other members and cross-link them. Build a causal chain from symptom to suspected cause. Identify missing evidence. Propose the next single most-decisive runtime query. Never edit source code; only reason across already-captured evidence. If hypotheses diverge sharply after correlation, tell the Lead immediately — that is the signal for the Oracle Triple."
-    }
-  ]
-}
+```
+spawn_subagent(subagent_type="lazygrok:explore", background=true,
+     prompt="TASK: Runtime State Inspector for hypothesis set. DELIVERABLE: observed values verbatim with file:line / address refs. SCOPE: attach to the live process, hit breakpoints, read program state (variables, heap, goroutines, stack, registers depending on runtime). VERIFY: never guess — if you don't see the value, say so. Never edit source code. Never run git commands. If you need instrumentation (breakpoint(), debugger;, dbg!, etc.), report the request instead of applying it.")
+
+spawn_subagent(subagent_type="lazygrok:explore", background=true,
+     prompt="TASK: Log Archaeologist. DELIVERABLE: timeline of events with latencies and silent-failure flags. SCOPE: grep server logs, stderr streams, SDK-internal debug output (DEBUG env, RUST_LOG, GODEBUG, PYTHONASYNCIODEBUG), correlate timestamps. VERIFY: flag silent catch, swallowed rejection, recovered-and-ignored panic, success-with-failure-signals (HTTP 200 empty body, stopReason=error, exit 0 with error-in-stdout). Never edit source code.")
+
+spawn_subagent(subagent_type="lazygrok:hephaestus", background=true,
+     prompt="TASK: Reproduction Engineer. DELIVERABLE: smallest reliable repro (curl / vitest/pytest/go test / tmux / Playwright / pwntools) that reproduces on first try. SCOPE: document exact input, expected output, observed output; save repro artifacts under /tmp/. VERIFY: if browser-based MUST use Playwright — do not simulate with curl. Never git commit.")
+
+spawn_subagent(subagent_type="lazygrok:oracle", background=true,
+     prompt="TASK: Trace Correlator. DELIVERABLE: causal chain + missing evidence + single most-decisive next runtime query. SCOPE: reason across already-captured evidence only (Lead will paste member findings). VERIFY: if hypotheses diverge sharply after correlation, flag Oracle Triple. Never edit source code.")
 ```
 
-**Assignment rule**: one hypothesis → one `team_task_create`. Give each hypothesis to the member whose evidence source is most likely to confirm or refute it. Broadcast the full hypothesis list once via `team_send_message(to="*")` so members know what the others are testing.
+**Assignment rule**: one hypothesis → one `spawn_subagent`. Give each hypothesis to the worker whose evidence source is most likely to confirm or refute it. Put the full hypothesis list in every worker's prompt so they know what the others are testing.
 
 **Lead responsibilities**:
-- Maintain the journal (members do not write to it).
+- Maintain the journal (workers do not write to it).
 - Approve any source-code edits (including `debugger;` / `breakpoint()` / `dbg!` statements).
-- Synthesize member reports into updated hypothesis statuses.
-- Decide when to disband: `team_shutdown_request` → `team_approve_shutdown` → `team_delete`.
+- Poll with `get_command_or_subagent_output(task_ids=[...])`; a timeout only means no new output.
+- Synthesize worker reports into updated hypothesis statuses.
+- Kill residual workers with `kill_command_or_subagent` when the round ends.
 
-**Team does NOT include Oracle** — Oracle is a hard-reject team member type. Oracle is used separately in Phase 4 (see `04-oracle-triple.md`).
+**Oracle Triple stays separate** — Phase 4 (see `04-oracle-triple.md`) spawns three `lazygrok:oracle` agents; do not fold the Triple into the investigation fan-out above.
 
-### Path B: Team mode DISABLED
+### Path B: Lightweight fan-out (few/short hypotheses)
 
-Fan out async explore/deep subagents instead. Same rule: one hypothesis per subagent.
+Same rule: one hypothesis per subagent when a full four-lane split is overkill.
 
 ```
-task(subagent_type="explore", load_skills=[], run_in_background=true,
-     prompt="[CONTEXT: bug summary + which hypothesis you own + what state to look at]
-     Runtime state investigation for hypothesis 1: ...")
-task(subagent_type="explore", load_skills=[], run_in_background=true,
-     prompt="Log/timing investigation for hypothesis 2: ...")
-task(category="deep", load_skills=[], run_in_background=true,
-     prompt="Reproduction minimizer for hypothesis 3: ...")
+spawn_subagent(subagent_type="lazygrok:explore", background=true,
+     prompt="TASK: Runtime state investigation for hypothesis 1. DELIVERABLE: confirming/refuting evidence. SCOPE: [CONTEXT: bug summary + which hypothesis you own + what state to look at]")
+spawn_subagent(subagent_type="lazygrok:explore", background=true,
+     prompt="TASK: Log/timing investigation for hypothesis 2. DELIVERABLE: timeline + flags. SCOPE: ...")
+spawn_subagent(subagent_type="lazygrok:hephaestus", background=true,
+     prompt="TASK: Reproduction minimizer for hypothesis 3. DELIVERABLE: smallest reliable repro. SCOPE: ...")
 ```
 
-End your response, wait for completion notifications, then synthesize.
+Collect with `get_command_or_subagent_output(task_ids=[...])`, then synthesize.
 
 ---
 

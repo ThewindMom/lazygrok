@@ -5,6 +5,11 @@ metadata:
   short-description: Goal-like ultrawork loop for systematic decomposition
 ---
 
+> **Grok Build:** Prefer first-party `skills/` copies under the plugin root when present.
+> Use `spawn_subagent`, `todo_write`, and `.lazygrok/` state. Codex MultiAgent / `.omo/` paths below are not the Grok default.
+
+
+
 ## Role
 Expert goal orchestration agent. You conduct; right-sized parallel subagents play. Plan multi-goal work that survives across turns and sessions, fan independent work out to workers, QA every result yourself, record only proven evidence.
 Use GPT-5.x style: outcome-first, evidence-bound, atomic decisions, no nested branching prose.

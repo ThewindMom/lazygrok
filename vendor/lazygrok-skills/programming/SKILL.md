@@ -7,7 +7,7 @@ description: "MUST USE for ANY work on .py .pyi .rs .ts .tsx .mts .cts .go files
 
 You are a senior engineer who writes Python, Rust, and TypeScript with one shared discipline. **Type-strict. Stack-first. Async-correct. Architecturally honest about file size.**
 
-This skill is an index. The hard per-language rules live under `references/`. Load the language-specific reference **before** writing a single line of code.
+This skill is an index. The hard per-language rules live under `references/`. Load each language-specific reference with `read_file` **before** writing a single line of code.
 
 ---
 
@@ -18,7 +18,7 @@ This skill is an index. The hard per-language rules live under `references/`. Lo
 1. **Identify the language** from the file extension or the user's request.
 2. **STOP** and read the matching reference set:
 
-   | File / Language | MANDATORY reading (load `Read` tool on every file below) |
+   | File / Language | MANDATORY reading (use `read_file` on every file below) |
    |---|---|
    | `.py`, `.pyi`, "Python" | `references/python/README.md` + every file under `references/python/` that the README tells you to load on demand |
    | `.rs`, `Cargo.toml`, "Rust" | `references/rust/README.md` + every file under `references/rust/` that the README tells you to load on demand. **IF the change touches `unsafe`, `*mut`, `*const`, `MaybeUninit`, FFI, `unsafe impl Send/Sync`, or a custom lock-free primitive: ALSO load `references/rust-ub/README.md` plus every file under `references/rust-ub/`.** |
@@ -192,7 +192,7 @@ Full rationale, measurement methods, workaround detection, and split examples: *
 
 A source file past 250 non-blank, non-comment lines has outgrown a single reviewer's working memory. The module is almost certainly doing more than one thing. Measure: `awk '!/^[[:space:]]*$/ && !/^[[:space:]]*(\/\/|#|--)/' <file> | wc -l`.
 
-**When detected:** Name what the file owns in one short noun phrase. If the answer needs "and", the file needs splitting. Load `/refactor` and split by responsibility. If the file genuinely cannot be split (generated parser, indivisible state machine), mark with `// allow: SIZE_OK — <reason>`.
+**When detected:** Name what the file owns in one short noun phrase. If the answer needs "and", the file needs splitting. `read_file` the `refactor` skill `SKILL.md` and split by responsibility. If the file genuinely cannot be split (generated parser, indivisible state machine), mark with `// allow: SIZE_OK — <reason>`.
 
 ### Smell 2 — Function with more than 3 parameters
 
@@ -264,8 +264,8 @@ After every code-writing session, answer these out loud (in your reply) before d
 
 ### Step 4 — if you need to refactor right now, invoke the right skill
 
-- Any code smell from the [CODE SMELLS section](#code-smells--automatic-review-triggers) fired (250+ LOC, >3 params, redundant verification, negative naming), or step 3 surfaced more than two issues: **load the `refactor` skill** and execute its safe-refactor protocol (codemap, plan, LSP-driven edits, test after each step). Do not improvise a refactor under time pressure — the refactor skill exists precisely so you do not corrupt behavior while reshaping structure.
-- You inherited a branch with AI-generated patterns (broad `except`, redundant null checks, vague TODOs, oversized modules, dead helpers, redundant post-action verification): **load the `remove-ai-slops` skill** to do a categorized branch-scope cleanup with regression tests pinned first.
+- Any code smell from the [CODE SMELLS section](#code-smells--automatic-review-triggers) fired (250+ LOC, >3 params, redundant verification, negative naming), or step 3 surfaced more than two issues: **`read_file` the `refactor` skill `SKILL.md`** and execute its safe-refactor protocol (codemap, plan, LSP-driven edits, test after each step). Do not improvise a refactor under time pressure — the refactor skill exists precisely so you do not corrupt behavior while reshaping structure.
+- You inherited a branch with AI-generated patterns (broad `except`, redundant null checks, vague TODOs, oversized modules, dead helpers, redundant post-action verification): **`read_file` the `remove-ai-slops` skill `SKILL.md`** to do a categorized branch-scope cleanup with regression tests pinned first.
 
 These two skills are not optional cosmetics. They are the recovery path for the smells this loop is designed to catch.
 
@@ -273,21 +273,21 @@ These two skills are not optional cosmetics. They are the recovery path for the 
 
 ## Companion skills - explicit invocation triggers
 
-| Trigger | Skill to load | Why |
+| Trigger | Skill / path to `read_file` | Why |
 |---|---|---|
-| Any [code smell](#code-smells--automatic-review-triggers) fires (250+ LOC, >3 params, redundant verification), OR the post-write loop surfaces 2+ issues, OR the user says "reshape this", "extract this", "clean this up" | `refactor` | Safe codemap-driven multi-step refactor with LSP + tests after each step. Never improvise a structural change. |
-| Recent branch contains AI-authored patterns (broad except, dead helpers, vague comments, oversized files, redundant post-action verification), OR the user says "remove slop", "clean AI code", "deslop" | `remove-ai-slops` | Tests pinned FIRST, then categorized parallel cleanup, then quality gates. Behavior-preserving. |
-| Rust code touches `unsafe`, `*mut`, `*const`, `MaybeUninit`, FFI, `unsafe impl Send/Sync`, or a custom lock-free primitive | `references/rust-ub/` | Full UB taxonomy + Miri strictness escalation. Every `unsafe` block must survive Miri Level 3 (strict provenance + symbolic alignment + preemption) before it ships. |
+| Any [code smell](#code-smells--automatic-review-triggers) fires (250+ LOC, >3 params, redundant verification), OR the post-write loop surfaces 2+ issues, OR the user says "reshape this", "extract this", "clean this up" | `refactor` skill `SKILL.md` | Safe codemap-driven multi-step refactor with LSP + tests after each step. Never improvise a structural change. |
+| Recent branch contains AI-authored patterns (broad except, dead helpers, vague comments, oversized files, redundant post-action verification), OR the user says "remove slop", "clean AI code", "deslop" | `remove-ai-slops` skill `SKILL.md` | Tests pinned FIRST, then categorized parallel cleanup, then quality gates. Behavior-preserving. |
+| Rust code touches `unsafe`, `*mut`, `*const`, `MaybeUninit`, FFI, `unsafe impl Send/Sync`, or a custom lock-free primitive | `references/rust-ub/` via `read_file` | Full UB taxonomy + Miri strictness escalation. Every `unsafe` block must survive Miri Level 3 (strict provenance + symbolic alignment + preemption) before it ships. |
 
 ---
 
 ## Per-language jump table
 
-**Stop. Read the matching reference fully before writing code.**
+**Stop. Use `read_file` on the matching reference fully before writing code.**
 
 ### Python (`.py`, `.pyi`)
 
-**READ `references/python/README.md` FIRST.** Then load on demand:
+**`read_file` `references/python/README.md` FIRST.** Then load on demand with `read_file`:
 
 | Need | Load |
 |---|---|
@@ -307,7 +307,7 @@ These two skills are not optional cosmetics. They are the recovery path for the 
 
 ### Rust (`.rs`, `Cargo.toml`)
 
-**READ `references/rust/README.md` FIRST.** It defines the five pillars (explicit allocation, compile-time proof, zero hidden cost, type-encoded invariants, deterministic cleanup) and the post-write review checklist. Then load on demand:
+**`read_file` `references/rust/README.md` FIRST.** It defines the five pillars (explicit allocation, compile-time proof, zero hidden cost, type-encoded invariants, deterministic cleanup) and the post-write review checklist. Then load on demand with `read_file`:
 
 | Need | Load |
 |---|---|
@@ -326,7 +326,7 @@ These two skills are not optional cosmetics. They are the recovery path for the 
 
 ### TypeScript (`.ts`, `.tsx`, `.mts`, `.cts`)
 
-**READ `references/typescript/README.md` FIRST.** Then load on demand:
+**`read_file` `references/typescript/README.md` FIRST.** Then load on demand with `read_file`:
 
 | Need | Load |
 |---|---|
@@ -339,7 +339,7 @@ These two skills are not optional cosmetics. They are the recovery path for the 
 
 ### Go (`.go`, `go.mod`, `go.sum`, `.golangci.yml`, `*.proto`)
 
-**READ `references/go/README.md` FIRST.** Then load on demand:
+**`read_file` `references/go/README.md` FIRST.** Then load on demand with `read_file`:
 
 | Need | Load |
 |---|---|
@@ -364,4 +364,4 @@ These two skills are not optional cosmetics. They are the recovery path for the 
 
 This skill activates whenever you are writing or modifying any `.py`, `.pyi`, `.rs`, `.ts`, `.tsx`, `.mts`, `.cts`, `.go` file, or any project manifest (`pyproject.toml`, `Cargo.toml`, `package.json`, `tsconfig.json`, `biome.json`, `go.mod`, `go.sum`, `.golangci.yml`, `Taskfile.yml`, `buf.yaml`, `sqlc.yaml`). **Even one-off scripts get the full treatment** - that is the whole point of `uv run` + PEP 723, `rust-script`, `bun run`, and `go run` + `//go:build ignore`: production hygiene with throwaway ergonomics.
 
-The references contain the recipes. **Read them before writing code. Re-read them when the model drifts.** The post-write review loop is non-negotiable.
+The references contain the recipes. **Use `read_file` on them before writing code. Re-read them when the model drifts.** The post-write review loop is non-negotiable.

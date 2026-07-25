@@ -35,8 +35,9 @@ ULW_CLI="node ${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js"
 # Or: omo ulw-loop …
 ```
 
-State is stored in `.omo/ulw-loop/<session-id>/` (or `.lazygrok/ulw-loop/`
-depending on scope).
+Prefer Grok-facing state under `.lazygrok/ulw-loop/` and evidence under
+`.lazygrok/evidence/`. If the CLI already created `.omo/ulw-loop/`, keep
+using that run's root (do not fork state mid-run).
 
 ## Create goals with success criteria
 
@@ -79,6 +80,8 @@ $ULW_CLI record-evidence --goal-id <id> --criterion-id <id> --status fail --evid
 # BLOCKED
 $ULW_CLI record-evidence --goal-id <id> --criterion-id <id> --status blocked --evidence "Server failed to start: port 3000 in use" --notes "Need to kill stale process"
 ```
+
+Also write human-readable artifacts under `.lazygrok/evidence/` when useful.
 
 ## Checkpoint goal completion
 

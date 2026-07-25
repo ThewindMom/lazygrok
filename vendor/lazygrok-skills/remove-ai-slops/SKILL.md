@@ -1,25 +1,25 @@
 ---
 name: remove-ai-slops
-description: "Remove AI-generated code smells (slop) from branch changes or an explicit file list. Locks behavior with regression tests FIRST, then runs categorized cleanup via parallel `deep` agents in batches of 5, then verifies with quality gates. Covers 10 slop categories including performance equivalences, excessive complexity (object annotations, if/elif variant chains), and oversized modules (250+ pure LOC with mandatory modular refactoring). MUST USE when the user asks to \"remove slop\", \"clean AI code\", \"deslop\", \"clean up AI-generated code\", \"remove AI slop\", or wants to clean up AI-generated patterns from recent changes. Triggers - \"remove ai slops\", \"clean ai code\", \"deslop\", \"cleanup AI generated\", \"remove AI slop\", \"clean up AI-generated code\", \"strip slop\", \"ai-slop cleanup\"."
+description: "Remove AI-generated code smells (slop) from branch changes or an explicit file list. Locks behavior with regression tests FIRST, then runs categorized cleanup via parallel workers in batches of 5, then verifies with quality gates. Covers 10 slop categories including performance equivalences, excessive complexity (object annotations, if/elif variant chains), and oversized modules (250+ pure LOC with mandatory modular refactoring). MUST USE when the user asks to \"remove slop\", \"clean AI code\", \"deslop\", \"clean up AI-generated code\", \"remove AI slop\", or wants to clean up AI-generated patterns from recent changes. Triggers - \"remove ai slops\", \"clean ai code\", \"deslop\", \"cleanup AI generated\", \"remove AI slop\", \"clean up AI-generated code\", \"strip slop\", \"ai-slop cleanup\"."
 ---
 
-## Codex Harness Tool Compatibility
+## Grok Harness Tool Compatibility
 
-This skill may include examples copied from the OpenCode harness. In Codex, do not call OpenCode-only tools such as `spawn_subagent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Codex native tools:
+This skill may include examples copied from other harnesses. On Grok, use native tools:
 
-| OpenCode example | Codex tool to use |
+| Foreign example | Grok tool to use |
 | --- | --- |
-| `spawn_subagent(subagent_type="explore", ...)` | `spawn_subagent({"message":"TASK: act as an explorer. ...","subagent_type":"explorer","background":true})` |
-| `spawn_subagent(subagent_type="librarian", ...)` | `spawn_subagent({"message":"TASK: act as a librarian. ...","subagent_type":"librarian","background":true})` |
-| `task(subagent_type="plan", ...)` | `spawn_subagent({"message":"TASK: act as a planning agent. ...","subagent_type":"plan","background":true})` |
-| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","subagent_type":"lazygrok-gate-reviewer","background":true})` |
-| `task(category="...", ...)` for implementation or QA | `spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":true})` |
-| `background_output(task_id="...")` | `get_command_or_subagent_output(...)` for mailbox signals |
-| `team_*(...)` | Use Codex native subagents via `spawn_subagent`, `spawn_subagent`, `get_command_or_subagent_output`, and `kill_command_or_subagent` |
+| `Task(...)` / `task(...)` | `spawn_subagent(...)` |
+| `TodoWrite(...)` | `todo_write(...)` |
+| `Bash` / `bash(...)` | `run_terminal_command(...)` |
+| `Write` / `Edit` / `StrReplace` | `write` / `search_replace` |
+| `Read` | `read_file` |
+| `background_output(...)` | `get_command_or_subagent_output(...)` |
+| `team_*(...)` | **n/a on Grok** — parallel `spawn_subagent` + orchestrator journal |
 
-Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into the lazygrok plugin agents directory: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `subagent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `subagent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
+Role-specific behavior must be described in a self-contained `prompt`. Prefer agent types: `explore`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer`. Prefer `.lazygrok/` over `.omo/` for Grok-facing state. If a code block below conflicts with this section, this section wins.
 
-For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `get_command_or_subagent_output` timeout only means no new mailbox update arrived. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
+For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. Poll with `get_command_or_subagent_output`. Treat a running child as alive.
 
 # Remove AI Slops Skill
 
@@ -119,7 +119,7 @@ A pass is complete only when all applicable gates are green. Skip gates that are
 
 ## Process
 
-### Phase 0: Plan with TodoWrite
+### Phase 0: Plan with todo_write
 
 Create todos for all phases below. Mark `in_progress` one at a time.
 
@@ -138,7 +138,7 @@ Filter out: deleted files, binary files, generated/vendored files (`node_modules
 For each in-scope source file:
 
 1. Identify the public/observable behavior the file exposes (exported functions, HTTP handlers, CLI commands, classes used elsewhere).
-2. Check whether existing tests cover that behavior. Use `git grep` / project test conventions to find related test files.
+2. Check whether existing tests cover that behavior. Use `grep` / project test conventions to find related test files.
 3. **If behavior is uncovered or weakly covered, write the narrowest regression test that pins current behavior BEFORE editing the file.** Tests should pin observable outputs, not implementation details.
 4. Run the test suite (or at minimum the relevant tests). They must be **green** before any cleanup begins.
 
@@ -162,16 +162,16 @@ File: src/bar.py
 
 Order rule (safest → riskiest): comments → dead code → defensive → duplication → complexity → abstraction/boundary → performance → tests → oversized-modules. This minimizes blast radius of any one change.
 
-### Phase 4: Parallel slop removal via `deep` agents in batches of 5
+### Phase 4: Parallel slop removal via workers in batches of 5
 
-Files are processed by `deep` category agents with the `$omo:remove-ai-slops` skill loaded, **batched 5 at a time in parallel**. The executable skill name is `remove-ai-slops`. The `deep` category gives the agent enough thoroughness to correctly evaluate the 9 categories and respect the KEEP rules without slipping into surface fixes; the 5-wide batch is the sweet spot — more than 5 creates result-merging noise and context contention, fewer wastes parallelism.
+Files are processed by thorough workers with the `remove-ai-slops` skill loaded (via `read_file` on SKILL.md), **batched 5 at a time in parallel**. The executable skill name is `remove-ai-slops`. The 5-wide batch is the sweet spot — more than 5 creates result-merging noise and context contention, fewer wastes parallelism.
 
 **Batching protocol** (strict):
 
 1. Slice the in-scope file list into chunks of up to 5 files.
-2. For each chunk, launch all `task` calls **in a single message**, every one with `run_in_background=true`.
-3. End your turn. Wait for the system to send `<system-reminder>` notifications as each task finishes.
-4. Once all 5 in the batch complete, collect each result via `background_output(task_id=...)`.
+2. For each chunk, launch all `spawn_subagent` calls **in a single message**, every one with `background: true` when available.
+3. End your turn. Poll with `get_command_or_subagent_output` as each finishes.
+4. Once all 5 in the batch complete, collect each result.
 5. Launch the next batch of 5. Repeat until every file is processed.
 6. If total files ≤ 5, launch all in one batch.
 
@@ -180,15 +180,16 @@ Files are processed by `deep` category agents with the `$omo:remove-ai-slops` sk
 **Per-file invocation** (one of the 5 in a batch):
 
 ```
-task(
-  category="deep",
-  load_skills=["remove-ai-slops"],
-  run_in_background=true,
-  description="Slop removal: {filename}",
+spawn_subagent(
+  subagent_type="lazygrok:lazygrok-executor",
+  background=true,
   prompt="""
-Remove AI slops from: {file_path}
+TASK: Slop removal for {file_path}
+DELIVERABLE: minimal behavior-preserving cleanup report grouped by category
+SCOPE: {file_path} only
+VERIFY: tests green; no public API changes
 
-In addition to your default categories (obvious comments, over-defensive code, spaghetti nesting), also evaluate these categories:
+In addition to default categories (obvious comments, over-defensive code, spaghetti nesting), also evaluate:
 - Excessive complexity: god functions, long parameter lists, complex booleans, nested ternaries
 - Needless abstraction: pass-through wrappers, single-use helpers, speculative indirection
 - Boundary violations: wrong-layer imports, leaky responsibilities, hidden coupling
@@ -211,7 +212,7 @@ For each skipped issue, give reason.
 )
 ```
 
-**Batch failure handling**: a `get_command_or_subagent_output` timeout only means no new mailbox update arrived, not that a `deep` agent failed. For long passes, require each child to send `WORKING: <file> - <current phase>` and `BLOCKED: <reason>` only when it cannot progress. Treat a running child as alive. Mark a file for retry only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running. Do NOT block the remaining 4 in that batch; collect successful results and retry the failed file once later. If retry also fails, escalate that file under "Issues Found & Fixed" in the final report.
+**Batch failure handling**: a `get_command_or_subagent_output` timeout only means no new mailbox update arrived, not that a worker failed. For long passes, require each child to send `WORKING: <file> - <current phase>` and `BLOCKED: <reason>` only when it cannot progress. Treat a running child as alive. Mark a file for retry only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running. Do NOT block the remaining 4 in that batch; collect successful results and retry the failed file once later. If retry also fails, escalate that file under "Issues Found & Fixed" in the final report.
 
 ### Phase 5: Verify with quality gates + critical review
 
@@ -243,8 +244,8 @@ If any gate fails or any checklist item flips:
 
 1. Identify the specific change that caused the failure.
 2. Explain why it broke things.
-3. `git checkout` the affected file (or use `git diff` + targeted `Edit` to revert just the problematic hunk).
-4. If genuine slop remains after revert, edit the file directly yourself — in parallel per file via multiple Edit calls — applying only the changes you can prove are safe.
+3. Use `run_terminal_command` (`git checkout` / targeted revert) or `search_replace` to restore the problematic hunk.
+4. If genuine slop remains after revert, edit the file directly yourself — in parallel per file via multiple `search_replace` calls — applying only the changes you can prove are safe.
 5. Re-run the failing gate and re-walk the checklist for the affected file.
 6. Repeat until all gates green AND checklist clean.
 

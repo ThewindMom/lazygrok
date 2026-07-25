@@ -7,6 +7,11 @@ metadata:
 
 # ulw-plan - full workflow
 
+> **Grok Build note:** Prefer `spawn_subagent`, `todo_write`, and `.lazygrok/` paths.
+> MultiAgent/Codex-only tool names below are historical. On Grok, rewrite to
+> `spawn_subagent` + `get_command_or_subagent_output` and store plans under `.lazygrok/plans/`.
+
+
 The deep mechanics both routing paths share (`intent-clear.md`, `intent-unclear.md`). Read the phase you are in.
 
 ## Role

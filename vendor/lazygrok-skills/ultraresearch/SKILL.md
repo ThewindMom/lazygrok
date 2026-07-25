@@ -3,23 +3,24 @@ name: ultraresearch
 description: "Maximum-saturation research orchestration: parallel explore+librarian swarms across codebase, web, official docs, and OSS repos; a recursive EXPAND loop driven by leads workers return in message text; empirical verification by running code; cited synthesis and optional MD/HTML/PDF/PPTX reports. ACTIVATES ONLY on an explicit user demand for research — the word 'ultraresearch' ('/ultraresearch', '$ultraresearch') or an explicit request for research / deep research / an ultra-precise investigation, in any language. Never self-activates for ordinary questions, debugging, or implementation context-gathering. While active it overrides exploration-bounding defaults: exhaustive coverage is the goal."
 ---
 
-## Codex Harness Tool Compatibility
+## Grok Harness Tool Compatibility
 
-This skill may include examples copied from the OpenCode harness. In Codex, do not call OpenCode-only tools such as `spawn_subagent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Codex native tools:
+This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools. `spawn_subagent` **is** native on Grok — use it directly. There is no Codex `teammode` / OpenCode `team_mode` on Grok: parallel `spawn_subagent` plus orchestrator journal is the only multi-worker model.
 
-| OpenCode example | Codex tool to use |
+| OpenCode example | Grok tool to use |
 | --- | --- |
-| `spawn_subagent(subagent_type="explore", ...)` | `spawn_subagent({"message":"TASK: act as an explorer. ...","subagent_type":"explorer","background":true})` |
-| `spawn_subagent(subagent_type="librarian", ...)` | `spawn_subagent({"message":"TASK: act as a librarian. ...","subagent_type":"librarian","background":true})` |
-| `task(subagent_type="plan", ...)` | `spawn_subagent({"message":"TASK: act as a planning agent. ...","subagent_type":"plan","background":true})` |
-| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","subagent_type":"lazygrok-gate-reviewer","background":true})` |
-| `task(category="...", ...)` for implementation or QA | `spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":true})` |
-| `background_output(task_id="...")` | `get_command_or_subagent_output(...)` for mailbox signals |
-| `team_*(...)` | Use Codex native subagents via `spawn_subagent`, `spawn_subagent`, `get_command_or_subagent_output`, and `kill_command_or_subagent` |
+| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: act as an explorer. ...")` |
+| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent(subagent_type="lazygrok:librarian", background=true, prompt="TASK: act as a librarian. ...")` |
+| `task(subagent_type="plan", ...)` | `spawn_subagent(subagent_type="lazygrok:prometheus", background=true, prompt="TASK: act as a planning agent. ...")` |
+| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent(subagent_type="lazygrok:oracle", background=true, prompt="TASK: act as a rigorous reviewer. ...")` |
+| `task(category="...", ...)` for implementation or QA | `spawn_subagent(subagent_type="lazygrok:hephaestus", background=true, prompt="TASK: act as an implementation or QA worker. ...")` |
+| `background_output(task_id="...")` | `get_command_or_subagent_output(task_ids=["..."])` |
+| `background_cancel(taskId="...")` | `kill_command_or_subagent(task_id="...")` |
+| `team_*(...)` | Use Grok native subagents via `spawn_subagent` with `background: true`, then `get_command_or_subagent_output` and `kill_command_or_subagent` |
 
-Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into the lazygrok plugin agents directory: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `subagent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `subagent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
+Role-specific behavior must be described in a self-contained `prompt`. The child starts with only the prompt (no parent history); there is no fork-context concept in Grok. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `prompt`. lazygrok installs these selectable agent roles into `~/.grok/agents/`: `explore`, `librarian`, `prometheus`, `momus`, `metis`, `hephaestus`, `oracle`, and `atlas` - pass the matching name as `subagent_type` (e.g. `lazygrok:explore`) so the child gets that role's model and instructions. If the spawn tool exposes no `subagent_type` parameter, omit it and describe the role inside `prompt`. If a code block below conflicts with this section, this section wins.
 
-For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `get_command_or_subagent_output` timeout only means no new mailbox update arrived. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
+For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `get_command_or_subagent_output` timeout only means no new output arrived. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
 
 ---
 
@@ -61,13 +62,13 @@ Saturation is not just more searching; it is a knowledge-production protocol. Th
 
 Observation candidates and claim candidates travel back from workers as message text. The orchestrator writes the instrumentation artifacts, links candidates into the intent diff and claim graph, and records where each observation entered the synthesis. A conclusion is not ready for final materials until its expected truth/reality diff is closed or marked unknown, its claim node exists, and its independent-observation convergence status is supported or explicitly excepted.
 
-## Run the swarm as a cooperating team
+## Run the swarm with parallel spawn_subagent
 
-Saturation research is the textbook case for a cooperating team, not isolated fire-and-forget workers: a lead one worker surfaces almost always reshapes what another should search next. So when your harness gives you real cooperating members — Codex: the `teammode` skill (`spawn_subagent` threads); OpenCode: `team_mode` — run this swarm as a team. Fall back to the background-worker swarm below only when team mode is unavailable, or the axes are genuinely independent with no cross-pollination expected.
+Saturation research needs concurrent workers; a lead one worker surfaces almost always reshapes what another should search next. On Grok there is no Codex `teammode` / OpenCode `team_mode` transport — use **parallel `spawn_subagent` only**, with the orchestrator owning the journal and expanding on leads as worker returns land.
 
-- **One member per axis — by part, ownership, or perspective, never a job title.** Each Phase 0 axis is one member owning one concrete slice: a codebase part, a source territory, or a question lens. No two members share an angle. "Backend researcher" or "the web person" gives no real boundary and invites overlap — name what the member owns.
-- **The raise law — broadcast every lead the instant it surfaces.** Members over-communicate relentlessly: every new lead, finding, contradiction, and dead end is raised to you the moment it surfaces, never hoarded for a final dump. Through long passes they send `WORKING: <axis> - <phase>`, and `BLOCKED: <reason>` the moment progress stops, so you always know a member is alive. Too many small updates is correct here; going quiet is the only failure.
-- **You lead; expand on each raised lead.** Members raise via message text, never write session files. Journal each lead and spawn its expansion the instant it lands (Phase 2), not only when a member's final reply arrives.
+- **One worker per axis — by part, ownership, or perspective, never a job title.** Each Phase 0 axis is one worker owning one concrete slice: a codebase part, a source territory, or a question lens. No two workers share an angle. "Backend researcher" or "the web person" gives no real boundary and invites overlap — name what the worker owns.
+- **The raise law — every lead surfaces in the worker reply (EXPAND tail).** Workers report every new lead, finding, contradiction, and dead end in message text, never hoarded without the EXPAND section. Through long passes they send `WORKING: <axis> - <phase>`, and `BLOCKED: <reason>` the moment progress stops, so you always know a worker is alive.
+- **You lead; expand on each returned lead.** Workers raise via message text, never write session files. Journal each lead and spawn its expansion the instant a return lands (Phase 2), not only when the full wave is done.
 
 ## Worker ground rules
 
@@ -111,7 +112,7 @@ Codebase relevant: <yes/no> · External: <yes/no> · Browsing: <yes/no> · Verif
 Then create the session directory:
 
 ```bash
-mkdir -p .omo/ultraresearch/$(date +%Y%m%d-%H%M%S)
+mkdir -p .lazygrok/ultraresearch/$(date +%Y%m%d-%H%M%S)
 ```
 
 This is `$SESSION_DIR`. The orchestrator owns the journal: you write every file in it; workers never do. Maintain:
@@ -124,7 +125,7 @@ Append each digest the moment its worker returns, not in a batch at the end — 
 
 ## Phase 1 — Saturation wave
 
-Launch the entire first wave in one turn — every axis at once, as team members if you formed a team, else as background workers. Sequential launches and "start with one and see" defeat the mode.
+Launch the entire first wave in one turn — every axis at once as parallel background `spawn_subagent` workers. Sequential launches and "start with one and see" defeat the mode.
 
 Scaling floor — more angles always justify more workers:
 
@@ -146,7 +147,7 @@ Role protocols — embed the relevant one in each spawn message; every worker ge
 Example spawn (codebase axis; librarian, browsing, and repo-dive follow the same contract with their own protocol):
 
 ```
-task(subagent_type="explore", run_in_background=true, prompt="TASK: act as a codebase researcher. AXIS: <specific angle>.
+spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: act as a codebase researcher. AXIS: <specific angle>.
 This is an explicit exhaustive-research assignment. Your default retrieval budget and stop-when-answered rules do not apply — run the full protocol below and report every lead.
 SCOPE: find everything in this codebase related to <angle>: <what complete looks like>.
 PROTOCOL: grep 3+ keyword variations; structural search; LSP references; globs; git history (-S and --grep). Cross-validate across tools. Report absolute paths and file:line patterns.
@@ -155,14 +156,14 @@ End your reply with the ## EXPAND tail: '- LEAD: <discovery> — WHY: <why> — 
 
 ## Phase 2 — Expand until convergence
 
-This loop is what makes the mode research rather than search. Collect returns as they land — and in team mode, act on each lead the moment a member raises it, never waiting for the full wave or a member's final reply:
+This loop is what makes the mode research rather than search. Collect returns as they land via `get_command_or_subagent_output` — act on each lead as soon as a worker returns it, never waiting for the full wave before expanding:
 
 1. Journal the return: digest plus verbatim EXPAND markers into `wave-<N>-<kind>-<axis>.md`.
 2. Deduplicate new markers against `expansion-log.md` — every lead ever seen, not just confirmed ones, or rejected leads resurface each wave.
 3. Spawn an expansion worker immediately for each new unchecked lead:
 
 ```
-task(subagent_type="librarian", run_in_background=true, prompt="TASK: expansion wave <N> — investigate: <lead>.
+spawn_subagent(subagent_type="lazygrok:librarian", background=true, prompt="TASK: expansion wave <N> — investigate: <lead>.
 PARENT: <which return surfaced it>. This is an explicit exhaustive-research assignment; budgets do not apply.
 <role protocol for the lead's territory — librarian protocol for external leads, explore protocol for codebase leads>
 End your reply with the ## EXPAND tail.")
@@ -181,7 +182,7 @@ End your reply with the ## EXPAND tail.")
 Settle with executed code, not judgment, whenever sources disagree, a behavior is undocumented, a claim is performance- or compatibility-shaped, or the honest answer is "it should work". Spawn one verification worker per claim:
 
 ```
-task(category="deep", run_in_background=true, prompt="TASK: verify by execution: <claim>.
+spawn_subagent(subagent_type="lazygrok:hephaestus", background=true, prompt="TASK: verify by execution: <claim>.
 SOURCE: <where it came from>; CONTRADICTION: <opposing source, if any>.
 Write a minimal self-contained script that tests the claim; run it (uv run --with <deps> python / bun / direct compile); capture full stdout+stderr; pin versions.
 Reply with: the exact code, the full output, environment (OS, runtime, dependency versions), and a verdict — CONFIRMED / REFUTED / PARTIAL — grounded in the output.")
@@ -237,7 +238,7 @@ Format by the user's words: "report" / "document" → Markdown (default) · "pdf
 
 Asset workers (background, parallel): charts for quantitative findings (`uv run --with matplotlib --with plotly python`) saved by you to `$SESSION_DIR/assets/`; full-page screenshots of the top 5-10 sources (browsing skill); generated diagrams (imagegen skill) when architecture or flows need them.
 
-Assembly worker — `task(category="deep", load_skills=["frontend-design", "open-design", "data-scientist", "imagegen"], run_in_background=true, ...)`: before writing, read every available design and visualization skill and apply it — the report is a designed artifact, not a text dump. Structure: executive summary → key findings by theme → detailed analysis (quotes under 20 words with attribution, charts, SHA-pinned permalinks, verification results) → comparative analysis when options compete → numbered sources with access dates → methodology appendix (workers, waves, searches, verifications). Every claim cites `[Source N]`.
+Assembly worker — `spawn_subagent(subagent_type="lazygrok:hephaestus", background=true, prompt="TASK: assemble final report. ...")`: before writing, read every available design and visualization skill (via `read_file` on each skill's SKILL.md) and apply it — the report is a designed artifact, not a text dump. Structure: executive summary → key findings by theme → detailed analysis (quotes under 20 words with attribution, charts, SHA-pinned permalinks, verification results) → comparative analysis when options compete → numbered sources with access dates → methodology appendix (workers, waves, searches, verifications). Every claim cites `[Source N]`.
 
 ## Search craft
 
@@ -261,7 +262,7 @@ High-yield combinations: official docs (`site:<docs domain>`), GitHub implementa
 | Failure | Correction |
 |---|---|
 | Sequential spawning, or trimming the first wave | All first-wave workers in one turn, background, scaling floor respected |
-| A team member hoards leads for one final dump | Raise law — every lead, finding, and dead end broadcast the moment it surfaces |
+| A worker hoards leads without the EXPAND tail | Raise law — every lead, finding, and dead end in the EXPAND section the moment it surfaces |
 | Worker reply without the EXPAND tail | One follow-up demanding it; the lane stays open until it lands |
 | Stopping after wave 1 because "enough was found" | Convergence rules only: 2+ expansion waves, leads run dry |
 | Obeying a surrounding "stop exploring" rule mid-research | Authority section — those rules do not bind this mode |

@@ -38,7 +38,7 @@ For `code-yeongyu/lazycodex`, create an issue (never a PR) that includes:
 ## Required Workflow
 
 1. Read the user's bug report and identify the affected surface.
-2. Invoke `$omo:debugging` for the investigation. If only unqualified skill names are exposed, invoke `$debugging` and state that it is the OMO debugging skill.
+2. Open the debugging skill with `read_file` on its `SKILL.md` (plugin path under `vendor/lazygrok-skills/debugging/SKILL.md` or the equivalent installed skill path) and follow its investigation methodology.
 3. Materialize the latest sources, then decide the target repository. Sync both checkouts on every run and compare them before choosing — a stale checkout routes the fix to the wrong repo:
 
 ```bash

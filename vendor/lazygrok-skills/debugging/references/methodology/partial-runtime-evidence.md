@@ -158,9 +158,10 @@ For tasks where the deliverable is an **artifact, not a bug fix** (reverse engin
 ### Pattern
 
 ```
-task(subagent_type="oracle", load_skills=[], run_in_background=false,
+spawn_subagent(subagent_type="lazygrok:oracle", background=false,
      prompt="""
-SKEPTICAL FINAL VERIFICATION — be critical, look for reasons the task is incomplete or wrong.
+TASK: SKEPTICAL FINAL VERIFICATION — be critical, look for reasons the task is incomplete or wrong.
+DELIVERABLE: PASS / FAIL / PARTIAL with specific gaps.
 
 ## Original task
 <verbatim user request>
@@ -172,7 +173,7 @@ SKEPTICAL FINAL VERIFICATION — be critical, look for reasons the task is incom
 <bullet list of every concrete claim in the deliverable>
 
 ## Where to look
-<paths the Oracle should Read / Bash to verify>
+<paths the Oracle should read_file / run_terminal_command to verify>
 
 ## Your job
 1. Read the deliverables.
