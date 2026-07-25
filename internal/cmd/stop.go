@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/cobra"
 	"lazygrok/internal/boulder"
 	coreboulder "lazygrok/internal/core/boulder"
 	"lazygrok/internal/core/config"
@@ -14,7 +15,6 @@ import (
 	"lazygrok/internal/ralph"
 	"lazygrok/internal/stoppending"
 	"lazygrok/internal/ulwbridge"
-	"github.com/spf13/cobra"
 )
 
 func stopCmd() *cobra.Command {
@@ -45,7 +45,7 @@ func stopCmd() *cobra.Command {
 			}
 
 			// 2. core/boulder: active work record with incomplete tasks
-			if bs, err := coreboulder.Load(ws); err == nil {
+			if bs, err := coreboulder.LoadCurrent(ws); err == nil {
 				if wr := bs.GetActiveWork(); wr != nil && wr.Status == coreboulder.WorkActive && !wr.IsComplete() {
 					completed, total := wr.TaskProgress()
 					msg := fmt.Sprintf(
