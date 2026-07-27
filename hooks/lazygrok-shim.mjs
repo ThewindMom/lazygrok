@@ -1,21 +1,32 @@
 #!/usr/bin/env node
-// lazygrok-shim.mjs — translates Grok hook events to Codex format for OmO components.
+// lazygrok-shim.mjs — Grok → OmO/Codex hook bridge.
 //
-// Grok dispatches snake_case lifecycle names (user_prompt_submit) and varies prompt field
-// shapes. OmO CLIs expect PascalCase (UserPromptSubmit) + { prompt: string }.
+// Official Grok Build envelope (xai-org/grok-build HookEventEnvelope):
+//   camelCase common fields + flattened event payload on stdin:
+//   {
+//     "hookEventName": "user_prompt_submit",   // snake_case value
+//     "sessionId": "...",
+//     "cwd": "...",
+//     "workspaceRoot": "...",
+//     "timestamp": "...",
+//     "permissionMode": "default",
+//     "prompt": "user text"                   // UserPromptSubmit payload
+//   }
+// Env (always set by runner): GROK_HOOK_EVENT, GROK_HOOK_NAME, GROK_SESSION_ID, GROK_WORKSPACE_ROOT
 //
-// Usage: node lazygrok-shim.mjs <component-name> <hook-event>
+// OmO CLIs expect: hook_event_name: "UserPromptSubmit", prompt: string, ...
+//
+// Usage: node lazygrok-shim.mjs <component> <hook-event>
 // Example: node lazygrok-shim.mjs ultrawork user-prompt-submit
 
 import { spawn } from "node:child_process";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { env } from "node:process";
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { env, homedir } from "node:process";
+import { readFileSync, mkdirSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
 const PLUGIN_ROOT = env.GROK_PLUGIN_ROOT || resolve(__dirname, "..");
 
 const componentName = process.argv[2];
@@ -28,6 +39,7 @@ if (!componentName || !hookEvent) {
 
 const cliPath = resolve(PLUGIN_ROOT, "vendor/lazygrok-hooks", componentName, "dist/cli.js");
 
+/** Map Grok display/snake names → OmO PascalCase. */
 const EVENT_ALIASES = {
 	user_prompt_submit: "UserPromptSubmit",
 	UserPromptSubmit: "UserPromptSubmit",
@@ -63,14 +75,11 @@ const EVENT_ALIASES = {
 	PermissionDenied: "PermissionDenied",
 };
 
-/** Coerce Grok/Cursor prompt-ish values to a single string. */
 function asString(value) {
 	if (typeof value === "string") return value;
 	if (value == null) return "";
 	if (typeof value === "number" || typeof value === "boolean") return String(value);
-	if (Array.isArray(value)) {
-		return value.map(asString).filter(Boolean).join("\n");
-	}
+	if (Array.isArray(value)) return value.map(asString).filter(Boolean).join("\n");
 	if (typeof value === "object") {
 		for (const k of ["text", "content", "prompt", "message", "value", "body"]) {
 			if (k in value) {
@@ -82,41 +91,115 @@ function asString(value) {
 	return "";
 }
 
-/** Best-effort prompt extraction across Grok payload variants. */
+function pick(input, ...keys) {
+	for (const k of keys) {
+		if (input[k] !== undefined && input[k] !== null && input[k] !== "") {
+			return input[k];
+		}
+	}
+	return undefined;
+}
+
+/**
+ * Recover latest user prompt from session chat_history when stdin lacks prompt
+ * (observed: some UPS fires arrive as {"event":"user_prompt_submit"} only).
+ */
+function recoverPromptFromSession(sessionId, workspaceRoot) {
+	if (!sessionId || !workspaceRoot) return "";
+	try {
+		// Grok session dirs: ~/.grok/sessions/<encodeURIComponent(cwd)>/<sessionId>/
+		const encoded = encodeURIComponent(workspaceRoot);
+		const base = join(homedir(), ".grok", "sessions", encoded, sessionId);
+		const historyPath = join(base, "chat_history.jsonl");
+		if (!existsSync(historyPath)) {
+			// Fallback: search under sessions for this session id
+			const sessionsRoot = join(homedir(), ".grok", "sessions");
+			if (!existsSync(sessionsRoot)) return "";
+			for (const d of readdirSync(sessionsRoot)) {
+				const p = join(sessionsRoot, d, sessionId, "chat_history.jsonl");
+				if (existsSync(p)) return extractLastUserQuery(p);
+			}
+			return "";
+		}
+		return extractLastUserQuery(historyPath);
+	} catch {
+		return "";
+	}
+}
+
+function extractLastUserQuery(historyPath) {
+	const lines = readFileSync(historyPath, "utf8").split(/\r?\n/).filter(Boolean);
+	for (let i = lines.length - 1; i >= 0; i--) {
+		try {
+			const o = JSON.parse(lines[i]);
+			const type = o.type || o.role;
+			let text = "";
+			const c = o.content;
+			if (typeof c === "string") text = c;
+			else if (Array.isArray(c)) {
+				text = c
+					.map((p) => (typeof p === "string" ? p : p?.text || p?.content || ""))
+					.join("\n");
+			}
+			if (!text) continue;
+			// Prefer explicit user_query blocks
+			const m = text.match(/<user_query>\s*([\s\S]*?)\s*<\/user_query>/i);
+			if (m) return m[1].trim();
+			if (type === "user" && !text.includes("<system-reminder>") && text.trim()) {
+				return text.trim();
+			}
+		} catch {
+			// continue
+		}
+	}
+	return "";
+}
+
 function extractPrompt(input, raw) {
+	// Official grok-build fields first
 	const direct = asString(
-		input.prompt ??
-			input.userPrompt ??
-			input.user_prompt ??
-			input.message ??
-			input.content ??
-			input.text ??
-			input.query ??
-			input.user_message ??
-			input.userMessage,
+		pick(
+			input,
+			"prompt",
+			"userPrompt",
+			"user_prompt",
+			"message",
+			"content",
+			"text",
+			"query",
+			"userMessage",
+			"user_message",
+		),
 	);
 	if (direct.trim()) return direct;
 
-	// Nested bags sometimes used by adapters
-	for (const bag of [input.input, input.payload, input.data, input.hook_input, input.hookInput]) {
+	for (const bagKey of ["input", "payload", "data", "hook_input", "hookInput"]) {
+		const bag = input[bagKey];
 		if (bag && typeof bag === "object") {
 			const nested = asString(
-				bag.prompt ?? bag.userPrompt ?? bag.user_prompt ?? bag.message ?? bag.content ?? bag.text,
+				pick(bag, "prompt", "userPrompt", "user_prompt", "message", "content", "text"),
 			);
 			if (nested.trim()) return nested;
 		}
 	}
 
-	// Last resort: if raw JSON mentions ulw/ultrawork, pass the whole raw so pattern match still fires
-	if (typeof raw === "string" && /(?:ultrawork|\bulw\b)/i.test(raw)) {
-		return raw;
-	}
+	const sessionId =
+		asString(pick(input, "sessionId", "session_id", "sessionID")) || env.GROK_SESSION_ID || "";
+	const workspace =
+		asString(pick(input, "workspaceRoot", "workspace_root", "cwd", "workspace")) ||
+		env.GROK_WORKSPACE_ROOT ||
+		env.CLAUDE_PROJECT_DIR ||
+		process.cwd();
+	const recovered = recoverPromptFromSession(sessionId, workspace);
+	if (recovered.trim()) return recovered;
+
+	if (typeof raw === "string" && /(?:ultrawork|\bulw\b)/i.test(raw)) return raw;
 	return "";
 }
 
 function maybeDebugDump(payload) {
 	try {
-		const dir = join(env.HOME || "/tmp", ".grok/state/lazygrok");
+		const dir = join(homedir(), ".grok/state/lazygrok");
 		mkdirSync(dir, { recursive: true });
 		writeFileSync(join(dir, "last-ups-shim.json"), JSON.stringify(payload, null, 2));
 	} catch {
@@ -124,13 +207,27 @@ function maybeDebugDump(payload) {
 	}
 }
 
-// Read all of stdin
 const chunks = [];
 process.stdin.on("data", (chunk) => chunks.push(chunk));
 process.stdin.on("end", () => {
 	const raw = Buffer.concat(chunks).toString("utf8").trim();
 	if (!raw) {
-		process.exit(0);
+		// Stdin empty — try env + session recovery (Grok sets GROK_SESSION_ID / GROK_WORKSPACE_ROOT)
+		const sessionId = env.GROK_SESSION_ID || "";
+		const workspace = env.GROK_WORKSPACE_ROOT || env.CLAUDE_PROJECT_DIR || process.cwd();
+		const recovered = recoverPromptFromSession(sessionId, workspace);
+		if (!recovered || !/(?:ultrawork|\bulw\b)/i.test(recovered)) {
+			process.exit(0);
+		}
+		const fabricated = {
+			hookEventName: env.GROK_HOOK_EVENT || "user_prompt_submit",
+			sessionId,
+			cwd: workspace,
+			workspaceRoot: workspace,
+			prompt: recovered,
+		};
+		processEnvelope(fabricated, JSON.stringify(fabricated));
+		return;
 	}
 
 	let input;
@@ -140,74 +237,75 @@ process.stdin.on("end", () => {
 		process.stdout.write(raw);
 		process.exit(0);
 	}
+	processEnvelope(input, raw);
+});
 
-	const rawEvent = input.event || input.hookEventName || input.hook_event_name || "";
+function processEnvelope(input, raw) {
+	// Official: hookEventName; legacy tests/docs: event / hook_event_name
+	const rawEvent =
+		pick(input, "hookEventName", "hook_event_name", "event") ||
+		env.GROK_HOOK_EVENT ||
+		"";
 	const grokEvent = EVENT_ALIASES[rawEvent] || rawEvent;
-	const sessionId = input.session_id || input.sessionId || input.sessionID || "";
-	const workspace = input.workspace || input.workspaceRoot || input.cwd || process.cwd();
+
+	const sessionId =
+		asString(pick(input, "sessionId", "session_id", "sessionID")) || env.GROK_SESSION_ID || "";
+	const workspace =
+		asString(pick(input, "workspaceRoot", "workspace_root", "cwd", "workspace")) ||
+		env.GROK_WORKSPACE_ROOT ||
+		env.CLAUDE_PROJECT_DIR ||
+		process.cwd();
 	const prompt = extractPrompt(input, raw);
-	const toolName = input.tool || input.toolName || input.tool_name || "";
-	const toolInput = input.tool_input || input.toolInput || input.arguments || input.input || {};
-	const toolUseId = input.tool_use_id || input.toolUseId || input.toolCallId || "";
-	const stopHookActive = input.stop_hook_active || input.stopHookActive || false;
-	const subagentId = input.subagent_id || input.subagentId || "";
+	const toolName = asString(pick(input, "toolName", "tool_name", "tool"));
+	const toolInput = pick(input, "toolInput", "tool_input", "arguments", "input") || {};
+	const toolUseId = asString(pick(input, "toolUseId", "tool_use_id", "toolCallId"));
+	const stopHookActive = Boolean(pick(input, "stopHookActive", "stop_hook_active"));
+	const subagentId = asString(pick(input, "subagentId", "subagent_id"));
 
 	const codexEvent = {
 		hook_event_name: grokEvent,
 		session_id: sessionId,
 		turn_id: sessionId,
-		transcript_path: input.transcript_path || input.transcriptPath || null,
-		cwd: workspace,
-		model: input.model || "grok-build",
-		permission_mode: input.permission_mode || "default",
+		transcript_path: pick(input, "transcriptPath", "transcript_path") ?? null,
+		cwd: asString(pick(input, "cwd")) || workspace,
+		model: asString(pick(input, "model")) || "grok-build",
+		permission_mode:
+			asString(pick(input, "permissionMode", "permission_mode")) || "default",
 	};
 
 	if (grokEvent === "UserPromptSubmit") {
 		codexEvent.prompt = prompt;
-		if (!prompt.trim()) {
-			maybeDebugDump({
-				reason: "empty_prompt",
-				component: componentName,
-				rawEvent,
-				grokEvent,
-				keys: Object.keys(input),
-				rawPreview: raw.slice(0, 2000),
-			});
-		}
 	} else if (grokEvent === "PreToolUse" || grokEvent === "PostToolUse") {
 		codexEvent.tool_name = toolName;
 		codexEvent.tool_use_id = toolUseId;
-		let enrichedToolInput = { ...toolInput };
-		const filePath =
-			enrichedToolInput.file_path || enrichedToolInput.filePath || enrichedToolInput.path || "";
-		const lowerTool = String(toolName).toLowerCase();
+		let enriched = { ...(typeof toolInput === "object" && toolInput ? toolInput : {}) };
+		const filePath = enriched.file_path || enriched.filePath || enriched.path || "";
+		const lower = toolName.toLowerCase();
 		if (
 			grokEvent === "PostToolUse" &&
 			filePath &&
-			!enrichedToolInput.content &&
-			(lowerTool === "write" ||
-				lowerTool === "edit" ||
-				lowerTool === "search_replace" ||
-				lowerTool === "strreplace" ||
-				lowerTool === "apply_patch" ||
-				lowerTool === "multiedit")
+			!enriched.content &&
+			["write", "edit", "search_replace", "strreplace", "apply_patch", "multiedit"].includes(
+				lower,
+			)
 		) {
 			try {
-				const absPath = resolve(workspace, filePath);
-				enrichedToolInput.content = readFileSync(absPath, "utf8");
+				enriched.content = readFileSync(resolve(workspace, filePath), "utf8");
 			} catch {
 				// skip
 			}
 		}
-		codexEvent.tool_input = enrichedToolInput;
+		codexEvent.tool_input = enriched;
 	} else if (grokEvent === "Stop") {
 		codexEvent.stop_hook_active = stopHookActive;
+		const last = asString(pick(input, "lastAssistantMessage", "last_assistant_message"));
+		if (last) codexEvent.last_assistant_message = last;
 	} else if (grokEvent === "SubagentStop") {
 		codexEvent.subagent_id = subagentId;
 	} else if (grokEvent === "SessionStart") {
-		codexEvent.source = input.source || "startup";
+		codexEvent.source = asString(pick(input, "source")) || "startup";
 	} else if (grokEvent === "PostCompact") {
-		codexEvent.trigger = input.trigger || "auto";
+		codexEvent.trigger = asString(pick(input, "source", "trigger")) || "auto";
 	}
 
 	const childEnv = { ...env };
@@ -215,8 +313,6 @@ process.stdin.on("end", () => {
 		childEnv.CODEX_HOME = env.HOME ? `${env.HOME}/.codex` : "/tmp/codex-home";
 	}
 
-	// Pipe child stdio so Grok's stdout capture always sees OmO CLI output
-	// (inherit is unreliable under some hook runners).
 	const child = spawn("node", [cliPath, "hook", hookEvent], {
 		stdio: ["pipe", "pipe", "pipe"],
 		env: {
@@ -241,25 +337,26 @@ process.stdin.on("end", () => {
 	child.stdin.end();
 
 	child.on("exit", (code) => {
-		if (
-			grokEvent === "UserPromptSubmit" &&
-			componentName === "ultrawork" &&
-			stdout.trim().length === 0
-		) {
-			maybeDebugDump({
-				reason: "empty_ultrawork_stdout",
-				component: componentName,
-				rawEvent,
-				grokEvent,
-				promptLen: prompt.length,
-				promptPreview: prompt.slice(0, 200),
-				keys: Object.keys(input),
-				exitCode: code,
-				stderrPreview: stderr.slice(0, 500),
-				codexEvent,
-				rawPreview: raw.slice(0, 2000),
-			});
+		if (componentName === "ultrawork" && grokEvent === "UserPromptSubmit") {
+			const ok = stdout.includes("ultrawork-mode") || stdout.includes("ULTRAWORK MODE");
+			if (!ok) {
+				maybeDebugDump({
+					reason: "empty_ultrawork_stdout",
+					component: componentName,
+					rawEvent,
+					grokEvent,
+					promptLen: prompt.length,
+					promptPreview: prompt.slice(0, 300),
+					keys: Object.keys(input || {}),
+					envHookEvent: env.GROK_HOOK_EVENT || null,
+					envSessionId: env.GROK_SESSION_ID || null,
+					exitCode: code,
+					stderrPreview: stderr.slice(0, 500),
+					codexEvent,
+					rawPreview: String(raw).slice(0, 3000),
+				});
+			}
 		}
 		process.exit(code || 0);
 	});
-});
+}
