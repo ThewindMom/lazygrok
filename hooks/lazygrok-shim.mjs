@@ -22,7 +22,8 @@
 import { spawn } from "node:child_process";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { env, homedir } from "node:process";
+import { env } from "node:process";
+import { homedir } from "node:os";
 import { readFileSync, mkdirSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 
 const __filename = fileURLToPath(import.meta.url);
