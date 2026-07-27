@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 Releases are normally automated via [release-please](https://github.com/googleapis/release-please) when GitHub Actions billing is active. While Actions is disabled, use [`scripts/manual-release.sh`](scripts/manual-release.sh).
 
+## [0.4.2] (2026-07-27)
+
+### UX
+* **One keyword:** `ulw` / `ultrawork` is enough — no user `/goal` ceremony
+* Bootstrap: host `create_goal`/`update_goal` if present → always `# Goal` + ulw-loop `create-goals` + `todo_write`
+* Clarifies Grok host `/goal` is optional bonus, not required for ULW
+
 ## [0.4.1] (2026-07-27)
 
 ### Changes
