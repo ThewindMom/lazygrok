@@ -2941,21 +2941,25 @@ import { readFileSync as readFileSync2 } from "node:fs";
 
 // src/ultrawork-skill-pointer.ts
 import { existsSync as existsSync5, readFileSync } from "node:fs";
-import { dirname, join as join3, resolve as resolve4 } from "node:path";
 import { fileURLToPath } from "node:url";
+import { dirname, join as join3, resolve as resolve4 } from "node:path";
 var ULTRAWORK_SKILL_POINTER_TEMPLATE = `<ultrawork-mode>
 ULTRAWORK MODE IS ACTIVE FOR THIS TASK.
 
-MANDATORY BOOTSTRAP: do all three steps, in order, before anything else.
+MANDATORY BOOTSTRAP: do all steps, in order, before anything else.
 
 1. First user-visible line this turn MUST be exactly:
 \`ULTRAWORK MODE ENABLED!\`
 
-2. Register the binding goal NOW (silent — never narrate missing tools):
-If host tool \`update_goal\` or \`create_goal\` is in your tool list,
-call it with \`objective\` only (no status/budget). Otherwise open with
-a binding \`# Goal\` block — that is the normal Grok path, not a defect. The user only needs ulw/ultrawork — do not ask them to also type /goal.
-Prefer also \`ulw-loop create-goals\` / skill \`ulw-evidence\` when the CLI is available.
+2. Register the binding goal NOW. objective = user request with ulw/ultrawork stripped.
+Send objective only: no status, no budget fields.
+- If tool \`create_goal\` is available → call it with objective only.
+- Always open with a binding \`# Goal\` block (objective, tier, criteria, when-to-stop).
+- Always durable ledger (Grok create_goal equivalent when host tools are absent):
+  \`node "\${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals --brief "<objective>" --json\`
+  Prefer \`.lazygrok/ulw-loop/\`; keep \`.omo/ulw-loop/\` if that run already uses it.
+- If \`update_goal\` is available and a host goal is already active, progress only with evidence.
+Never skip registration. Never narrate missing host tools. \`ulw\`/\`ultrawork\` alone is enough — do not ask for /goal.
 
 3. Read the FULL ultrawork directive NOW, before any other tool call,
 plan, or edit. It is the \`ultrawork\` skill, stored at:
@@ -2966,14 +2970,16 @@ Read the whole file. If a read result comes back truncated, keep
 reading the remaining line ranges until you have seen every line.
 Every rule in that file is binding for this entire task: no
 compromise, no summarizing from memory, no skipping. If the file does
-not exist, tell the user the lazygrok ultrawork skill is missing and
+not exist, tell the user the LazyGrok ultrawork skill is missing and
 continue with steps 1 and 2 plus evidence-bound execution.
 
-Do not start the requested work until all three steps are complete.
+4. Live checklist: \`todo_write\` (exactly one \`in_progress\`).
+
+Do not start the requested work until bootstrap is complete.
+LIGHT complete: ulw-loop light-quality-gate then checkpoint. HEAVY: reviewer gate in the skill.
 </ultrawork-mode>
 `;
 var ULTRAWORK_SKILL_PATH_PLACEHOLDER = "{{ULTRAWORK_SKILL_PATH}}";
-var ULTRAWORK_DIRECTIVE = readFileSync(new URL("../directive.md", import.meta.url), "utf8");
 function resolveUltraworkSkillFilePath() {
   const here = dirname(fileURLToPath(import.meta.url));
   const envRoot = process.env["GROK_PLUGIN_ROOT"]?.trim();
@@ -2990,7 +2996,7 @@ function resolveUltraworkSkillFilePath() {
     if (existsSync5(abs))
       return abs;
   }
-  return resolve4(join3(here, "../skills/ultrawork/SKILL.md"));
+  return resolve4(join3(here, "../../ultrawork/skills/ultrawork/SKILL.md"));
 }
 function buildUltraworkSkillPointer(skillFilePath) {
   return ULTRAWORK_SKILL_POINTER_TEMPLATE.replace(ULTRAWORK_SKILL_PATH_PLACEHOLDER, skillFilePath);
@@ -3000,7 +3006,7 @@ function buildUltraworkAdditionalContext(options = {}) {
   if (skillFilePath !== null && existsSync5(skillFilePath)) {
     return buildUltraworkSkillPointer(skillFilePath);
   }
-  return ULTRAWORK_DIRECTIVE;
+  return readFileSync(new URL("../directive.md", import.meta.url), "utf8");
 }
 
 // src/ultrawork-directive.ts

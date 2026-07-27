@@ -1,12 +1,12 @@
 ---
 name: ultrawork
 description: >
-  Binding ultrawork mode directive for LazyGrok (omo) on Grok Build. When a prompt
-  contains ultrawork or ulw, the UserPromptSubmit hook injects a short bootstrap that
-  points at this file. One keyword is enough — do not require /goal or other commands.
-  Read the whole file and follow every rule in it for the rest of the task.
+  Binding ultrawork mode directive for LazyGrok (omo) on Grok. When a prompt contains
+  ultrawork or ulw, the UserPromptSubmit hook injects a short bootstrap that points at
+  this file. Read the whole file and follow every rule in it for the rest of the task.
+  Upstream: code-yeongyu/lazycodex plugins/omo@4.19.2 (Grok harness renames only).
 metadata:
-  short-description: Binding ultrawork mode directive (LazyCodex-faithful, Grok harness)
+  short-description: Binding ultrawork mode directive (LazyCodex 4.19.2)
 user_invocable: true
 ---
 
@@ -17,35 +17,22 @@ user_invocable: true
 
 [CODE RED] Maximum precision. Outcome-first. Evidence-driven.
 
-# User trigger (only this)
+# Trigger
+`ulw` or `ultrawork` in the prompt is enough. Do not require `/goal` or other slash commands.
 
-The user only needs to say **`ulw`** or **`ultrawork`** (anywhere in the prompt).
-Do **not** ask them to also run `/goal`, `/ulw-loop`, or `/ulw-evidence`. You perform
-goal registration and ledger setup yourself.
+# Grok harness map
+Upstream LazyCodex ultrawork on Grok tools:
 
-# Grok Build harness map
-
-This skill is LazyCodex ultrawork, run on the Grok Build tool surface. When the
-body mentions a Codex tool name that is not on this surface, use the mapping
-below — do not invent Codex multi-agent APIs.
-
-| Intent | Grok tool |
+| Intent | Grok |
 | --- | --- |
-| Live checklist | `todo_write` (exactly one `in_progress`) |
-| Spawn worker / specialist | `spawn_subagent({subagent_type:"lazygrok:<role>", prompt:"…", background:true})` |
-| Wait for background child | `get_command_or_subagent_output({task_ids:[...]})` |
-| Stop a runaway | `kill_command_or_subagent({task_id:"..."})` |
-| Edit / write files | `search_replace` / `write` |
-| Shell | `run_terminal_command` |
-| Read files | `read_file` |
-| Binding host goal (optional) | `create_goal` / `update_goal` **only if present in the tool list** |
-| Binding durable criteria | ulw-loop CLI via skill `ulw-evidence` (always for non-trivial work) |
-| Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
-| Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
-| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
+| Live checklist | `todo_write` |
+| Spawn / wait / stop | `spawn_subagent` / `get_command_or_subagent_output` / `kill_command_or_subagent` |
+| Edit / shell / read | `search_replace`·`write` / `run_terminal_command` / `read_file` |
+| Binding goal | ulw-loop ledger (`create-goals`) always; host `create_goal`/`update_goal` only if in tool list; always `# Goal` mirror |
+| Workers / review / explore | `lazygrok:lazygrok-worker-{low,medium,high}` · `lazygrok-code-reviewer` · `explore` · `librarian` · `prometheus` |
 
-Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list.
+Spawn prompts: `TASK:` + `DELIVERABLE` `SCOPE` `VERIFY` `STOP WHEN`. `background: true` unless full history required. Never invent Codex multi_agent APIs.
+
 
 # Role
 Expert coding agent. Ship verified work. No process narration.
@@ -162,31 +149,20 @@ Never spawn `plan` before the discovery wave has returned.
 
 ## 1. Create the goal with binding success criteria
 You MUST register a binding goal for the whole run — NOT prose alone,
-NOT the notepad alone, NOT the plan alone. Skipping registration is a
-defect. On Grok Build the host often omits `create_goal` (especially when
-workflows are enabled); that is normal. Register via every layer that
-applies, silently when a tool is absent:
+NOT the notepad alone, NOT the plan alone. Skipping it is a defect.
 
-1. **Host tools (when present in this session's tool list)**  
-   - `create_goal` → call with exactly `objective`; do not include `status`
-     or any budget/token fields.  
-   - `update_goal` → only if a host goal is already active (e.g. user ran
-     `/goal` earlier); never invent host completion without evidence.  
-   - Missing host goal tools are **not** a defect — continue.
-2. **Transcript contract (always)** — open with a markdown `# Goal` block
-   treated as binding: objective, tier, success criteria with scenarios,
-   when-to-stop. This survives compaction and is for humans + hooks.
-3. **Durable ULW ledger (always for non-trivial work)** — skill
-   `ulw-evidence`:
-   ```bash
-   node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals --brief "<objective>" --json
-   ```
-   Prefer `.lazygrok/ulw-loop/`; keep `.omo/ulw-loop/` if that run already
-   started there. Record evidence with `record-evidence`. LIGHT complete:
-   `light-quality-gate` then `checkpoint`; HEAVY uses the reviewer gate below.
-4. **Live checklist** — `todo_write` (see §3). Goals are unlimited; never
-   invent a numeric budget or limit.
+Upstream LazyCodex uses `create_goal`. On Grok the host may omit that tool
+(workflows on). The **ulw-loop ledger** is the durable binding contract:
 
+1. Always: `node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals --brief "<objective>" --json`
+   Prefer `.lazygrok/ulw-loop/`; keep `.omo/ulw-loop/` if that run already uses it.
+   Evidence: `record-evidence`. LIGHT complete: `light-quality-gate` then `checkpoint`. HEAVY: reviewer gate below.
+2. Always: open with a markdown `# Goal` block treated as binding (objective, tier, criteria, when-to-stop).
+3. If `create_goal` is in the tool list: call with exactly `objective`; no `status`/budget.
+   If `update_goal` is in the tool list and a host goal is already active: progress/complete only with real evidence after ledger criteria pass.
+   If host tools are absent: skip silently — not a defect; never narrate their absence.
+
+Goals are unlimited; never invent a numeric budget or limit.
 The criteria MUST list, upfront:
 - The user-visible deliverable in one line, and the tier with its
   justification.
@@ -385,35 +361,27 @@ child's run; a child without a stop condition wanders past its goal.
 State that it is an executable assignment, not a context handoff. Use `background: true` unless full history is truly
 required; paste only the context the child needs. Full-history forks can
 make the child continue old parent context instead of the delegated task.
-Always use Grok `spawn_subagent` with `subagent_type` + `prompt` + `background: true`. Wait with `get_command_or_subagent_output({task_ids:[...], timeout_ms})`. Stop runaways with `kill_command_or_subagent`. Re-task by spawning again with the missing deliverable — there is no separate followup/close API.
+Use Grok `spawn_subagent` with `subagent_type` + `prompt` + `background: true`. Wait with `get_command_or_subagent_output({task_ids, timeout_ms})`. Stop with `kill_command_or_subagent`. Re-task by spawning again.
 
 # TOML-backed subagent routing compatibility
-Installed role agents bind via `subagent_type` on Grok's `spawn_subagent`.
-Always pass `subagent_type` from the installed LazyGrok agents list and put
-the full assignment in `prompt` (Grok does not use Codex `task_name` /
-`message`-only multi_agent schemas). Prefer `background: true` unless full
-history is truly required.
+Installed role agents bind via `subagent_type` on Grok `spawn_subagent`.
+Always pass `subagent_type` from the LazyGrok agents list; put the assignment in `prompt`.
+Prefer `background: true` unless full history is required.
 
-Difficulty tiers when selecting workers:
-  low -> `lazygrok:lazygrok-worker-low`
-  medium -> `lazygrok:lazygrok-worker-medium`
-  high -> `lazygrok:lazygrok-worker-high`
-explorer/librarian/plan carry their own agent entries
-(`lazygrok:explore`, `lazygrok:librarian`, `lazygrok:prometheus`).
-Difficulty (model power) is orthogonal to LIGHT/HEAVY rigor (process size).
+Difficulty tiers: low -> `lazygrok:lazygrok-worker-low`; medium -> `lazygrok:lazygrok-worker-medium`;
+high -> `lazygrok:lazygrok-worker-high`. Explorer/librarian/plan: `lazygrok:explore` /
+`lazygrok:librarian` / `lazygrok:prometheus`. Difficulty (model power) is orthogonal to LIGHT/HEAVY.
 
 Treat child status as a progress signal, not a timeout counter. For
 work likely to exceed one wait cycle, tell the child to send
 `WORKING: <task> - <current phase>` before long reading, testing, or
 review passes, and `BLOCKED: <reason>` only when it cannot progress.
 Track spawned agent ids locally. Use `get_command_or_subagent_output` for
-mailbox signals, but a timeout only means no new mailbox update arrived.
+mailbox signals; a timeout only means no new mailbox update arrived.
 Treat a running child as alive and keep doing independent root work.
-Fallback only when the child is completed without the
-deliverable, ack-only, or no longer running. If that followup is still
-silent or ack-only, record the result as inconclusive, do not count it
-as approval/pass, close it if safe, and respawn a smaller
-`background: true` task with the missing deliverable.
+Fallback only when the child completed without the deliverable, is ack-only,
+or is no longer running. If followup is still silent/ack-only, record inconclusive,
+do not count as approval, and respawn a smaller `background: true` task if needed.
 
 
 # Subagent-dependent transition barrier
@@ -447,9 +415,7 @@ one line why the tier held.
 
 Procedure (NON-NEGOTIABLE):
 1. Spawn a child with `background: true` and a self-contained reviewer
-   assignment in `prompt`. Prefer `subagent_type: "lazygrok:lazygrok-code-reviewer"`
-   (or gate/qa reviewers) when available; otherwise paste the reviewer
-   requirements into the prompt.
+   assignment in `prompt`. Prefer `subagent_type: "lazygrok:lazygrok-code-reviewer"` when available; otherwise paste reviewer requirements into the prompt.
    Pass: goal, success-criteria, scenario evidence, full diff, notepad
    path.
 2. Verify each reviewer concern yourself. A concern blocks only when

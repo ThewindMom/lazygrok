@@ -6,13 +6,12 @@ Releases are normally automated via [release-please](https://github.com/googleap
 
 ## [0.4.3] (2026-07-27)
 
-### Ultrawork skill fidelity
-* **`skills/ultrawork/SKILL.md` is LazyCodex 4.19.2 ultrawork verbatim**, adjusted only for the Grok Build harness:
-  - Restored full LCX body: Role, Goal, Tier triage, Manual-QA channels, Bootstrap 0–3, Finding things, PIN→RED→GREEN→SURFACE→CLEAN, Waiting discipline, subagent reliability, verification gate, commits, constraints, output discipline, stop rules
-  - Harness map only: `todo_write`, `spawn_subagent` / `get_command_or_subagent_output` / `kill_command_or_subagent`, `playwright` MCP, `lazygrok:*` workers, `.lazygrok/plans/`
-  - Goal registration: host tools optional + always `# Goal` + ulw-loop `create-goals` (silent when host tools absent)
-  - One-keyword UX: `ulw` / `ultrawork` alone is enough
-* Mirrored to component `directive.md` + vendor skill copies; ulw-loop fallback directive synced
+### Ultrawork from code-yeongyu/lazycodex@4.19.2
+* Source of truth: https://github.com/code-yeongyu/lazycodex `plugins/omo` tag **v4.19.2**
+* Full LCX ultrawork SKILL body + mechanical Grok renames (`todo_write`, `spawn_subagent`, playwright, `lazygrok:*`)
+* Binding goal: ulw-loop `create-goals` ledger (= LCX `create_goal` when host tools missing) + `# Goal`
+* skill-pointer: LCX bootstrap shape + ledger + LazyGrok path resolve; dists rebuilt
+* See `docs/ultrawork-upstream.md`
 
 ## [0.4.2] (2026-07-27)
 
