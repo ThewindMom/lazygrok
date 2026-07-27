@@ -1,27 +1,50 @@
 ---
 name: remove-ai-slops
-description: "Remove AI-generated code smells (slop) from branch changes or an explicit file list. Locks behavior with regression tests FIRST, then runs categorized cleanup via parallel workers in batches of 5, then verifies with quality gates. Covers 10 slop categories including performance equivalences, excessive complexity (object annotations, if/elif variant chains), and oversized modules (250+ pure LOC with mandatory modular refactoring). MUST USE when the user asks to \"remove slop\", \"clean AI code\", \"deslop\", \"clean up AI-generated code\", \"remove AI slop\", or wants to clean up AI-generated patterns from recent changes. Triggers - \"remove ai slops\", \"clean ai code\", \"deslop\", \"cleanup AI generated\", \"remove AI slop\", \"clean up AI-generated code\", \"strip slop\", \"ai-slop cleanup\"."
+description: "Remove AI-generated code smells (slop) from branch changes or an explicit file list. Locks behavior with regression tests FIRST, then runs categorized cleanup via parallel `deep` agents in batches of 5, then verifies with quality gates. Covers 10 slop categories including performance equivalences, excessive complexity (object annotations, if/elif variant chains), and oversized modules (250+ pure LOC with mandatory modular refactoring). MUST USE when the user asks to \"remove slop\", \"clean AI code\", \"deslop\", \"clean up AI-generated code\", \"remove AI slop\", or wants to clean up AI-generated patterns from recent changes. Triggers - \"remove ai slops\", \"clean ai code\", \"deslop\", \"cleanup AI generated\", \"remove AI slop\", \"clean up AI-generated code\", \"strip slop\", \"ai-slop cleanup\"."
 ---
 
 ## Grok Harness Tool Compatibility
 
-This skill may include examples copied from other harnesses. On Grok, use native tools:
+This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools:
 
-| Foreign example | Grok tool to use |
+| OpenCode example | Grok tool to use |
 | --- | --- |
-| `Task(...)` / `task(...)` | `spawn_subagent(...)` |
-| `TodoWrite(...)` | `todo_write(...)` |
-| `Bash` / `bash(...)` | `run_terminal_command(...)` |
-| `Write` / `Edit` / `StrReplace` | `write` / `search_replace` |
-| `Read` | `read_file` |
-| `background_output(...)` | `get_command_or_subagent_output(...)` |
-| `team_*(...)` | **n/a on Grok** — parallel `spawn_subagent` + orchestrator journal |
+| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as an explorer. ...","agent_type":"explorer","background":false})` |
+| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as a librarian. ...","agent_type":"librarian","background":false})` |
+| `task(subagent_type="plan", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as a planning agent. ...","agent_type":"plan","background":false})` |
+| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent.spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazygrok-gate-reviewer","background":false})` |
+| `task(category="...", ...)` for implementation or QA | `spawn_subagent.spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":false})` |
+| `background_output(task_id="...")` | `spawn_subagent.get_command_or_subagent_output(...)` for mailbox signals |
+| `team_*(...)` | Use Grok native subagents via `spawn_subagent.spawn_subagent` and `spawn_subagent.get_command_or_subagent_output`; use `spawn_subagent.send_input` and `spawn_subagent.kill_command_or_subagent` only when exposed in the active tools list |
 
-Role-specific behavior must be described in a self-contained `prompt`. Prefer agent types: `explore`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer`. Prefer `.lazygrok/` over `.omo/` for Grok-facing state. If a code block below conflicts with this section, this section wins.
+Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into `~/.grok/agents/`: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `agent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `agent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
 
-For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. Poll with `get_command_or_subagent_output`. Treat a running child as alive.
+Grok exposes ONE of two subagent tool surfaces per session; check your own tool list and route accordingly. If `spawn_subagent` tools exist, use the table above as written. If instead a flat `spawn_subagent` with a required `task_name` exists (`spawn_subagent`), rewrite every `spawn_subagent` example: `spawn_subagent.spawn_subagent({...,"background":false})` becomes `spawn_subagent({"task_name":"<lowercase_digits_underscores>","message":...,"agent_type":...,"fork_turns":"none"})` (`"all"` only when full parent history is truly required); `send_input` becomes `spawn_subagent (message-only follow-up)`; do not call `kill_command_or_subagent`/`resume_agent` (finished agents end on their own; `spawn_subagent (re-task: new prompt to same role)` re-tasks one, `kill_command_or_subagent` stops one); `get_command_or_subagent_output` takes only `timeout_ms` and returns on any child mailbox activity. On the v2 surface `agent_type` may be ABSENT from the spawn schema (verified 2026-07-11: only `fork_turns`/`message`/`task_name`) — when absent, omit it and describe the role inside `message`; installed role TOMLs cannot be selected on that surface. If a code block below conflicts with this section, this section wins.
+
+When translating `load_skills=[...]`, include the requested skill names in the spawned agent's `message`. If a code block below conflicts with this section, this section wins.
+
+For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `spawn_subagent.get_command_or_subagent_output` timeout only means no new mailbox update arrived; back off between waits (double the timeout up to ~5 minutes) instead of spinning short cycles. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
 
 # Remove AI Slops Skill
+
+## Grok Tool Mapping
+
+| Intent | Grok tool |
+| --- | --- |
+| Spawn a worker | `spawn_subagent({subagent_type:"lazygrok:<role>", prompt:"TASK: ...", background:true})` |
+| Wait for background result | `get_command_or_subagent_output({task_ids:[...]})` |
+| Stop a runaway | `kill_command_or_subagent({task_id:"..."})` |
+| Live checklist | `todo_write` |
+| Edit files | `search_replace` / `write` |
+| Shell | `run_terminal_command` |
+| Read files | `read_file` |
+| Binding goal | `# Goal` block + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
+| Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
+| Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
+| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` or `lazygrok-plan` |
+
+Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
+
 
 ## Inputs
 
@@ -48,6 +71,7 @@ The agent looks for these nine categories. The first three are stylistic, the ne
 2. **Over-defensive code** — null checks for guaranteed values, try/except around code that cannot raise, isinstance checks for statically typed params, default values for required params, backward-compat shims, redundant validation duplicated at multiple layers, **broad exception catching** (`except Exception`/`except BaseException` in Python, empty `catch {}` or `catch (e) { console.error(e) }` without narrowing in TypeScript/JavaScript).
    - KEEP: validation at system boundaries (user input, external APIs), I/O error handling, nullable DB fields. Top-level boundary catch-all (CLI `main()`, HTTP handler) with explicit logging + re-raise is acceptable.
    - REFACTOR: `except Exception` → catch the specific exception you expect. Empty `catch {}` → add `instanceof` narrowing or re-throw. `catch (e) { log(e) }` → narrow with `instanceof`, handle known cases, re-throw unknown.
+   - PROOF REQUIRED: before deleting any validation or error handling at a trust boundary, Phase 2 must include an **adversarial** regression (malformed or hostile input) that fails if the guard is removed. No adversarial test → the guard stays. Redundant defense to remove is a duplicate of a check that already runs *inside* the boundary; a guard with no proof of redundancy is load-bearing.
 
 3. **Excessive complexity** — deep nesting (>3 levels), nested ternaries, complex boolean expressions (combine 4+ predicates), long parameter lists (>5 args without a struct/dataclass/object), god functions (>50 lines doing many things), overly clever one-liners that sacrifice readability, `if/elif/else` chains for type/enum/literal discrimination (must be `match/case` + `assert_never`), `object` used as a type annotation (must be `Protocol`, `TypeVar`, or explicit union).
    - KEEP: established complexity patterns in this codebase, performance-critical hot paths that intentionally use a complex idiom. `if/else` for boolean conditions and range checks (not variant discrimination).
@@ -79,7 +103,7 @@ The agent looks for these nine categories. The first three are stylistic, the ne
    **Hard rule**: only apply when behavior equivalence is obvious. Do NOT change algorithms with subtle correctness implications. Do NOT micro-optimize hot paths without a benchmark. If in doubt, SKIP.
 
 ### Behavior coverage
-9. **Missing tests** — behavior present in changed files that is not locked by any regression test. The fix is not to remove code but to ADD the narrowest test that pins the behavior.
+9. **Missing tests** — behavior present in changed files that is not locked by any regression test. The fix is not to remove code but to ADD the narrowest test that pins the behavior. EXCEPTION: a PROSE file (prompt, `SKILL.md`, rule, markdown) has no behavioral seam — do NOT add a text/word-count/phrase pin for it; that guards a diff, not behavior. Cover only a machine-consumed value (parsed field, sentinel a runtime greps, a doc JSON sample through its real validator) or leave it to review.
 
 ### Structural
 10. **Oversized modules** — any source file exceeding **250 pure LOC** (non-blank, non-comment lines). This is an architectural defect, not a style preference. Measure: `awk '!/^[[:space:]]*$/ && !/^[[:space:]]*(#|\/\/)/' <file> | wc -l`.
@@ -138,40 +162,55 @@ Filter out: deleted files, binary files, generated/vendored files (`node_modules
 For each in-scope source file:
 
 1. Identify the public/observable behavior the file exposes (exported functions, HTTP handlers, CLI commands, classes used elsewhere).
-2. Check whether existing tests cover that behavior. Use `grep` / project test conventions to find related test files.
-3. **If behavior is uncovered or weakly covered, write the narrowest regression test that pins current behavior BEFORE editing the file.** Tests should pin observable outputs, not implementation details.
+2. Check whether existing tests cover that behavior. Use `git grep` / project test conventions to find related test files.
+3. **If behavior is uncovered or weakly covered, write the narrowest regression test that pins current behavior BEFORE editing the file.** Tests should pin observable outputs, not implementation details. A PROSE file (prompt/`SKILL.md`/rule/markdown) is exempt — its wording is not behavior; skip the test and rely on review, or assert only a machine-consumed value.
 4. Run the test suite (or at minimum the relevant tests). They must be **green** before any cleanup begins.
 
 If you cannot establish a green baseline (e.g., test runner is broken), STOP and report. Do not proceed with cleanup on unverified ground.
 
-### Phase 3: Cleanup plan
+### Phase 3: Cleanup plan — existence first, then smells
 
-Produce an explicit plan **before** spawning the removal agents:
+The largest, safest deletion is code that should not have existed. **Before categorizing smells, run the deletion ladder on each changed unit:**
+
+- **Delete entirely** — the behavior is not needed (YAGNI, speculative, dead on arrival).
+- **Reuse** — an existing helper or pattern in this repo already does it; replace the reimplementation with a call to it.
+- **Platform / stdlib / native / dependency** — the language stdlib, the runtime, or an already-installed dependency already does it (a hand-rolled date picker → `<input type="date">`, a custom query parser → `URLSearchParams`, a bespoke debounce → the util already imported).
+- **Simplify in place** — it must exist; make it smaller.
+
+Only code that lands on **Simplify in place** proceeds to the smell categories. This turns the pass from "find smells to trim" into "first decide whether the code should exist, then trim what survives." One function replaced by a platform call is a bigger, safer win than any in-place cleanup — and it needs no per-line smell analysis.
+
+For a diff that **fixes a bug**, grep the callers of every shared function it touches. Prefer one root-cause fix at the shared seam over repeated guards at each caller — a per-caller patch that leaves a sibling caller broken is a partial fix, not a cleanup.
+
+Then produce an explicit plan **before** spawning the removal agents:
 
 ```
 File: src/foo.py
+  Ladder: 2 units simplify-in-place; 1 unit delete (native <input> replaces custom picker)
   Categories: dead code, excessive complexity, performance
   Order: dead code → complexity → performance
   Risk: medium (touches caching layer)
 
 File: src/bar.py
+  Ladder: all simplify-in-place
   Categories: obvious comments, over-defensive
   Order: comments → defensive
   Risk: low
 ```
 
+**Intentional shortcuts:** if the plan deliberately keeps a bounded simplification (a naive scan fine under N rows, a global lock, an O(n²) path), mark it in-code with a `debt:` comment naming the ceiling and the upgrade trigger (in omo, prefix with `// @allow` so the comment-checker treats it as intentional), and list it under "Remaining Risks / Deferred" in the report. That section is the debt ledger — a simplification with a known ceiling and no marker is indistinguishable from a bug.
+
 Order rule (safest → riskiest): comments → dead code → defensive → duplication → complexity → abstraction/boundary → performance → tests → oversized-modules. This minimizes blast radius of any one change.
 
-### Phase 4: Parallel slop removal via workers in batches of 5
+### Phase 4: Parallel slop removal via `deep` agents in batches of 5
 
-Files are processed by thorough workers with the `remove-ai-slops` skill loaded (via `read_file` on SKILL.md), **batched 5 at a time in parallel**. The executable skill name is `remove-ai-slops`. The 5-wide batch is the sweet spot — more than 5 creates result-merging noise and context contention, fewer wastes parallelism.
+Files are processed by `deep` category agents with the `$omo:remove-ai-slops` skill loaded, **batched 5 at a time in parallel**. The executable skill name is `remove-ai-slops`. The `deep` category gives the agent enough thoroughness to correctly evaluate the 9 categories and respect the KEEP rules without slipping into surface fixes; the 5-wide batch is the sweet spot — more than 5 creates result-merging noise and context contention, fewer wastes parallelism.
 
 **Batching protocol** (strict):
 
 1. Slice the in-scope file list into chunks of up to 5 files.
-2. For each chunk, launch all `spawn_subagent` calls **in a single message**, every one with `background: true` when available.
-3. End your turn. Poll with `get_command_or_subagent_output` as each finishes.
-4. Once all 5 in the batch complete, collect each result.
+2. For each chunk, launch all `task` calls **in a single message**, every one with `run_in_background=true`.
+3. End your turn. Wait for the system to send `<system-reminder>` notifications as each task finishes.
+4. Once all 5 in the batch complete, collect each result via `background_output(task_id=...)`.
 5. Launch the next batch of 5. Repeat until every file is processed.
 6. If total files ≤ 5, launch all in one batch.
 
@@ -180,22 +219,17 @@ Files are processed by thorough workers with the `remove-ai-slops` skill loaded 
 **Per-file invocation** (one of the 5 in a batch):
 
 ```
-spawn_subagent(
-  subagent_type="lazygrok:lazygrok-executor",
-  background=true,
+task(
+  category="deep",
+  load_skills=["remove-ai-slops"],
+  run_in_background=true,
+  description="Slop removal: {filename}",
   prompt="""
-TASK: Slop removal for {file_path}
-DELIVERABLE: minimal behavior-preserving cleanup report grouped by category
-SCOPE: {file_path} only
-VERIFY: tests green; no public API changes
+Remove AI slops from: {file_path}
 
-In addition to default categories (obvious comments, over-defensive code, spaghetti nesting), also evaluate:
-- Excessive complexity: god functions, long parameter lists, complex booleans, nested ternaries
-- Needless abstraction: pass-through wrappers, single-use helpers, speculative indirection
-- Boundary violations: wrong-layer imports, leaky responsibilities, hidden coupling
-- Dead code: unused imports, unreachable branches, stale flags, debug leftovers
-- Duplication: copy-paste branches, redundant helpers
-- Performance equivalences: O(n²)→O(n) via set lookup, hoist computation out of loops, eager→lazy collections, batch redundant calls, cache repeated len()/length
+First run the deletion ladder from Phase 3 on this file (delete entirely / reuse existing repo code / platform-stdlib-native / simplify in place); only code that must exist proceeds to smell removal.
+
+Then evaluate EVERY category defined in this skill's "Categories (what counts as slop)" section, applying that section's KEEP and REFACTOR rules verbatim — the Categories section you have loaded is canonical, do not work from a restated subset.
 
 Apply changes in this order (safest → riskiest): comments → dead code → defensive → duplication → complexity → abstraction/boundary → performance → oversized-modules.
 
@@ -212,7 +246,7 @@ For each skipped issue, give reason.
 )
 ```
 
-**Batch failure handling**: a `get_command_or_subagent_output` timeout only means no new mailbox update arrived, not that a worker failed. For long passes, require each child to send `WORKING: <file> - <current phase>` and `BLOCKED: <reason>` only when it cannot progress. Treat a running child as alive. Mark a file for retry only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running. Do NOT block the remaining 4 in that batch; collect successful results and retry the failed file once later. If retry also fails, escalate that file under "Issues Found & Fixed" in the final report.
+**Batch failure handling**: a `spawn_subagent.get_command_or_subagent_output` timeout only means no new mailbox update arrived, not that a `deep` agent failed. For long passes, require each child to send `WORKING: <file> - <current phase>` and `BLOCKED: <reason>` only when it cannot progress. Treat a running child as alive. Mark a file for retry only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running. Do NOT block the remaining 4 in that batch; collect successful results and retry the failed file once later. If retry also fails, escalate that file under "Issues Found & Fixed" in the final report.
 
 ### Phase 5: Verify with quality gates + critical review
 
@@ -244,8 +278,8 @@ If any gate fails or any checklist item flips:
 
 1. Identify the specific change that caused the failure.
 2. Explain why it broke things.
-3. Use `run_terminal_command` (`git checkout` / targeted revert) or `search_replace` to restore the problematic hunk.
-4. If genuine slop remains after revert, edit the file directly yourself — in parallel per file via multiple `search_replace` calls — applying only the changes you can prove are safe.
+3. `git checkout` the affected file (or use `git diff` + targeted `Edit` to revert just the problematic hunk).
+4. If genuine slop remains after revert, edit the file directly yourself — in parallel per file via multiple Edit calls — applying only the changes you can prove are safe.
 5. Re-run the failing gate and re-walk the checklist for the affected file.
 6. Repeat until all gates green AND checklist clean.
 
@@ -270,18 +304,19 @@ Behavior Lock:
   - Baseline status: GREEN
 
 Cleanup Plan:
-  - path/to/file1.ts: [dead code → complexity → performance]
-  - path/to/file2.py: [comments → defensive]
+  - path/to/file1.ts: [ladder: 1 delete (native) + simplify-in-place] → [dead code → complexity → performance]
+  - path/to/file2.py: [ladder: all simplify-in-place] → [comments → defensive]
 
-Per-File Results:
+Per-File Results (each cut shows what replaces it):
   path/to/file1.ts
-    - Dead code: 3 removed (lines X-Y, A-B, C)
+    - Ladder/delete: custom DatePicker (48 lines) → <input type="date"> (native), flatpickr import removed
+    - Dead code: 3 removed (lines X-Y, A-B, C) → nothing (unreachable)
     - Excessive complexity: 1 simplified (nested ternary at L42 → if/else)
     - Performance: 1 (line N: list scan → set lookup, O(n²)→O(n), behavior identical)
     - Skipped (preserved): 2 (defensive null check at boundary; commented WHY at L88)
 
   path/to/file2.py
-    - Obvious comments: 5 removed
+    - Obvious comments: 5 removed → nothing
     - Over-defensive: 1 simplified (redundant isinstance on typed param)
 
 Quality Gates:
@@ -299,8 +334,14 @@ Critical Review:
 Issues Found & Fixed:
   - [None] OR [Issue description → Fix applied]
 
-Remaining Risks / Deferred:
+Net Impact:
+  - LOC: -74 (removed 91, added 17)
+  - Dependencies: -1 (flatpickr removed; native <input type="date"> used)
+  - Files deleted: 1 (src/date-picker-wrapper.ts — platform-native replacement)
+
+Remaining Risks / Deferred (this section is the debt ledger):
   - [None] OR [e.g., "boundary violation in module X flagged but not refactored — needs human judgment"]
+  - `debt:` markers kept this pass: [None] OR [file:line — ceiling → upgrade trigger]
 
 Final Status: CLEAN | ISSUES FIXED | REQUIRES ATTENTION
 ```

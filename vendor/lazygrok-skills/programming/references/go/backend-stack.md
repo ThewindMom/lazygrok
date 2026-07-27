@@ -1,6 +1,6 @@
 # HTTP Backend Stack — gin + slog + validator + pgx
 
-The canonical production HTTP service skeleton. Distilled from the [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) codebase — a real proxy serving OpenAI / Gemini / Claude / Codex APIs in production, with SSE streaming, WebSocket upgrades, request logging, and hot-reload config.
+The canonical production HTTP service skeleton. Distilled from the [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) codebase — a real proxy serving OpenAI / Gemini / Claude / Grok APIs in production, with SSE streaming, WebSocket upgrades, request logging, and hot-reload config.
 
 If you are tempted to pick echo or chi instead, see `libraries.md` — gin wins on ecosystem, not technical merit, and the win is large enough to matter.
 

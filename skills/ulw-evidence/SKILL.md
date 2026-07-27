@@ -100,15 +100,19 @@ $ULW_CLI status --json
 Returns the full plan with goal progress, criterion pass/fail counts, and
 evidence trails.
 
-## Integration with ultrawork
+## Integration with ultrawork / ulw-loop
 
-The ultrawork skill's execution loop (PIN → RED → GREEN → SURFACE → CLEAN)
-maps to this system:
+Pair with:
+- skill **`ultrawork`** (mode directive; `# Goal` binding)
+- skill **`ulw-loop`** (OmO goal-ledger conductor + full-workflow)
+- skill **`ulw-ralph-loop`** only when you want Ralph promise+verifier continuation
 
-1. **Create goals** at bootstrap → binding success criteria
+The ultrawork execution loop (PIN → RED → GREEN → SURFACE → CLEAN) maps to:
+
+1. **Create goals** at bootstrap → binding success criteria (`create-goals`)
 2. **Record evidence** after each RED/GREEN/SURFACE step
 3. **Checkpoint** when all criteria for a goal pass
-4. **Status** check before emitting `<promise>DONE</promise>`
+4. **Status** before final report / quality gate
 
-This replaces the ad-hoc boulder.json approach with structured, auditable
-evidence tracking.
+This is the durable ledger path. Boulder (`.lazygrok/boulder.json`) remains
+for `/start-work` Prometheus plan continuation and is complementary.

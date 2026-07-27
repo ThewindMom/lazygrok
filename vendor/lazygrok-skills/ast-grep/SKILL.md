@@ -5,6 +5,25 @@ description: "Use ast-grep (sg) for AST-aware code search and rewrite across 25 
 
 # ast-grep
 
+## Grok Tool Mapping
+
+| Intent | Grok tool |
+| --- | --- |
+| Spawn a worker | `spawn_subagent({subagent_type:"lazygrok:<role>", prompt:"TASK: ...", background:true})` |
+| Wait for background result | `get_command_or_subagent_output({task_ids:[...]})` |
+| Stop a runaway | `kill_command_or_subagent({task_id:"..."})` |
+| Live checklist | `todo_write` |
+| Edit files | `search_replace` / `write` |
+| Shell | `run_terminal_command` |
+| Read files | `read_file` |
+| Binding goal | `# Goal` block + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
+| Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
+| Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
+| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` or `lazygrok-plan` |
+
+Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
+
+
 `sg` (also installed as `ast-grep`) is an **AST-aware search and rewrite tool** across 25 languages. It treats your pattern as code, parses it the same way it parses your project, and matches structurally. It is the right tool whenever your question depends on **code shape** rather than text bytes.
 
 This skill ships a Python wrapper at `scripts/ast_grep_helper.py` and platform install scripts at `install.sh` (POSIX) and `install.ps1` (Windows). The helper adds offline pattern validation, the two-pass write trick, and binary auto-resolution. Use it as your default entry point.

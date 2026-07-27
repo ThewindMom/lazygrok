@@ -23,7 +23,7 @@ Prepend this lane to a `ulw-plan` planning prompt when the work is UI, UX, produ
 
 ```text
 Load Lane A Direction & Discovery. Use designpowers only as design-process context.
-`ulw-plan` remains the planner and must write the final `.omo/plans/<slug>.md`.
+`ulw-plan` remains the planner and must write the final `.lazygrok/plans/<slug>.md`.
 
 Before planning, extract or infer:
 - problem statement, primary users, constraints, out-of-scope
@@ -44,7 +44,7 @@ Add design-specific acceptance criteria to the Prometheus plan:
 
 Lane A passes only when the plan has inspectable design context, not vague intent. Required evidence:
 
-- `.omo/plans/<slug>.md` names the design brief, personas, success criteria, constraints, and owner decisions.
+- `.lazygrok/plans/<slug>.md` names the design brief, personas, success criteria, constraints, and owner decisions.
 - `.omo/frontend-design/state.md` contains or references the current brief summary, personas, design principles, taste signals, decisions log, open questions, and design debt register.
 - The plan's verification entries include real-surface QA expectations for UI work, plus persona or ability-spectrum checks for affected flows.
 - Any adopted default is named with the reason it was safe to default instead of asking the user.

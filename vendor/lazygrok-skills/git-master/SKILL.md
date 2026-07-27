@@ -5,6 +5,25 @@ description: "MUST USE whenever a task needs a commit or git-history investigati
 
 # Git Master
 
+## Grok Tool Mapping
+
+| Intent | Grok tool |
+| --- | --- |
+| Spawn a worker | `spawn_subagent({subagent_type:"lazygrok:<role>", prompt:"TASK: ...", background:true})` |
+| Wait for background result | `get_command_or_subagent_output({task_ids:[...]})` |
+| Stop a runaway | `kill_command_or_subagent({task_id:"..."})` |
+| Live checklist | `todo_write` |
+| Edit files | `search_replace` / `write` |
+| Shell | `run_terminal_command` |
+| Read files | `read_file` |
+| Binding goal | `# Goal` block + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
+| Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
+| Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
+| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` or `lazygrok-plan` |
+
+Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
+
+
 Use this skill when the user asks you to operate on Git history or answer a Git-history question. Be exact, conservative, and evidence-led. Read the repository state before you infer anything.
 
 ## Mode Gate
@@ -35,6 +54,10 @@ git merge-base HEAD origin/master
 ```
 
 Missing upstream or missing `main`/`master` is normal. Fall back to the best available branch or report the missing fact. Never treat a failed lookup as proof.
+
+## PR Body Evidence Attachments
+
+When a PR body needs screenshots or terminal PNGs, use the repo reference at `docs/reference/github-attachment-upload.md`. The allowed hosting path is GitHub user attachments from the authenticated web attachment flow; never commit temporary images, never use GitHub Releases for PR evidence, and never use external image hosts. Do not log browser cookies, CSRF tokens, S3 form fields, or upload headers.
 
 ## Commit Mode
 

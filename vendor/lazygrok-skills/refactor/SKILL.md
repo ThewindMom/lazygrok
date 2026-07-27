@@ -5,28 +5,22 @@ description: "Intelligent refactor command. Triggers: refactor, refactoring, cle
 
 ## Grok Harness Tool Compatibility
 
-This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools (`spawn_subagent` **is** native on Grok):
+This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools:
 
 | OpenCode example | Grok tool to use |
 | --- | --- |
-| `spawn_subagent(subagent_type="explore", ...)` / `task(subagent_type="explore", ...)` | `spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: act as an explorer. ...")` |
-| `spawn_subagent(subagent_type="librarian", ...)` / `task(subagent_type="librarian", ...)` | `spawn_subagent(subagent_type="lazygrok:librarian", background=true, prompt="TASK: act as a librarian. ...")` |
-| `task(subagent_type="plan", ...)` | `spawn_subagent(subagent_type="lazygrok:prometheus", background=true, prompt="TASK: act as a planning agent. ...")` |
-| `task(subagent_type="oracle", ...)` for final verification / consultation | `spawn_subagent(subagent_type="lazygrok:oracle", background=true, prompt="TASK: act as a rigorous reviewer/consultant. ...")` |
-| `task(category="...", ...)` for implementation or QA | `spawn_subagent(subagent_type="lazygrok:hephaestus", background=true, prompt="TASK: act as an implementation or QA worker. ...")` |
-| `background_output(task_id="...")` | `get_command_or_subagent_output(task_ids=["..."])` |
-| `background_cancel(taskId="...")` | `kill_command_or_subagent(task_id="...")` |
-| `TodoWrite(...)` | `todo_write(...)` |
-| `bash(...)` / `Bash(...)` | `run_terminal_command(...)` |
-| `edit(...)` / `Edit` / `StrReplace` | `search_replace(...)` |
-| `Read` / `Write` | `read_file` / `write` |
-| `team_*(...)` | **n/a on Grok** — use parallel `spawn_subagent` + orchestrator journal; poll with `get_command_or_subagent_output` |
+| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent({"message":"TASK: act as an explorer. ...","agent_type":"explorer","background":false})` |
+| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent({"message":"TASK: act as a librarian. ...","agent_type":"librarian","background":false})` |
+| `task(subagent_type="plan", ...)` | `spawn_subagent({"message":"TASK: act as a planning agent. ...","agent_type":"plan","background":false})` |
+| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazygrok-gate-reviewer","background":false})` |
+| `task(category="...", ...)` for implementation or QA | `spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":false})` |
+| `background_output(task_id="...")` | `get_command_or_subagent_output(...)` for mailbox signals |
+| `team_*(...)` | Use Grok native subagents via `spawn_subagent` and `get_command_or_subagent_output`; use `re-prompt via spawn_subagent` and `kill_command_or_subagent` only when exposed in the active tools list |
 
-Role-specific behavior must be described in a self-contained `prompt`. The child starts with only the prompt (no parent history). Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `prompt`. lazygrok installs selectable agent roles: `explore`, `librarian`, `prometheus`/`plan`, `momus`, `metis`, `hephaestus`, `oracle`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` — pass the matching name as `subagent_type` (e.g. `lazygrok:explore`). If the spawn tool exposes no `subagent_type` parameter, omit it and describe the role inside `prompt`. Prefer `.lazygrok/` over `.omo/` for Grok-facing state. If a code block below conflicts with this section, this section wins.
+Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into `~/.grok/agents/`: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `agent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `agent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
 
-For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `get_command_or_subagent_output` timeout only means no new output arrived. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
+Use the Grok Tool Mapping table. Always pass `subagent_type` and put the full assignment in `prompt`.
 
-export const REFACTOR_TEMPLATE = `# Intelligent Refactor Command
 
 ## Usage
 \`\`\`
@@ -65,7 +59,28 @@ Performs intelligent, deterministic refactoring with full codebase awareness. Un
 
 # PHASE 0: INTENT GATE (MANDATORY FIRST STEP)
 
-**BEFORE ANY ACTION, classify and validate the request.**
+## Grok Tool Mapping
+
+| Intent | Grok tool |
+| --- | --- |
+| Spawn a worker | `spawn_subagent({subagent_type:"lazygrok:<role>", prompt:"TASK: ...", background:true})` |
+| Wait for background result | `get_command_or_subagent_output({task_ids:[...]})` |
+| Stop a runaway | `kill_command_or_subagent({task_id:"..."})` |
+| Live checklist | `todo_write` |
+| Edit files | `search_replace` / `write` |
+| Shell | `run_terminal_command` |
+| Read files | `read_file` |
+| Binding goal | `# Goal` + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
+| Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
+| Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
+| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
+
+Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
+Prefer `subagent_type` from the installed LazyGrok agents list. Do not use Codex multi_agent_v1/v2 tool names.
+
+When a skill or workflow still shows Codex MultiAgent examples, translate them with this table.
+
+
 
 ## Step 0.1: Parse Request Type
 
@@ -125,42 +140,47 @@ todo_write([
 
 ## 1.1: Launch Parallel Explore Agents (BACKGROUND)
 
-Fire ALL of these simultaneously using \`spawn_subagent\`:
+Fire ALL of these simultaneously using \`call_omo_agent\`:
 
 \`\`\`
 // Agent 1: Find the refactoring target
-spawn_subagent(
-  subagent_type="lazygrok:explore",
-  background=true,
-  prompt="TASK: Find all occurrences and definitions of [TARGET]. DELIVERABLE: file paths, line numbers, usage patterns."
+call_omo_agent(
+  subagent_type="explore",
+  run_in_background=true,
+  prompt="Find all occurrences and definitions of [TARGET].
+  Report: file paths, line numbers, usage patterns."
 )
 
 // Agent 2: Find related code
-spawn_subagent(
-  subagent_type="lazygrok:explore",
-  background=true,
-  prompt="TASK: Find all code that imports, uses, or depends on [TARGET]. DELIVERABLE: dependency chains, import graphs."
+call_omo_agent(
+  subagent_type="explore",
+  run_in_background=true,
+  prompt="Find all code that imports, uses, or depends on [TARGET].
+  Report: dependency chains, import graphs."
 )
 
 // Agent 3: Find similar patterns
-spawn_subagent(
-  subagent_type="lazygrok:explore",
-  background=true,
-  prompt="TASK: Find similar code patterns to [TARGET] in the codebase. DELIVERABLE: analogous implementations, established conventions."
+call_omo_agent(
+  subagent_type="explore",
+  run_in_background=true,
+  prompt="Find similar code patterns to [TARGET] in the codebase.
+  Report: analogous implementations, established conventions."
 )
 
 // Agent 4: Find tests
-spawn_subagent(
-  subagent_type="lazygrok:explore",
-  background=true,
-  prompt="TASK: Find all test files related to [TARGET]. DELIVERABLE: test file paths, test case names, coverage indicators."
+call_omo_agent(
+  subagent_type="explore",
+  run_in_background=true,
+  prompt="Find all test files related to [TARGET].
+  Report: test file paths, test case names, coverage indicators."
 )
 
 // Agent 5: Architecture context
-spawn_subagent(
-  subagent_type="lazygrok:explore",
-  background=true,
-  prompt="TASK: Find architectural patterns and module organization around [TARGET]. DELIVERABLE: module boundaries, layer structure, design patterns in use."
+call_omo_agent(
+  subagent_type="explore",
+  run_in_background=true,
+  prompt="Find architectural patterns and module organization around [TARGET].
+  Report: module boundaries, layer structure, design patterns in use."
 )
 \`\`\`
 
@@ -204,7 +224,9 @@ grep(pattern="[search_term]", path="src/", include="*.ts")
 ## 1.3: Collect Background Results
 
 \`\`\`
-get_command_or_subagent_output(task_ids=["[agent_1_id]", "[agent_2_id]", "..."])
+background_output(task_id="[agent_1_id]")
+background_output(task_id="[agent_2_id]")
+...
 \`\`\`
 
 **Mark phase-1 as completed after all results collected.**
@@ -286,10 +308,10 @@ ls -la *_test.go
 
 \`\`\`
 // Find all tests related to target
-spawn_subagent(
-  subagent_type="lazygrok:explore",
-  background=false,  // Need this synchronously
-  prompt="TASK: Analyze test coverage for [TARGET]. DELIVERABLE: coverage report covering:
+call_omo_agent(
+  subagent_type="explore",
+  run_in_background=false,  // Need this synchronously
+  prompt="Analyze test coverage for [TARGET]:
   1. Which test files cover this code?
   2. What test cases exist?
   3. Are there integration tests?
@@ -357,10 +379,9 @@ After each refactoring step:
 ## 4.1: Invoke Plan Agent
 
 \`\`\`
-spawn_subagent(
-  subagent_type="lazygrok:prometheus",
-  background=true,
-  prompt="TASK: Create a detailed refactoring plan. DELIVERABLE: ordered atomic steps with verification.
+Task(
+  subagent_type="plan",
+  prompt="Create a detailed refactoring plan:
 
   ## Refactoring Goal
   [User's original request]
@@ -447,8 +468,8 @@ python3 scripts/ast_grep_helper.py replace '[pattern]' '[rewrite]' --lang ts pat
 
 **For Structural Changes:**
 \`\`\`typescript
-// Use search_replace for precise changes
-search_replace(file_path, old_string, new_string)
+// Use Edit tool for precise changes
+edit(filePath, oldString, newString)
 \`\`\`
 
 ### Post-Step Verification (MANDATORY)
@@ -458,10 +479,10 @@ search_replace(file_path, old_string, new_string)
 lsp_diagnostics(filePath)  // Must be clean or same as baseline
 
 // 2. Run tests
-run_terminal_command("bun test")  // Or appropriate test command
+bash("bun test")  // Or appropriate test command
 
 // 3. Type check
-run_terminal_command("tsc --noEmit")  // Or appropriate type check
+bash("tsc --noEmit")  // Or appropriate type check
 \`\`\`
 
 ### Step Completion
@@ -610,11 +631,11 @@ Leverage LSP tools for precision analysis. Key patterns:
 Use \`ast-grep\` skill helper or \`sg\` CLI for structural transformations.
 **Critical**: Always preview first, review, then execute.
 
-## Agents (via \`spawn_subagent\`)
-- \`lazygrok:explore\`: Parallel codebase pattern discovery
-- \`lazygrok:prometheus\` (plan): Detailed refactoring plan generation
-- \`lazygrok:oracle\`: Read-only consultation for complex architectural decisions and debugging
-- \`lazygrok:librarian\`: **Use proactively** when encountering deprecated methods or library migration tasks. Query official docs and OSS examples for modern replacements.
+## Agents
+- \`explore\`: Parallel codebase pattern discovery
+- \`plan\`: Detailed refactoring plan generation
+- \`oracle\`: Read-only consultation for complex architectural decisions and debugging
+- \`librarian\`: **Use proactively** when encountering deprecated methods or library migration tasks. Query official docs and OSS examples for modern replacements.
 
 ## Deprecated Code & Library Migration
 When you encounter deprecated methods/APIs during refactoring:
@@ -631,109 +652,141 @@ $ARGUMENTS
 </user-request>
 `
 
-export const REFACTOR_PARALLEL_DISPATCH_ADDENDUM = `
+export const REFACTOR_TEAM_MODE_ADDENDUM = `
 ---
 
-# Parallel Dispatch Protocol (Grok)
+# Team Mode Protocol (active when team_* tools are present)
 
-\`team_*\` tools and Codex team transport are **n/a on Grok**. When the plan has ≥3 file-independent steps, use **parallel \`spawn_subagent\` workers** plus an orchestrator journal instead of \`team_create\` / \`team_send_message\` / \`team_task_*\`. Prefer state under \`.lazygrok/\` (not \`.omo/\`).
+Team mode is enabled for this session. The rules below **override Phase 4-6** above. Follow this protocol instead of the in-session step-by-step execution.
 
 ## Phase 4 override: Plan agent staffing requirement
 
 When invoking the Plan agent in Phase 4.1, append this additional requirement to the prompt:
 
 \`\`\`
-7. (REQUIRED for parallel dispatch) Output a Parallel Staffing Recommendation section with these fields — missing fields fail Phase 5.0:
+7. (REQUIRED when team mode is active) Output a Team Staffing Recommendation section with these fields — missing fields fail Phase 5.0:
    - total_atomic_steps: integer
    - file_independent_steps: integer (parallelizable, no cross-file blocker)
    - cross_file_dependent_steps: integer (has blockers)
-   - per_step_assignment: [{step_id, assigned_to: 'mechanical' | 'reasoning', blockedBy: [step_ids], rationale}]
-   - dispatch_path_recommendation: 'parallel' | 'legacy' with reason
+   - per_step_assignment: [{step_id, assigned_to: 'quick' | 'unspecified-low', blockedBy: [step_ids], rationale}]
+   - dispatch_path_recommendation: 'team' | 'legacy' with reason
    - rationale for the composition
 \`\`\`
 
 **Classification rules** the plan agent must apply to each step:
-- \`mechanical\`: mechanical edits — LSP rename, extract variable, inline, simple move, signature change without call-site logic.
-- \`reasoning\`: logic-preserving refactors that need reasoning — extract function, restructure conditional, pattern transformation, cross-file API change.
-- Recommend \`parallel\` path when \`file_independent_steps >= 3\`; recommend \`legacy\` otherwise.
+- \`quick\`: mechanical edits — LSP rename, extract variable, inline, simple move, signature change without call-site logic.
+- \`unspecified-low\`: logic-preserving refactors that need reasoning — extract function, restructure conditional, pattern transformation, cross-file API change.
+- Recommend \`team\` path when \`file_independent_steps >= 3\`; recommend \`legacy\` otherwise.
 
 ## Phase 5 override: Dispatch path selection
 
-Read the Parallel Staffing Recommendation from Phase 4. If any required field is missing, fail here and re-request the plan with the exact missing field names. Do not proceed with a partial plan.
+Read the Team Staffing Recommendation from Phase 4. If any required field is missing, fail here and re-request the plan with the exact missing field names. Do not proceed with a partial plan.
 
 Then choose the path:
 
-- **Parallel path (5.1-P)**: when the plan recommends \`parallel\` AND \`file_independent_steps >= 3\`. Workers execute via parallel \`spawn_subagent\`, Lead orchestrates, a verifier runs as a separate spawn.
+- **Team path (5.1-T)**: when the plan recommends \`team\` AND \`file_independent_steps >= 3\`. Members execute in parallel, Lead orchestrates, a \`deep\` verifier lives outside the team.
 - **Legacy path (5.1-L)**: otherwise. Use the original 5.1 / 5.2 / 5.3 flow from above.
 
-Record the chosen path in the \`todo_write\` list.
+Record the chosen path in the todo_write list.
 
-## Phase 5.1-P: Parallel \`refactor-squad\` via spawn_subagent
+## Phase 5.1-T: \`refactor-squad\` team execution
 
 **Precondition checks** (fail hard if any step fails):
 
-1. Optional: read the \`teammode\` skill via \`read_file\` only for conceptual guidance — do **not** call \`team_*\` APIs (n/a on Grok).
-2. Journal active worker task IDs under \`.lazygrok/refactor-squad/\` (or session notes). Ensure no stale worker set from a prior run is still running (\`kill_command_or_subagent\` if needed).
+1. Load the \`team-mode\` skill via the \`skill\` tool for lifecycle, message protocol, and limits.
+2. Call \`team_list\` and verify no active \`refactor-squad\` run exists; if one does, shutdown + delete the orphan before proceeding.
+3. If \`~/.lazygrok/teams/refactor-squad/config.json\` is missing, write it using the spec below.
 
-**Worker roles** (spawn one background subagent per independent step, cap ~4 concurrent):
+**Team spec** (\`~/.lazygrok/teams/refactor-squad/config.json\`):
 
+\`\`\`json
+{
+  "name": "refactor-squad",
+  "lead": { "kind": "subagent_type", "subagent_type": "sisyphus" },
+  "members": [
+    {
+      "kind": "category",
+      "category": "quick",
+      "prompt": "You handle mechanical refactoring steps (LSP rename, extract variable, inline, simple move, signature change). Use LSP tools for correctness. Apply the task description's per-step instructions verbatim — no scope expansion. After edits, run lsp_diagnostics on touched files. Report via team_send_message(teamRunId=<id>, to=\"lead\", summary=<files touched>, body=<lsp status + diff summary>) + team_task_update(status=completed). Never run tests — the external verifier handles that. Never git add, never --continue."
+    },
+    { "kind": "category", "category": "quick", "prompt": "Same contract as peer quick worker." },
+    {
+      "kind": "category",
+      "category": "unspecified-low",
+      "prompt": "You handle logic-preserving refactors that need reasoning (extract function, restructure conditional, pattern transformation, cross-file API change). Read the task description's plan step carefully. Use the ast-grep skill helper or sg CLI to preview structural rewrites first, review the preview, then execute. If the step is ambiguous or would require out-of-scope changes, STOP and send team_send_message(teamRunId=<id>, to=\"lead\", summary=\"UNCLEAR\", body=<reason>) + team_task_update(status=pending). Same reporting contract as peer quick workers. Never run tests."
+    },
+    { "kind": "category", "category": "unspecified-low", "prompt": "Same contract as peer unspecified-low worker." }
+  ]
+}
 \`\`\`
-// Mechanical worker
-spawn_subagent(
-  subagent_type="lazygrok:hephaestus",
-  background=true,
-  prompt="TASK: Mechanical refactor step <N>. DELIVERABLE: apply edits + report files touched and lsp status. SCOPE: <per-step instructions from plan, target files, line ranges, rollback>. VERIFY: run lsp_diagnostics on touched files; do NOT run full test suite; never git add / commit. Return PASS or FAIL with diff summary."
-)
 
-// Reasoning worker
-spawn_subagent(
-  subagent_type="lazygrok:hephaestus",
-  background=true,
-  prompt="TASK: Logic-preserving refactor step <N>. DELIVERABLE: apply edits + report. SCOPE: <plan step; preview structural rewrites with sg/ast-grep first>. VERIFY: lsp_diagnostics clean on touched files; if step is ambiguous return UNCLEAR:<reason> without expanding scope. Do NOT run full test suite; never git add / commit."
-)
-\`\`\`
+Rationale for this composition:
+- **4 workers = team mode's parallel cap.** 5+ just queues.
+- **No verifier team member.** Verification needs \`deep\` reasoning (or \`unspecified-high\` fallback). In-team category routing downcasts to sisyphus-junior, which is weaker than required — the verifier runs OUTSIDE the team as a \`task(category="deep")\`.
+- **quick × 2** for mechanical edits, **unspecified-low × 2** for reasoning edits — mirrors the plan's split.
 
-Rationale:
-- **~4 concurrent workers** — avoid unbounded fan-out.
-- **Verifier is separate** — after each worker completes, spawn an external verifier (not the same agent that edited).
-- **Lead orchestrates only** — Lead does not edit files on the parallel path.
+**Team lifecycle** (one team, reused until Phase 6 cleanup):
+
+1. \`team_create(teamName="refactor-squad")\`. Record \`teamRunId\`.
+2. Broadcast the refactor Intent Card ONCE (keep task descriptions slim):
+   \`\`\`
+   team_send_message(
+     teamRunId=<id>, to="*", kind="announcement",
+     summary="refactor-intent",
+     body=<codemap summary + constraints + established patterns from Phase 2>
+   )
+   \`\`\`
+3. Broadcast the verification spec ONCE:
+   \`\`\`
+   team_send_message(
+     teamRunId=<id>, to="*", kind="announcement",
+     summary="verify-spec",
+     body=<exact test/typecheck/lint commands + expected pass counts + regression indicators from Phase 3.4>
+   )
+   \`\`\`
+4. For each plan step, \`team_task_create(teamRunId=<id>, subject="refactor step <N>: <short>", description=<per-step instructions from plan, including target files and line ranges, rollback strategy>, blockedBy=<from plan's per_step_assignment>)\`.
 
 **Lead monitoring loop**:
 
-While any worker is running:
+While any team task is \`pending | claimed | in_progress\`:
 
-- Poll with \`get_command_or_subagent_output(task_ids=[...])\`. A timeout only means no new output; treat a running child as alive.
-- On worker completion, dispatch an **external verifier**:
+- Wait for \`<system-reminder>\` or member messages. Avoid tight polling; a single \`team_status\` check is acceptable if no notification arrives within roughly 10 seconds of expected completion.
+- On a worker completion report, immediately dispatch an **external verifier** — verification runs OUTSIDE the team because team-member category routing downcasts to sisyphus-junior:
   \`\`\`
-  spawn_subagent(
-    subagent_type="lazygrok:lazygrok-gate-reviewer",
-    background=true,
-    prompt="TASK: verify refactor step <N>. DELIVERABLE: PASS or FAIL:<failing test + specific error + suggested revert hunks>. SCOPE: <files touched + verify-spec commands from Phase 3.4>. VERIFY: run the listed test/typecheck/lint commands."
+  task(
+    category="deep",
+    load_skills=[],
+    run_in_background=true,
+    description="verify step <N>",
+    prompt=<files touched + verify-spec commands + instruction to return "PASS" or "FAIL:<failing test + specific error + suggested revert hunks>">
   )
   \`\`\`
-  Fall back to \`lazygrok:hephaestus\` with a rigorous-reviewer prompt if gate-reviewer is unavailable. Do not create a commit checkpoint until the verifier returns PASS.
-- On verifier PASS: make the commit checkpoint for that step (see original 5.3). Proceed.
-- On verifier FAIL: Lead decides:
-  - **Retry with fix hint**: re-spawn the original step with the failure body in the prompt (same scope, specific fix guidance).
+  If \`deep\` is unavailable, fall back to \`category="unspecified-high"\`. Do not create a commit checkpoint until the verifier returns PASS.
+- On a verifier PASS: make the commit checkpoint for that step (see original 5.3). Proceed.
+- On a verifier FAIL: Lead decides:
+  - **Retry with fix hint**: \`team_task_update(status=pending)\` on the original step + \`team_send_message(teamRunId=<id>, to=<original member>, summary="retry", body=<specific failure from verifier>)\`. Runtime reassigns.
   - **Escalate**: after three FAIL cycles on the same step, STOP and consult the user with full evidence.
-- On worker UNCLEAR: re-harvest context via a targeted \`spawn_subagent\` (explore/oracle), then reassign with an updated Intent Card fragment in the prompt.
+- On a member UNCLEAR message: re-harvest context via a targeted \`task()\` outside the team, broadcast an updated Intent Card fragment, then reassign.
 
-Proceed to Phase 6 only when every planned step is \`completed\` AND every paired verifier returned PASS.
+Proceed to Phase 6 only when every team task is \`completed\` AND every paired verifier task returned PASS.
 
-## Phase 6 override: Cleanup before summary
+## Phase 6 override: Team cleanup before summary
 
-If Phase 5 used the parallel path, finish or kill residual workers BEFORE producing the 6.6 summary:
+If Phase 5 used the team path, dismantle \`refactor-squad\` BEFORE producing the 6.6 summary. Every exit path — success, escalation, abort — must cleanup; orphan teams poison the next session's precondition check.
 
-1. \`kill_command_or_subagent\` for any still-running worker/verifier that is no longer needed.
-2. Clear \`.lazygrok/refactor-squad/\` journal entries for this run (optional).
+1. \`team_shutdown_request\` for each member, then \`team_approve_shutdown\` if members do not self-approve within a reasonable window.
+2. \`team_delete(teamRunId=<id>)\`.
+3. \`team_list\` to confirm no residual \`refactor-squad\` run.
 
-Append to the 6.6 summary a "Dispatch path" line and, when parallel path was used, metrics (worker count, verifier runs, lifetime).
+The \`~/.lazygrok/teams/refactor-squad/config.json\` declaration stays on disk; next session reuses it.
 
-## MUST NOT (parallel path)
+Append to the 6.6 summary a "Dispatch path" line and, when team path was used, team metrics (teamRunId, tasks created, verifier runs, team lifetime).
+
+## MUST NOT (team mode)
 
 - Lead never edits files directly — orchestrate only.
-- Do not call \`team_*\` tools — they are n/a on Grok.
-- Do not recreate an unbounded swarm mid-session.
-- Do not run full suite from Lead on the parallel path — the external verifier owns that lane.
-- Consultation for complex architecture: \`spawn_subagent(subagent_type="lazygrok:oracle", ...)\` or \`lazygrok:librarian\` outside the worker set when needed.
+- Do not inline the Intent Card or verify-spec into task descriptions — rely on the broadcasts.
+- Do not recreate the team mid-session.
+- Do not run tests from Lead — the external verifier owns that lane.
+- Do not put \`oracle\` / \`librarian\` / \`deep\` into the team spec — oracle/librarian are team-ineligible, and \`deep\` under category routing downcasts to sisyphus-junior. Use them via \`task()\` outside the team when needed.
 `

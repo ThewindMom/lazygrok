@@ -6,7 +6,7 @@
 // bootstrap, no npm/pip install, and no POSIX-shell or python3 precondition - the
 // two things genuinely not guaranteed on native Windows across the omo harnesses.
 //
-// Usage:  node "<skill-root>/scripts/scaffold-plan.mjs" <slug> [--clear|--unclear] [--reset [--force]]
+// Usage:  node "<skill-root>/scripts/scaffold-plan.mjs" <slug> [--clear|--unclear] [--draft-only] [--review-required] [--reset [--force]]
 //
 // RESUME-SAFE: run it ONCE at plan generation. A plain re-run on an existing
 // ulw-plan artifact is a NO-OP success (it never overwrites your appended todos),
@@ -16,7 +16,7 @@
 //
 // WRITE BOUNDARY: the prometheus-md-only hook gates Write/Edit but NOT Bash, so
 // this node:fs script writes out of band of that hook. It self-guards THIS script's
-// own writes to resolve under .lazygrok/ (it does not, and cannot, contain other Bash
+// own writes to resolve under .omo/ (it does not, and cannot, contain other Bash
 // commands; it only guarantees the mandated generator never escapes .omo). Mirrors
 // packages/omo-opencode/src/hooks/prometheus-md-only/path-policy.ts.
 
@@ -52,23 +52,27 @@ export function parseArgs(argv) {
 	let intent = "unspecified";
 	let force = false;
 	let reset = false;
+	let draftOnly = false;
+	let reviewRequired = false;
 	for (const arg of rest) {
 		if (arg === "--clear") intent = "clear";
 		else if (arg === "--unclear") intent = "unclear";
 		else if (arg === "--reset") reset = true;
 		else if (arg === "--force") force = true;
+		else if (arg === "--draft-only") draftOnly = true;
+		else if (arg === "--review-required") reviewRequired = true;
 		else if (arg.startsWith("--")) throw new Error(`unknown flag: ${arg}`);
 		else if (slug === undefined) slug = arg;
 		else throw new Error(`unexpected argument: ${arg}`);
 	}
-	if (!slug) throw new Error('usage: scaffold-plan.mjs <slug> [--clear|--unclear] [--reset [--force]]');
+	if (!slug) throw new Error('usage: scaffold-plan.mjs <slug> [--clear|--unclear] [--draft-only] [--review-required] [--reset [--force]]');
 	if (!SLUG_PATTERN.test(slug)) {
 		throw new Error(`invalid slug "${slug}" - use lowercase letters, digits, and hyphens only`);
 	}
-	return { slug, intent, reset, force };
+	return { slug, intent, reset, force, draftOnly, reviewRequired };
 }
 
-// Resolve a project-relative path and confine it under .lazygrok/ - the script's own
+// Resolve a project-relative path and confine it under .omo/ - the script's own
 // enforcement of the prometheus planner write boundary.
 export function resolveSafeOmoPath(cwd, relPath) {
 	const resolved = resolve(cwd, relPath);
@@ -77,7 +81,7 @@ export function resolveSafeOmoPath(cwd, relPath) {
 		throw new Error(`refused: path escapes the workspace root: ${relPath}`);
 	}
 	if (!/(^|[/\\])\.omo([/\\]|$)/i.test(rel)) {
-		throw new Error(`refused: ulw-plan may only write under .lazygrok/: ${relPath}`);
+		throw new Error(`refused: ulw-plan may only write under .omo/: ${relPath}`);
 	}
 	if (!resolved.toLowerCase().endsWith(".md")) {
 		throw new Error(`refused: ulw-plan may only write .md files: ${relPath}`);
@@ -118,15 +122,15 @@ async function mkdirWithoutSymlinks(dir, stopAt) {
 async function assertSafeWriteParent(cwd, target) {
 	const workspaceReal = await realpath(cwd);
 	const workspaceRoot = resolve(cwd);
-	const omoRoot = resolve(cwd, ".lazygrok");
+	const omoRoot = resolve(cwd, ".omo");
 	const parent = dirname(target);
 	assertContainedPath(workspaceRoot, parent, `refused: path escapes the workspace root: ${target}`);
-	assertContainedPath(omoRoot, parent, `refused: ulw-plan may only write under .lazygrok/: ${target}`);
+	assertContainedPath(omoRoot, parent, `refused: ulw-plan may only write under .omo/: ${target}`);
 	await mkdirWithoutSymlinks(parent, workspaceRoot);
 	const omoReal = await realpath(omoRoot);
 	const parentReal = await realpath(parent);
 	assertContainedPath(workspaceReal, parentReal, `refused: path escapes the workspace root through symlinks: ${target}`);
-	assertContainedPath(omoReal, parentReal, `refused: ulw-plan may only write under .lazygrok/ through real paths: ${target}`);
+	assertContainedPath(omoReal, parentReal, `refused: ulw-plan may only write under .omo/ through real paths: ${target}`);
 }
 
 async function assertSafeWriteTarget(target) {
@@ -147,16 +151,45 @@ export function isUlwArtifact(content) {
 	return isPlan || isDraft;
 }
 
-export function buildDraft(slug, intent) {
+export function buildDraft(slug, intent, { reviewRequired = false } = {}) {
 	const assumptionsNote =
 		intent === "unclear"
 			? "Intent is UNCLEAR: research resolves ambiguity, defaults are adopted (not asked), and each is surfaced in the plan's human TL;DR for veto."
 			: "Record any default you adopt instead of asking, so the user can veto it at the gate.";
+	const reviewState = reviewRequired
+		? `review_required: true
+plan_path: .lazygrok/plans/${slug}.md
+plan_sha256: null
+review_round_id: null
+pending-action: write and review .lazygrok/plans/${slug}.md
+review:
+  momus:
+    status: pending
+    workspace_root: null
+    runtime_home: null
+    target: .lazygrok/plans/${slug}.md
+    round_id: null
+    plan_sha256: null
+    launch_id: null
+    session: null
+    result: null
+  independent:
+    status: pending
+    workspace_root: null
+    runtime_home: null
+    target: .lazygrok/plans/${slug}.md
+    round_id: null
+    plan_sha256: null
+    launch_id: null
+    session: null
+    result: null`
+		: `review_required: false
+pending-action: write .lazygrok/plans/${slug}.md`;
 	return `---
 slug: ${slug}
 status: drafting
 intent: ${intent}
-pending-action: write .lazygrok/plans/${slug}.md
+${reviewState}
 approach: <fill: the approach you intend to plan>
 ---
 
@@ -221,7 +254,7 @@ Your next move: <fill - e.g. approve, or run a high-accuracy review>. Full execu
 ## Verification strategy
 > Zero human intervention - all verification is agent-executed.
 - Test decision: <TDD | tests-after | none> + framework
-- Evidence: .lazygrok/evidence/task-<N>-${slug}.<ext>
+- Evidence: <attemptDir>/task-<N>-${slug}.<ext> (attemptDir = currentAttemptDir from 'omo ulw-loop status --json', .lazygrok/evidence/ulw/<session>/<goalId>/a<attempt>; outside ulw-loop use .lazygrok/evidence/)
 
 ## Execution strategy
 ### Parallel execution waves
@@ -233,13 +266,13 @@ Your next move: <fill - e.g. approve, or run a high-accuracy review>. Full execu
 
 ## Todos
 > Implementation + Test = ONE todo. Never separate.
-<!-- APPEND TASK BATCHES BELOW THIS LINE WITH edit/apply_patch - never rewrite the headers above. -->
+<!-- APPEND TASK BATCHES BELOW THIS LINE WITH edit/search_replace/write - never rewrite the headers above. -->
 - [ ] 1. <title>
   What to do / Must NOT do: <...>
   Parallelization: Wave <N> | Blocked by: <...> | Blocks: <...>
   References (executor has NO interview context - be exhaustive): <src/path:lines>
   Acceptance criteria (agent-executable): <exact command or assertion>
-  QA scenarios (name the exact tool + invocation): happy + failure, Evidence .lazygrok/evidence/task-1-${slug}.<ext>
+  QA scenarios (name the exact tool + invocation): happy + failure, Evidence <attemptDir>/task-1-${slug}.<ext>
   Commit: <Y/N> | <type>(<scope>): <summary>
 
 ## Final verification wave
@@ -273,21 +306,24 @@ export async function writeGuarded(cwd, relPath, content, { reset = false, force
 	return { relPath, status: existing ? "reset" : "created" };
 }
 
-export async function scaffold(cwd, { slug, intent, reset = false, force = false }) {
-	const draftRel = join(".lazygrok", "drafts", `${slug}.md`);
-	const planRel = join(".lazygrok", "plans", `${slug}.md`);
-	const draft = await writeGuarded(cwd, draftRel, buildDraft(slug, intent), { reset, force });
+export async function scaffold(cwd, { slug, intent, reset = false, force = false, draftOnly = false, reviewRequired = false }) {
+	const draftRel = join(".omo", "drafts", `${slug}.md`);
+	const draft = await writeGuarded(cwd, draftRel, buildDraft(slug, intent, { reviewRequired }), { reset, force });
+	if (draftOnly) return [draft];
+	const planRel = join(".omo", "plans", `${slug}.md`);
 	const plan = await writeGuarded(cwd, planRel, buildPlanSkeleton(slug, intent), { reset, force });
 	return [draft, plan];
 }
 
 async function main() {
-	const { slug, intent, reset, force } = parseArgs(process.argv);
-	const results = await scaffold(process.cwd(), { slug, intent, reset, force });
+	const { slug, intent, reset, force, draftOnly, reviewRequired } = parseArgs(process.argv);
+	const results = await scaffold(process.cwd(), { slug, intent, reset, force, draftOnly, reviewRequired });
 	for (const r of results) process.stdout.write(`${r.status}: ${r.relPath}\n`);
 	const created = results.some((r) => r.status !== "exists");
 	process.stdout.write(
-		created
+		draftOnly
+			? `next: record intent, findings, decisions, review state, and the approval gate in the draft; create the plan only after approval.\n`
+			: created
 			? `next: record findings/decisions in the draft, then APPEND task batches into the "## Todos" region of the plan; fill "## TL;DR (For humans)" LAST.\n`
 			: `skeleton already present - left untouched. APPEND task batches into the "## Todos" region; the human "## TL;DR (For humans)" stays on top.\n`,
 	);

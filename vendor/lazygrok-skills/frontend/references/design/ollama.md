@@ -1,5 +1,8 @@
 # Design System Inspired by Ollama
 
+> Category: AI & LLM
+> Run LLMs locally. Terminal-first, monochrome simplicity.
+
 ## 1. Visual Theme & Atmosphere
 
 Ollama's interface is radical minimalism taken to its logical conclusion — a pure-white void where content floats without decoration, shadow, or color. The design philosophy mirrors the product itself: strip away everything unnecessary until only the essential tool remains. This is the digital equivalent of a Dieter Rams object — every pixel earns its place, and the absence of design IS the design.
@@ -146,7 +149,7 @@ What makes Ollama distinctive is the combination of SF Pro Rounded (Apple's roun
 - Copy button integrated
 
 **Integration Grid**
-- Grid of integration logos (Codex, Claude Code, OpenCode, LangChain, etc.)
+- Grid of integration logos (Grok, Claude Code, OpenCode, LangChain, etc.)
 - Each in a bordered pill or card with icon + name
 - Tabbed by category (Coding, Documents & RAG, Automation, Chat)
 

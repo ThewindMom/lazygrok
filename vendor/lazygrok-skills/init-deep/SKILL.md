@@ -4,23 +4,46 @@ description: "(builtin) Initialize hierarchical AGENTS.md knowledge base"
 ---
 ## Grok Harness Tool Compatibility
 
-This skill may include examples copied from other harnesses. On Grok, use native tools:
+This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools:
 
-| Foreign example | Grok tool to use |
+| OpenCode example | Grok tool to use |
 | --- | --- |
-| `Task(...)` / `task(...)` | `spawn_subagent(...)` |
-| `TodoWrite(...)` | `todo_write(...)` |
-| `Bash` / `bash(...)` | `run_terminal_command(...)` |
-| `Write` / `Edit` / `StrReplace` | `write` / `search_replace` |
-| `Read` | `read_file` |
-| `background_output(...)` | `get_command_or_subagent_output(...)` |
-| `team_*(...)` | **n/a on Grok** — parallel `spawn_subagent` + orchestrator journal |
+| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as an explorer. ...","agent_type":"explorer","background":false})` |
+| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as a librarian. ...","agent_type":"librarian","background":false})` |
+| `task(subagent_type="plan", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as a planning agent. ...","agent_type":"plan","background":false})` |
+| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent.spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazygrok-gate-reviewer","background":false})` |
+| `task(category="...", ...)` for implementation or QA | `spawn_subagent.spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":false})` |
+| `background_output(task_id="...")` | `spawn_subagent.get_command_or_subagent_output(...)` for mailbox signals |
+| `team_*(...)` | Use Grok native subagents via `spawn_subagent.spawn_subagent` and `spawn_subagent.get_command_or_subagent_output`; use `spawn_subagent.send_input` and `spawn_subagent.kill_command_or_subagent` only when exposed in the active tools list |
 
-Role-specific behavior must be described in a self-contained `prompt`. Use `background: true` when available so the child starts with only the initial prompt. Include required context, files, diffs, and skill names in the spawned agent's `prompt`. Prefer agent types: `explore`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` — pass matching `subagent_type` (e.g. `lazygrok:explore`). Prefer `.lazygrok/` over `.omo/` for Grok-facing state. If a code block below conflicts with this section, this section wins.
+Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into `~/.grok/agents/`: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `agent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `agent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
 
-For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. Poll with `get_command_or_subagent_output`. Treat a running child as alive.
+Grok exposes ONE of two subagent tool surfaces per session; check your own tool list and route accordingly. If `spawn_subagent` tools exist, use the table above as written. If instead a flat `spawn_subagent` with a required `task_name` exists (`spawn_subagent`), rewrite every `spawn_subagent` example: `spawn_subagent.spawn_subagent({...,"background":false})` becomes `spawn_subagent({"task_name":"<lowercase_digits_underscores>","message":...,"agent_type":...,"fork_turns":"none"})` (`"all"` only when full parent history is truly required); `send_input` becomes `spawn_subagent (message-only follow-up)`; do not call `kill_command_or_subagent`/`resume_agent` (finished agents end on their own; `spawn_subagent (re-task: new prompt to same role)` re-tasks one, `kill_command_or_subagent` stops one); `get_command_or_subagent_output` takes only `timeout_ms` and returns on any child mailbox activity. On the v2 surface `agent_type` may be ABSENT from the spawn schema (verified 2026-07-11: only `fork_turns`/`message`/`task_name`) — when absent, omit it and describe the role inside `message`; installed role TOMLs cannot be selected on that surface. If a code block below conflicts with this section, this section wins.
+
+When translating `load_skills=[...]`, include the requested skill names in the spawned agent's `message`. If a code block below conflicts with this section, this section wins.
+
+For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `spawn_subagent.get_command_or_subagent_output` timeout only means no new mailbox update arrived; back off between waits (double the timeout up to ~5 minutes) instead of spinning short cycles. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
 
 # /init-deep
+
+## Grok Tool Mapping
+
+| Intent | Grok tool |
+| --- | --- |
+| Spawn a worker | `spawn_subagent({subagent_type:"lazygrok:<role>", prompt:"TASK: ...", background:true})` |
+| Wait for background result | `get_command_or_subagent_output({task_ids:[...]})` |
+| Stop a runaway | `kill_command_or_subagent({task_id:"..."})` |
+| Live checklist | `todo_write` |
+| Edit files | `search_replace` / `write` |
+| Shell | `run_terminal_command` |
+| Read files | `read_file` |
+| Binding goal | `# Goal` block + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
+| Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
+| Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
+| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` or `lazygrok-plan` |
+
+Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
+
 
 Generate hierarchical AGENTS.md files. Root + complexity-scored subdirectories.
 
@@ -38,7 +61,7 @@ Generate hierarchical AGENTS.md files. Root + complexity-scored subdirectories.
 
 1. **Discovery + Analysis** (concurrent)
    - Fire background explore agents immediately
-   - Main session: structure via `run_terminal_command` + LSP/codegraph code map + read existing AGENTS.md
+   - Main session: bash structure + LSP/codegraph code map + read existing AGENTS.md
 2. **Score & Decide** - Determine AGENTS.md locations from merged findings
 3. **Generate** - Root first, then subdirs in parallel
 4. **Review** - Deduplicate, trim, validate
@@ -47,10 +70,10 @@ Generate hierarchical AGENTS.md files. Root + complexity-scored subdirectories.
 **todo_write ALL phases. Mark in_progress → completed in real-time.**
 ```
 todo_write([
-  { id: "discovery", content: "Fire explore agents + LSP/codegraph map + read existing", status: "pending" },
-  { id: "scoring", content: "Score directories, determine locations", status: "pending" },
-  { id: "generate", content: "Generate AGENTS.md files (root + subdirs)", status: "pending" },
-  { id: "review", content: "Deduplicate, validate, trim", status: "pending" }
+  { id: "discovery", content: "Fire explore agents + LSP/codegraph map + read existing", status: "pending", priority: "high" },
+  { id: "scoring", content: "Score directories, determine locations", status: "pending", priority: "high" },
+  { id: "generate", content: "Generate AGENTS.md files (root + subdirs)", status: "pending", priority: "high" },
+  { id: "review", content: "Deduplicate, validate, trim", status: "pending", priority: "medium" }
 ])
 ```
 </critical>
@@ -63,20 +86,20 @@ todo_write([
 
 ### Fire Background Explore Agents IMMEDIATELY
 
-Don't wait—these run async while main session works. **Equip every agent with the code graph**: any task touching structure, entry points, dependencies, or hotspots MUST query `codegraph_*` (explore/search/callers/callees/impact) and `lsp_symbols` when present, and ground its claims in that data instead of guessing from conventions.
+Don't wait-these run async while main session works. **Equip every agent with the code graph**: any task touching structure, entry points, dependencies, or hotspots MUST query `codegraph_*` (explore/search/callers/callees/impact) and `lsp_symbols` when present, and ground its claims in that data instead of guessing from conventions. Richer real-graph context per agent = a more accurate project map.
 
 ```
 // Fire all at once, collect results later
-spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Project structure. DELIVERABLE: map real layout via codegraph_explore/codegraph_files → REPORT deviations from standard patterns. VERIFY: absolute paths.")
-spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Entry points. DELIVERABLE: FIND main files, trace reach via codegraph_callees + lsp_symbols → REPORT non-standard organization.")
-spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Conventions. DELIVERABLE: FIND config files (.eslintrc, pyproject.toml, .editorconfig) → REPORT project-specific rules.")
-spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Anti-patterns. DELIVERABLE: FIND 'DO NOT', 'NEVER', 'ALWAYS', 'DEPRECATED' comments → LIST forbidden patterns.")
-spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Build/CI. DELIVERABLE: FIND .github/workflows, Makefile → REPORT non-standard patterns.")
-spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Test patterns. DELIVERABLE: FIND test configs/structure; codegraph_callers on core modules → REPORT unique conventions.")
+task(subagent_type="explore", load_skills=[], description="Explore project structure", run_in_background=true, prompt="Project structure: map real layout via codegraph_explore/codegraph_files → REPORT deviations from standard patterns")
+task(subagent_type="explore", load_skills=[], description="Find entry points", run_in_background=true, prompt="Entry points: FIND main files, trace reach via codegraph_callees + lsp_symbols → REPORT non-standard organization")
+task(subagent_type="explore", load_skills=[], description="Find conventions", run_in_background=true, prompt="Conventions: FIND config files (.eslintrc, pyproject.toml, .editorconfig) → REPORT project-specific rules")
+task(subagent_type="explore", load_skills=[], description="Find anti-patterns", run_in_background=true, prompt="Anti-patterns: FIND 'DO NOT', 'NEVER', 'ALWAYS', 'DEPRECATED' comments → LIST forbidden patterns")
+task(subagent_type="explore", load_skills=[], description="Explore build/CI", run_in_background=true, prompt="Build/CI: FIND .github/workflows, Makefile → REPORT non-standard patterns")
+task(subagent_type="explore", load_skills=[], description="Find test patterns", run_in_background=true, prompt="Test patterns: FIND test configs/structure; codegraph_callers on core modules to see what is covered → REPORT unique conventions")
 ```
 
 <dynamic-agents>
-**DYNAMIC AGENT SPAWNING**: After structure analysis, spawn ADDITIONAL explore agents based on project scale:
+**DYNAMIC AGENT SPAWNING**: After bash analysis, spawn ADDITIONAL explore agents based on project scale:
 
 | Factor | Threshold | Additional Agents |
 |--------|-----------|-------------------|
@@ -90,16 +113,18 @@ spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: 
 ```bash
 # Measure project scale first
 total_files=$(find . -type f -not -path '*/node_modules/*' -not -path '*/.git/*' | wc -l)
-total_lines=$(find . -type f \( -name "*.ts" -o -name "*.py" -o -name "*.go" \) -not -path '*/node_modules/*' -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}')
-large_files=$(find . -type f \( -name "*.ts" -o -name "*.py" \) -not -path '*/node_modules/*' -exec wc -l {} + 2>/dev/null | awk '$1 > 500 {count++} END {print count+0}')
+total_lines=$(find . -type f \\( -name "*.ts" -o -name "*.py" -o -name "*.go" \\) -not -path '*/node_modules/*' -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}')
+large_files=$(find . -type f \\( -name "*.ts" -o -name "*.py" \\) -not -path '*/node_modules/*' -exec wc -l {} + 2>/dev/null | awk '$1 > 500 {count++} END {print count+0}')
 max_depth=$(find . -type d -not -path '*/node_modules/*' -not -path '*/.git/*' | awk -F/ '{print NF}' | sort -rn | head -1)
 ```
 
 Example spawning:
 ```
-spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Large file analysis. DELIVERABLE: FIND files >500 lines, REPORT complexity hotspots.")
-spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Deep modules at depth 4+. DELIVERABLE: FIND hidden patterns, internal conventions.")
-spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: Shared utilities. DELIVERABLE: FIND cross-cutting concerns across directories.")
+// 500 files, 50k lines, depth 6, 15 large files → spawn 5+5+2+1 = 13 additional agents
+task(subagent_type="explore", load_skills=[], description="Analyze large files", run_in_background=true, prompt="Large file analysis: FIND files >500 lines, REPORT complexity hotspots")
+task(subagent_type="explore", load_skills=[], description="Explore deep modules", run_in_background=true, prompt="Deep modules at depth 4+: FIND hidden patterns, internal conventions")
+task(subagent_type="explore", load_skills=[], description="Find shared utilities", run_in_background=true, prompt="Cross-cutting concerns: FIND shared utilities across directories")
+// ... more based on calculation
 ```
 </dynamic-agents>
 
@@ -107,25 +132,25 @@ spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: 
 
 **While background agents run**, main session does:
 
-#### 1. Structural Analysis (`run_terminal_command`)
+#### 1. Bash Structural Analysis
 ```bash
 # Directory depth + file counts
-find . -type d -not -path '*/\.*' -not -path '*/node_modules/*' -not -path '*/venv/*' -not -path '*/dist/*' -not -path '*/build/*' | awk -F/ '{print NF-1}' | sort -n | uniq -c
+find . -type d -not -path '*/\\.*' -not -path '*/node_modules/*' -not -path '*/venv/*' -not -path '*/dist/*' -not -path '*/build/*' | awk -F/ '{print NF-1}' | sort -n | uniq -c
 
 # Files per directory (top 30)
-find . -type f -not -path '*/\.*' -not -path '*/node_modules/*' | sed 's|/[^/]*$||' | sort | uniq -c | sort -rn | head -30
+find . -type f -not -path '*/\\.*' -not -path '*/node_modules/*' | sed 's|/[^/]*$||' | sort | uniq -c | sort -rn | head -30
 
 # Code concentration by extension
-find . -type f \( -name "*.py" -o -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.go" -o -name "*.rs" \) -not -path '*/node_modules/*' | sed 's|/[^/]*$||' | sort | uniq -c | sort -rn | head -20
+find . -type f \\( -name "*.py" -o -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.go" -o -name "*.rs" \\) -not -path '*/node_modules/*' | sed 's|/[^/]*$||' | sort | uniq -c | sort -rn | head -20
 
 # Existing AGENTS.md / CLAUDE.md
-find . -type f \( -name "AGENTS.md" -o -name "CLAUDE.md" \) -not -path '*/node_modules/*' 2>/dev/null
+find . -type f \\( -name "AGENTS.md" -o -name "CLAUDE.md" \\) -not -path '*/node_modules/*' 2>/dev/null
 ```
 
 #### 2. Read Existing AGENTS.md
 ```
 For each existing file found:
-  read_file(filePath=file)
+  Read(filePath=file)
   Extract: key insights, conventions, anti-patterns
   Store in EXISTING_AGENTS map
 ```
@@ -150,10 +175,10 @@ Only if NEITHER exists: explore agents + the ast-grep skill (`sg`), and mark cen
 
 ```
 // After main session analysis done, collect all task results
-for each background task: get_command_or_subagent_output(...)
+for each background task ID (`bg_...`): background_output(task_id="bg_...")
 ```
 
-**Merge: structure analysis + LSP/codegraph + existing + explore findings. Mark "discovery" as completed.**
+**Merge: bash + LSP/codegraph + existing + explore findings. Mark "discovery" as completed.**
 
 ---
 
@@ -165,11 +190,11 @@ for each background task: get_command_or_subagent_output(...)
 
 | Factor | Weight | High Threshold | Source |
 |--------|--------|----------------|--------|
-| File count | 3x | >20 | shell |
-| Subdir count | 2x | >5 | shell |
-| Code ratio | 2x | >70% | shell |
+| File count | 3x | >20 | bash |
+| Subdir count | 2x | >5 | bash |
+| Code ratio | 2x | >70% | bash |
 | Unique patterns | 1x | Has own config | explore |
-| Module boundary | 2x | Has index.ts/__init__.py | shell |
+| Module boundary | 2x | Has index.ts/__init__.py | bash |
 | Symbol density | 2x | >30 symbols | LSP/cg |
 | Export count | 2x | >10 exports | LSP/cg |
 | Reference centrality | 3x | >20 refs | LSP/cg |
@@ -201,8 +226,8 @@ AGENTS_LOCATIONS = [
 **Mark "generate" as in_progress.**
 
 <critical>
-**File Writing Rule**: If AGENTS.md already exists at the target path → use `search_replace`. If it does NOT exist → use `write`.
-NEVER use write to overwrite an existing file blindly. ALWAYS check existence first via `read_file` or discovery results.
+**File Writing Rule**: If AGENTS.md already exists at the target path → use `Edit` tool. If it does NOT exist → use `Write` tool.
+NEVER use Write to overwrite an existing file. ALWAYS check existence first via `Read` or discovery results.
 </critical>
 
 ### Root AGENTS.md (Full Treatment)
@@ -260,11 +285,12 @@ Launch writing tasks for each location:
 
 ```
 for loc in AGENTS_LOCATIONS (except root):
-  spawn_subagent(subagent_type="lazygrok:lazygrok-executor", background=false, prompt=`
-    TASK: Generate AGENTS.md for: ${loc.path}
-    DELIVERABLE: 30-80 lines max AGENTS.md
-    SCOPE: reason=${loc.reason}; NEVER repeat parent content
-    VERIFY: sections OVERVIEW (1 line), STRUCTURE (if >5 subdirs), WHERE TO LOOK, CONVENTIONS (if different), ANTI-PATTERNS
+  task(category="writing", load_skills=[], run_in_background=false, description="Generate AGENTS.md", prompt=`
+    Generate AGENTS.md for: ${loc.path}
+    - Reason: ${loc.reason}
+    - 30-80 lines max
+    - NEVER repeat parent content
+    - Sections: OVERVIEW (1 line), STRUCTURE (if >5 subdirs), WHERE TO LOOK, CONVENTIONS (if different), ANTI-PATTERNS
   `)
 ```
 

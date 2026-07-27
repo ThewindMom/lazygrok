@@ -50,7 +50,7 @@ metadata:
 | Field | Required | Description |
 |---|---|---|
 | `id` | yes | Unique identifier. Use `kebab-case`. |
-| `language` | yes | One of: `Bash`, `C`, `Cpp`, `CSharp`, `Css`, `Elixir`, `Go`, `Haskell`, `Html`, `Java`, `JavaScript`, `Json`, `Kotlin`, `Lua`, `Nix`, `Php`, `Python`, `Ruby`, `Rust`, `Scala`, `Solidity`, `Swift`, `TypeScript`, `Tsx`, `Yaml`. **Capitalized PascalCase** is canonical, but lowercase often works. |
+| `language` | yes | One of: `run_terminal_command`, `C`, `Cpp`, `CSharp`, `Css`, `Elixir`, `Go`, `Haskell`, `Html`, `Java`, `JavaScript`, `Json`, `Kotlin`, `Lua`, `Nix`, `Php`, `Python`, `Ruby`, `Rust`, `Scala`, `Solidity`, `Swift`, `TypeScript`, `Tsx`, `Yaml`. **Capitalized PascalCase** is canonical, but lowercase often works. |
 | `rule` | yes | The matching logic. Object containing one or more atomic / relational / composite rules. |
 | `constraints` | no | Filter on captured single-metavariables (`$VAR`, not `$$$`). |
 | `utils` | no | Local utility rules referenced by `matches:` in this file. |

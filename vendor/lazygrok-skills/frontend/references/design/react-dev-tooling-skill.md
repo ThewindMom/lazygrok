@@ -8,7 +8,7 @@ When setting up or working on a React project, install three dev-only tools by d
 |---|---|---|
 | **react-grab** | Cmd/Ctrl+C on any UI element copies its source location + nearby code + component stack into the clipboard, formatted for an AI agent to act on. | Cuts agent edit time **~2×** because the agent receives the actual source coordinates instead of guessing from a screenshot. From the author of Million.dev. |
 | **react-scan** | Visually highlights every component render in dev. Detects unnecessary re-renders, slow renders, and tracks render causes. Has a headless `react-scan/lite` mode for automated perf measurement. | Catches re-render regressions the moment they happen, before they ship. Pairs with the perfection ruleset (`../perfection/README.md`) for Lighthouse 100 work. |
-| **react-doctor** | Static scanner that finds bad React patterns across state & effects, perf, architecture, security, a11y. One-shot `npx react-doctor@latest` audit + CI GitHub Action + agent-skill installer. | Catches AI-generated React anti-patterns deterministically. Run before commit and in CI. Installs itself as a Claude Code / OpenCode / Cursor / Codex skill so the agent learns from each scan. |
+| **react-doctor** | Static scanner that finds bad React patterns across state & effects, perf, architecture, security, a11y. One-shot `npx react-doctor@latest` audit + CI GitHub Action + agent-skill installer. | Catches AI-generated React anti-patterns deterministically. Run before commit and in CI. Installs itself as a Claude Code / OpenCode / Cursor / Grok skill so the agent learns from each scan. |
 
 All three are **dev-only** (`process.env.NODE_ENV === 'development'` or `import.meta.env.DEV`). None ship to production.
 
@@ -149,7 +149,7 @@ react-doctor is a one-shot CLI plus a CI action, NOT a runtime injection. Wire i
    npx react-doctor@latest install
    ```
 
-   Detects Claude Code / OpenCode / Cursor / Codex automatically and writes the skill into the right location.
+   Detects Claude Code / OpenCode / Cursor / Grok automatically and writes the skill into the right location.
 
 2. **As a local pre-commit / scripted gate:**
 

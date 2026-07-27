@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 
 Releases are normally automated via [release-please](https://github.com/googleapis/release-please) when GitHub Actions billing is active. While Actions is disabled, use [`scripts/manual-release.sh`](scripts/manual-release.sh).
 
+## [0.4.0] (2026-07-27)
+
+### Features
+
+* **LazyCodex 4.19.2 skill port** — re-sync OmO skills (ulw-loop, ulw-plan, ulw-research, ultrawork, start-work, frontend, programming, debugging, visual-qa, ultimate-browsing, …) with Grok tool map
+* **`ulw-loop` is OmO goal ledger** on Grok (`# Goal` + ulw-loop CLI + `todo_write` + `spawn_subagent`); full-workflow Dynamic Steering / Manual-QA channels
+* **`ulw-ralph-loop`** skill + command — previous Ralph `<promise>VERIFIED</promise>` loop split out of `ulw-loop`
+* **Worker agents** — `lazygrok-worker-{low,medium,high}` MD agents; SubagentStop executor-verify matcher includes workers
+* Port script `scripts/port-lazycodex-to-grok.py`
+* **Rebuilt ultrawork/ulw-loop dists** from TypeScript with permanent Grok skill-pointer (`scripts/rebuild-ulw-components.sh`) + receipt `docs/lazycodex-4.19.2-port-receipt.md`
+
+### Grok adaptations preserved
+
+* Host `create_goal`/`update_goal` optional (workflows often hide them); durable goals via `ulw-evidence` CLI under `.lazygrok/`
+* No multi_agent_v2/teammode transport; no npm auto-update SessionStart
+* `coding-agent-sessions` Grok platform scanner kept after LCX merge
+
 ## [0.2.1](https://github.com/mihazs/lazygrok/releases/tag/v0.2.1) (2026-06-03)
 
 ### Fixes

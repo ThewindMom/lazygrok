@@ -44,7 +44,7 @@
       "name": "lazygrok-hooks",
       "path": "vendor/lazygrok-hooks/",
       "upstream": "https://github.com/code-yeongyu/lazycodex",
-      "ref": "plugins/omo components",
+      "ref": "lazycodex-ai@4.19.2 (ultrawork+ulw-loop rebuilt from TS with Grok skill-pointer)",
       "license": "MIT",
       "components": [
         "bootstrap",
@@ -64,7 +64,7 @@
         "ulw-loop"
       ],
       "contents": "pre-built dist/cli.js + directive.md + hooks.json + supporting skills/agents/scripts + auto-update scripts",
-      "modifications": "hooks.json paths adapted to ${GROK_PLUGIN_ROOT}; matchers adapted for Grok tool names; start-work-continuation and ulw-loop dist/cli.js sourced from oh-my-openagent builds (lazycodex repo gitignores dist/ for those two)"
+      "modifications": "hooks.json ${GROK_PLUGIN_ROOT}; Grok matchers; ultrawork/ulw-loop: permanent Grok skill-pointer in src/ + bun-built dist; rebuild: scripts/rebuild-ulw-components.sh; skills ported 4.19.2; worker SubagentStop verify"
     }
   ],
   "removed": [

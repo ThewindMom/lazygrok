@@ -345,7 +345,7 @@
         ]
       },
       {
-        "matcher": "^lazygrok-executor$|^lazycodex-executor$",
+        "matcher": "^lazygrok-executor$|^lazycodex-executor$|^lazygrok-worker-(low|medium|high)$|^lazycodex-worker-(low|medium|high)$",
         "hooks": [
           {
             "type": "command",

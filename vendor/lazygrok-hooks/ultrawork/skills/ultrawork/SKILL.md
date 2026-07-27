@@ -1,6 +1,6 @@
 ---
 name: ultrawork
-description: Binding ultrawork mode directive for omo on Codex. When a prompt contains ultrawork or ulw, the omo UserPromptSubmit hook injects a short bootstrap that points at this file. Read the whole file and follow every rule in it for the rest of the task.
+description: Binding ultrawork mode directive for omo on Grok. When a prompt contains ultrawork or ulw, the omo UserPromptSubmit hook injects a short bootstrap that points at this file. Read the whole file and follow every rule in it for the rest of the task.
 metadata:
   short-description: Binding ultrawork mode directive
 ---
@@ -13,96 +13,45 @@ metadata:
 [CODE RED] Maximum precision. Outcome-first. Evidence-driven.
 
 # Role
-Expert coding agent. Ship verified work. No process narration.
 
-# Goal
-Deliver EXACTLY what the user asked, end-to-end working, proven by
-captured evidence: a failing-first proof that went RED→GREEN through
-the cheapest faithful channel, plus real-surface proof sized by the
-tier below. TESTS ALONE NEVER PROVE DONE — a green suite means the
-unit-level contract holds, not that the user-facing behavior works.
+## Grok goal registration (host tools optional)
 
-# Tier triage (classify ONCE at bootstrap; record tier + one-line
-justification in the notepad; ratchet up only)
-Your change set is what THIS session will itself edit or execute;
-work handed to another session, thread, or delegated loop is payload
-and sizes THAT session's process, not yours. Launching it — sync,
-prompt, create, verify — is control-plane work: LIGHT however large
-the delegated project is.
-Default is LIGHT. Take HEAVY only when the change set hits a fact you
-can point to: a new module / layer / domain model / abstraction;
-auth, security, session-handling code, or permissions; building or
-changing an external integration (API, queue, payment, webhook) —
-calling an existing API is not one; a DB schema or migration;
-concurrency, transaction boundaries, or cache invalidation; a
-refactor crossing domain boundaries; or the user signaled care
-("carefully", "thoroughly", "design first") or demanded review of
-this session's work.
-When unsure, take HEAVY. If a HEAVY fact surfaces mid-task, upgrade
-immediately and redo whatever the LIGHT path skipped; never downgrade
-mid-task. The tier sizes process, never honesty: both tiers capture
-evidence, record cleanup receipts, and obey the never-suppress rules.
+Grok often does **not** inject `create_goal` / `update_goal` / `get_goal`
+(especially when background workflows are enabled). That is normal.
 
-LIGHT — the deliverable follows a known pattern with no open design
-decisions (one-spot bugfix, an endpoint following an existing
-pattern, a validation rule, a query tweak, copy/constants, launching
-or steering another session): plan directly in the notepad; 1-2
-success criteria (happy path + the riskiest edge); one real-surface
-proof of the user-visible deliverable, where auxiliary surfaces are
-first-class for CLI- or data-shaped work; self-review recorded in the
-notepad instead of the reviewer loop.
-HEAVY — anything a fact above names: 3+ success criteria (happy,
-edge, regression, adversarial risk), each with its own channel
-scenario and both evidence pieces; reviewer loop until unconditional
-approval.
+Silent priority — never narrate missing tools:
+1. If `update_goal` or `create_goal` is in the tool list → call with `objective` only (no status/budget).
+2. Else bind the turn with a markdown `# Goal` block (objective + success criteria).
+3. Always prefer durable structured goals via the ulw-loop CLI (`ulw-evidence` skill):
+   `node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals ...`
+   Prefer state under `.lazygrok/ulw-loop/`; if the CLI already created `.omo/ulw-loop/`, keep that run's root.
+4. Live checklist: `todo_write` (exactly one `in_progress`, mark completed immediately).
+5. Host `/goal` slash command is optional extra; do not block on it.
 
-# Manual-QA channels
-Run real-surface proof yourself through the channel that faithfully
-exercises the surface; capture the artifact.
+When OmO/Codex docs say "call get_goal / create_goal / update_goal", translate to this protocol.
 
-  1. HTTP call — hit the live endpoint with `curl -i` (or a
-     Playwright APIRequestContext); capture status line + headers +
-     body.
-  2. Terminal / TUI - drive a real pty and prove it through the
-     xterm.js web terminal (see the TUI visual QA note below). tmux
-     `send-keys` is fine for a boot smoke; NEVER `tmux capture-pane`
-     for color / layout / CJK evidence, which degrades truecolor.
-  3. Browser use — in Codex, use `browser:control-in-app-browser`
-     first when available and no authenticated/persistent user browser
-     profile is required. Otherwise use Chrome to drive the REAL page;
-     if Chrome is not available, download and use agent-browser
-     (https://github.com/vercel-labs/agent-browser). Capture action
-     log + screenshot path. Never downgrade to a non-browser surface
-     for a browser-facing criterion.
-  4. Computer use — when the surface is a desktop/GUI app rather than a
-     page, drive it via OS-level automation (a computer-use agent,
-     AppleScript, xdotool, etc.) against the running app; capture
-     action log + screenshot. USE THIS for any non-browser GUI
-     criterion; do not substitute a CLI dump for it.
 
-For EVERY scenario name the exact tool and the exact invocation
-upfront: the literal command / API call / page action with its concrete
-inputs (URL, payload, keystrokes, selectors) and the single binary
-observable that decides PASS vs FAIL. "run the endpoint", "open the
-page", "check it works" are NOT scenarios — write the `curl ...`, the
-`send-keys ...`, the Browser plugin action, the `page.click(...)`, the
-expected status/text.
+## Grok Tool Mapping
 
-Auxiliary surfaces (CLI stdout / DB state diff / parsed config dump)
-are first-class evidence for CLI- or data-shaped criteria; use a
-channel scenario when the behavior is user-facing. `--dry-run`,
-printing the command, "should respond", and "looks correct" never
-count.
+| Intent | Grok tool |
+| --- | --- |
+| Spawn a worker | `spawn_subagent({subagent_type:"lazygrok:<role>", prompt:"TASK: ...", background:true})` |
+| Wait for background result | `get_command_or_subagent_output({task_ids:[...]})` |
+| Stop a runaway | `kill_command_or_subagent({task_id:"..."})` |
+| Live checklist | `todo_write` |
+| Edit files | `search_replace` / `write` |
+| Shell | `run_terminal_command` |
+| Read files | `read_file` |
+| Binding goal | `# Goal` + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
+| Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
+| Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
+| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
 
-For TUI visual QA, render the terminal through the real xterm.js web
-terminal and screenshot it - never a `tmux capture-pane` dump, which
-degrades color and wide-glyph width. In this repo:
-`node script/qa/web-terminal-visual-qa.mjs --title "<surface>" --command "<cmd>" --input "{Enter}" --evidence-dir <dir>`
-(live pty + xterm.js in Chrome; `--from-file <capture>` replays a raw
-stream). Outside this repo, capture equivalent browser-rendered terminal
-evidence: screenshot + plain transcript + cleanup receipt.
+Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
+Prefer `subagent_type` from the installed LazyGrok agents list. Do not use Codex multi_agent_v1/v2 tool names.
 
-# Bootstrap (DO ALL FOUR BEFORE ANY OTHER WORK — NO SKIPPING)
+When a skill or workflow still shows Codex MultiAgent examples, translate them with this table.
+
 
 ## 0. Survey the skills, gather context, then size the work
 First, survey the loaded skill list and read the description of each
@@ -125,10 +74,8 @@ A known procedure — however many steps — and questions about work you
 are delegating never justify a planner: plan directly in the notepad.
 Never spawn `plan` before the discovery wave has returned.
 
-## 1. Create the goal with binding success criteria
-You MUST register the goal with the `create_goal` tool — NOT prose,
-NOT the notepad, NOT the plan: the registered goal is the binding
-contract for the whole run, and skipping it is a defect. Call it with
+## 1. Register the binding goal (Grok-native channels)
+You MUST register a binding goal via the Grok goal protocol (`# Goal` + ulw-loop CLI; host `create_goal` only if present). Call it with
 exactly `objective`; do not include `status`. Only when no goal tool
 exists on this surface, open your reply with a `# Goal` block treated
 as binding. Goals are unlimited; never invent a numeric budget or
@@ -191,13 +138,13 @@ the WHOLE notepad FIRST before any other action, then resume from
 state from the notepad; do not re-plan from scratch or re-run completed
 steps.
 
-## 3. Register obsessive todos via `update_plan`
-The todo tool is Codex `update_plan` — your live, user-visible
-checklist. Translate every action from the plan into one `update_plan`
+## 3. Register obsessive todos via `todo_write`
+The todo tool is Grok `todo_write` — your live, user-visible
+checklist. Translate every action from the plan into one `todo_write`
 step — one step per atomic work unit: an edit plus its verification, a
 QA scenario run, a teardown. Keep each step small enough to finish
 within a few tool calls.
-Call `update_plan` on EVERY state transition — the instant a step starts
+Call `todo_write` on EVERY state transition — the instant a step starts
 (mark it `in_progress`) and the instant it finishes (mark it `completed`
 and the next `in_progress`). Exactly ONE `in_progress` at a time. Mark
 completed IMMEDIATELY — never batch, never let the rendered plan lag
@@ -237,7 +184,7 @@ When discovery needs multiple angles or the module layout is
 unfamiliar, delegate to the `explorer` subagent (read-only codebase
 search, absolute-path results). For research that leaves the repo —
 library/API/docs/web — delegate to the `librarian` subagent. Spawn them
-`fork_context: false` and keep doing root work while they run.
+`background: true` and keep doing root work while they run.
 
 # Execution loop (PIN → RED → GREEN → SURFACE → CLEAN)
 Until every success criterion PASSES with its evidence captured:
@@ -323,26 +270,24 @@ calls the harness allows, and do independent root work while the
 command runs. If two consecutive checks show no state change, double
 the wait before the next check or switch to a completion signal.
 
-# Codex subagent reliability
-Every `multi_agent_v1.spawn_agent` message is self-contained and starts with
+# Grok subagent reliability
+Every `spawn_subagent` message is self-contained and starts with
 `TASK: <imperative assignment>`, then names `DELIVERABLE`, `SCOPE`,
 `VERIFY`, and `STOP WHEN` — the observable condition that ends the
 child's run; a child without a stop condition wanders past its goal.
-State that it is an executable assignment, not a context handoff. Use `fork_context: false` unless full history is truly
+State that it is an executable assignment, not a context handoff. Use `background: true` unless full history is truly
 required; paste only the context the child needs. Full-history forks can
 make the child continue old parent context instead of the delegated task.
-If your tool list has a flat `spawn_agent` with a required `task_name` instead of `multi_agent_v1.*` (`multi_agent_v2`), rewrite: `fork_context: false` becomes `fork_turns: "none"`, `send_input` becomes `send_message`, finished agents end on their own (no `close_agent`; `followup_task` re-tasks, `interrupt_agent` stops), and `wait_agent` takes only `timeout_ms`, returning on any child mailbox activity.
+Use the Grok Tool Mapping table. Always pass `subagent_type` and put the full assignment in `prompt`/`message`.
+
 
 # TOML-backed subagent routing compatibility
-Installed role TOMLs (`~/.codex/agents/`) bind ONLY via `agent_type`.
-`multi_agent_v1.spawn_agent` exposes `agent_type`; the deployed
-`multi_agent_v2` `collaboration.spawn_agent` schema does NOT (verified
-2026-07-11: only `fork_turns`, `message`, `task_name`). On a v2 surface,
-omit `agent_type`, describe the role and difficulty tier inside
+Installed role TOMLs (`~/.grok/agents/`) bind ONLY via `agent_type`.
+`spawn_subagent` `spawn_subagent` schema does NOT (verified
 `message`, and expect the session model for children. Difficulty tiers
-when `agent_type` IS exposed: low -> `lazycodex-worker-low`
-(gpt-5.6-luna/high), medium -> `lazycodex-worker-medium`
-(gpt-5.6-luna/max), high -> `lazycodex-worker-high` (gpt-5.6-sol/max);
+when `agent_type` IS exposed: low -> `lazygrok-worker-low`
+(gpt-5.6-luna/high), medium -> `lazygrok-worker-medium`
+(gpt-5.6-luna/max), high -> `lazygrok-worker-high` (gpt-5.6-sol/max);
 explorer/librarian carry their own TOMLs (gpt-5.6-luna/low). Difficulty
 (model power) is orthogonal to LIGHT/HEAVY rigor (process size).
 
@@ -350,30 +295,30 @@ Treat child status as a progress signal, not a timeout counter. For
 work likely to exceed one wait cycle, tell the child to send
 `WORKING: <task> - <current phase>` before long reading, testing, or
 review passes, and `BLOCKED: <reason>` only when it cannot progress.
-Track spawned agent names locally. Use `multi_agent_v1.wait_agent` for mailbox
+Track spawned agent names locally. Use `get_command_or_subagent_output` for mailbox
 signals, but a timeout only means no new mailbox update arrived.
 Treat a running child as alive and keep doing independent root work.
 Fallback only when the child is completed without the
 deliverable, ack-only, or no longer running. If that followup is still
 silent or ack-only, record the result as inconclusive, do not count it
 as approval/pass, close it if safe, and respawn a smaller
-`fork_context: false` task with the missing deliverable.
+`background: true` task with the missing deliverable.
 
 # Subagent-dependent transition barrier
-Do not mark an `update_plan` step `completed` while an active child owns
+Do not mark an `todo_write` step `completed` while an active child owns
 evidence for that step. Do not start dependent implementation until the
 audit, research, or review result is integrated or explicitly recorded
 as inconclusive. Do not generate a plan before spawned research lanes
 that feed the plan have returned or been closed as inconclusive.
 Spawn every independent child for the current wave first. After the wave
-is launched, run `multi_agent_v1.wait_agent` for each spawned child until
+is launched, run `get_command_or_subagent_output` for each spawned child until
 each reaches terminal status (`completed`, `failed`, `blocked`, or
-explicitly recorded inconclusive) before any dependent `update_plan`
+explicitly recorded inconclusive) before any dependent `todo_write`
 transition, `create_goal` continuation, implementation tool call, plan
 drafting, approval-gate work, PR handoff, or final response. A timeout is
 not terminal status.
 Do not write the final answer, PR handoff, or completion summary while
-active child agents remain open. Use `multi_agent_v1.wait_agent` cycles with growing timeouts: start short (~30s) and double up to ~5 minutes.
+active child agents remain open. Use `get_command_or_subagent_output` cycles with growing timeouts: start short (~30s) and double up to ~5 minutes.
 After two silent waits send `TASK STILL ACTIVE: return <deliverable> or
 BLOCKED: <reason>`. After four silent or ack-only checks, close the lane as
 inconclusive, record that it is not approval, and respawn smaller only
@@ -389,9 +334,8 @@ diff, run diagnostics, confirm each criterion's evidence, and state in
 one line why the tier held.
 
 Procedure (NON-NEGOTIABLE):
-1. Spawn a child with `fork_context: false` and a self-contained reviewer
-   assignment in `message`. The `multi_agent_v1.spawn_agent` schema cannot select a
-   TOML-backed reviewer role, so paste the reviewer requirements into
+1. Spawn a child with `background: true` and a self-contained reviewer
+   assignment in `message`.    TOML-backed reviewer role, so paste the reviewer requirements into
    the message.
    Pass: goal, success-criteria, scenario evidence, full diff, notepad
    path.
@@ -411,13 +355,18 @@ Procedure (NON-NEGOTIABLE):
    2-attempt stop rule below) — do not loop further.
 
 # Commits
-Atomic, Conventional Commits (`<type>(<scope>): <imperative>` — feat /
-fix / refactor / test / docs / chore / build / ci / perf). One logical
-change per commit; each commit builds + tests green on its own. No WIP
-on the final branch. If a plan file exists, final commit footer:
-`Plan: .omo/plans/<slug>.md`. Do NOT auto-`git commit` unless the user
-requested or preauthorised this session — default is stage + draft
-message + present for approval.
+Commit frequently: one atomic commit per verified increment (RED→GREEN
++ its evidence), never one end-of-run omnibus; each commit builds +
+tests green on its own; no WIP on the final branch.
+BEFORE composing each message, read the history and mimic it: run
+`git log --oneline -20` plus `git log -5 -- <touched paths>` and match
+the observed convention — subject shape, scope names, message language,
+body style, and typical commit size. Default to Conventional Commits
+(`<type>(<scope>): <imperative>` — feat / fix / refactor / test / docs /
+chore / build / ci / perf) only where history shows no stronger local
+convention. If a plan file exists, final commit footer:
+`Plan: .lazygrok/plans/<slug>.md`. Skip committing only when the user forbade
+commits this session — then stage + draft the message instead.
 
 # Constraints
 - Every behavior change needs a failing-first proof captured BEFORE

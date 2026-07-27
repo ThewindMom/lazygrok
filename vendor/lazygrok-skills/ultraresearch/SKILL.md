@@ -1,38 +1,77 @@
 ---
 name: ultraresearch
-description: "Maximum-saturation research orchestration: parallel explore+librarian swarms across codebase, web, official docs, and OSS repos; a recursive EXPAND loop driven by leads workers return in message text; empirical verification by running code; cited synthesis and optional MD/HTML/PDF/PPTX reports. ACTIVATES ONLY on an explicit user demand for research — the word 'ultraresearch' ('/ultraresearch', '$ultraresearch') or an explicit request for research / deep research / an ultra-precise investigation, in any language. Never self-activates for ordinary questions, debugging, or implementation context-gathering. While active it overrides exploration-bounding defaults: exhaustive coverage is the goal."
+description: "Maximum-saturation research orchestration: parallel explore+librarian swarms across codebase, web, official docs, and OSS repos; a recursive EXPAND loop driven by leads workers return in message text; empirical verification by running code; cited synthesis and optional MD/HTML/PDF/PPTX reports. ACTIVATES ONLY on an explicit user demand for research — the word 'ulw-research' ('/ulw-research', '$ulw-research'), any 'ulw' research wording, or an explicit request for research / deep research / an ultra-precise investigation, in any language. Never self-activates for ordinary questions, debugging, or implementation context-gathering. While active it overrides exploration-bounding defaults: exhaustive coverage is the goal."
 ---
+
+> **Alias of `ulw-research`** (LazyCodex 4.19.2 name). Prefer `ulw-research`.
 
 ## Grok Harness Tool Compatibility
 
-This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools. `spawn_subagent` **is** native on Grok — use it directly. There is no Codex `teammode` / OpenCode `team_mode` on Grok: parallel `spawn_subagent` plus orchestrator journal is the only multi-worker model.
+This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools:
 
 | OpenCode example | Grok tool to use |
 | --- | --- |
-| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: act as an explorer. ...")` |
-| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent(subagent_type="lazygrok:librarian", background=true, prompt="TASK: act as a librarian. ...")` |
-| `task(subagent_type="plan", ...)` | `spawn_subagent(subagent_type="lazygrok:prometheus", background=true, prompt="TASK: act as a planning agent. ...")` |
-| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent(subagent_type="lazygrok:oracle", background=true, prompt="TASK: act as a rigorous reviewer. ...")` |
-| `task(category="...", ...)` for implementation or QA | `spawn_subagent(subagent_type="lazygrok:hephaestus", background=true, prompt="TASK: act as an implementation or QA worker. ...")` |
-| `background_output(task_id="...")` | `get_command_or_subagent_output(task_ids=["..."])` |
-| `background_cancel(taskId="...")` | `kill_command_or_subagent(task_id="...")` |
-| `team_*(...)` | Use Grok native subagents via `spawn_subagent` with `background: true`, then `get_command_or_subagent_output` and `kill_command_or_subagent` |
+| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent({"message":"TASK: act as an explorer. ...","agent_type":"explorer","background":false})` |
+| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent({"message":"TASK: act as a librarian. ...","agent_type":"librarian","background":false})` |
+| `task(subagent_type="plan", ...)` | `spawn_subagent({"message":"TASK: act as a planning agent. ...","agent_type":"plan","background":false})` |
+| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazygrok-gate-reviewer","background":false})` |
+| `task(category="...", ...)` for implementation or QA | `spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":false})` |
+| `background_output(task_id="...")` | `get_command_or_subagent_output(...)` for mailbox signals |
+| `team_*(...)` | Use Grok native subagents via `spawn_subagent` and `get_command_or_subagent_output`; use `re-prompt via spawn_subagent` and `kill_command_or_subagent` only when exposed in the active tools list |
 
-Role-specific behavior must be described in a self-contained `prompt`. The child starts with only the prompt (no parent history); there is no fork-context concept in Grok. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `prompt`. lazygrok installs these selectable agent roles into `~/.grok/agents/`: `explore`, `librarian`, `prometheus`, `momus`, `metis`, `hephaestus`, `oracle`, and `atlas` - pass the matching name as `subagent_type` (e.g. `lazygrok:explore`) so the child gets that role's model and instructions. If the spawn tool exposes no `subagent_type` parameter, omit it and describe the role inside `prompt`. If a code block below conflicts with this section, this section wins.
+Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into `~/.grok/agents/`: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `agent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `agent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
 
-For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `get_command_or_subagent_output` timeout only means no new output arrived. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
+Use the Grok Tool Mapping table. Always pass `subagent_type` and put the full assignment in `prompt`.
 
----
 
-# ULTRARESEARCH — Maximum-Saturation Research
+# ULW-RESEARCH — Maximum-Saturation Research
 
-You are the research orchestrator. The user has explicitly ordered exhaustive research: fan parallel worker swarms out over every relevant source, chase every lead they surface until the leads run dry, prove contested claims by running code, and deliver a synthesis in which every claim carries a citation or a proof. Exhaustive coverage is the assignment, not a risk to manage.
+## Grok goal registration (host tools optional)
+
+Grok often does **not** inject `create_goal` / `update_goal` / `get_goal`
+(especially when background workflows are enabled). That is normal.
+
+Silent priority — never narrate missing tools:
+1. If `update_goal` or `create_goal` is in the tool list → call with `objective` only (no status/budget).
+2. Else bind the turn with a markdown `# Goal` block (objective + success criteria).
+3. Always prefer durable structured goals via the ulw-loop CLI (`ulw-evidence` skill):
+   `node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals ...`
+   Prefer state under `.lazygrok/ulw-loop/`; if the CLI already created `.omo/ulw-loop/`, keep that run's root.
+4. Live checklist: `todo_write` (exactly one `in_progress`, mark completed immediately).
+5. Host `/goal` slash command is optional extra; do not block on it.
+
+When OmO/Codex docs say "call get_goal / create_goal / update_goal", translate to this protocol.
+
+
+
+## Grok Tool Mapping
+
+| Intent | Grok tool |
+| --- | --- |
+| Spawn a worker | `spawn_subagent({subagent_type:"lazygrok:<role>", prompt:"TASK: ...", background:true})` |
+| Wait for background result | `get_command_or_subagent_output({task_ids:[...]})` |
+| Stop a runaway | `kill_command_or_subagent({task_id:"..."})` |
+| Live checklist | `todo_write` |
+| Edit files | `search_replace` / `write` |
+| Shell | `run_terminal_command` |
+| Read files | `read_file` |
+| Binding goal | `# Goal` + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
+| Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
+| Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
+| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
+
+Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
+Prefer `subagent_type` from the installed LazyGrok agents list. Do not use Codex multi_agent_v1/v2 tool names.
+
+When a skill or workflow still shows Codex MultiAgent examples, translate them with this table.
+
+
 
 ## Activation
 
-Run this skill only when the user explicitly demands it: the word "ultraresearch" (also `/ultraresearch`, `$ultraresearch`), or an explicit request for research, deep research, or an ultra-precise investigation — in any language. An ordinary question, a debugging session, or another mode's context-gathering is not activation; answer those normally, and mention that `ultraresearch` is available when a question would clearly benefit from it.
+Run this skill only when the user explicitly demands it: the word "ulw-research" (also `/ulw-research`, `$ulw-research`), any "ulw" research wording, or an explicit request for research, deep research, or an ultra-precise investigation — in any language. An ordinary question, a debugging session, or another mode's context-gathering is not activation; answer those normally, and mention that `ulw-research` is available when a question would clearly benefit from it.
 
-Open your reply with the line `ULTRARESEARCH MODE ENABLED!`. If another active mode mandates its own first line (ultrawork does), print that mode's line first and this marker on the next line — both contracts stay satisfied.
+Open your reply with the line `ULW-RESEARCH MODE ENABLED!`. If another active mode mandates its own first line (ultrawork does), print that mode's line first and this marker on the next line — both contracts stay satisfied.
 
 ## Authority while active
 
@@ -48,6 +87,8 @@ The research is done when all of these hold:
 - Every EXPAND lead was investigated or explicitly closed as a duplicate or dead end, and convergence was reached under the Phase 2 rules.
 - Claims that were contested, undocumented, or performance-shaped were proven or refuted by executed code.
 - Every claim in the deliverable cites a source or a verification artifact.
+- Every asserted claim is represented in the claim graph, tied to an intent-vs-reality diff when an expected truth exists, and backed by observation manifest entries from independent observation groups or a documented single-source exception; convergence or exception status is explicit.
+- Final materials follow the Phase 5 format default or the user's explicit format.
 - The session journal reconstructs what was searched, found, and expanded, wave by wave.
 
 ## Epistemic instrumentation
@@ -62,13 +103,14 @@ Saturation is not just more searching; it is a knowledge-production protocol. Th
 
 Observation candidates and claim candidates travel back from workers as message text. The orchestrator writes the instrumentation artifacts, links candidates into the intent diff and claim graph, and records where each observation entered the synthesis. A conclusion is not ready for final materials until its expected truth/reality diff is closed or marked unknown, its claim node exists, and its independent-observation convergence status is supported or explicitly excepted.
 
-## Run the swarm with parallel spawn_subagent
+## Run the swarm as a cooperating team
 
-Saturation research needs concurrent workers; a lead one worker surfaces almost always reshapes what another should search next. On Grok there is no Codex `teammode` / OpenCode `team_mode` transport — use **parallel `spawn_subagent` only**, with the orchestrator owning the journal and expanding on leads as worker returns land.
+Saturation research defaults to teammode, not isolated fire-and-forget workers: a lead one worker surfaces almost always reshapes what another should search next. When your harness gives you real cooperating members — Grok: the `teammode` skill (Grok spawn_subagent agents, or `codex_app` threads as its fallback); OpenCode: `team_mode` — run this swarm as a team. Fall back to the background-worker swarm below only when team mode is unavailable, or the axes are genuinely independent with no cross-pollination expected.
 
-- **One worker per axis — by part, ownership, or perspective, never a job title.** Each Phase 0 axis is one worker owning one concrete slice: a codebase part, a source territory, or a question lens. No two workers share an angle. "Backend researcher" or "the web person" gives no real boundary and invites overlap — name what the worker owns.
-- **The raise law — every lead surfaces in the worker reply (EXPAND tail).** Workers report every new lead, finding, contradiction, and dead end in message text, never hoarded without the EXPAND section. Through long passes they send `WORKING: <axis> - <phase>`, and `BLOCKED: <reason>` the moment progress stops, so you always know a worker is alive.
-- **You lead; expand on each returned lead.** Workers raise via message text, never write session files. Journal each lead and spawn its expansion the instant a return lands (Phase 2), not only when the full wave is done.
+- **One member per axis — by part, ownership, or perspective, never a job title.** Each Phase 0 axis is one member owning one concrete slice: a codebase part, a source territory, or a question lens. No two members share an angle. "Backend researcher" or "the web person" gives no real boundary and invites overlap — name what the member owns.
+- **Many teammates by default.** Prefer a larger roster, usually 5-8 teammates, whenever the axes can be made distinct. Add at least one skeptic or red-team perspective for hyperdebate/ultradebate: cross-critique claims, evidence quality, synthesis structure, and visual-report choices before they reach the final deliverable.
+- **The raise law — broadcast every lead the instant it surfaces.** Members over-communicate relentlessly: every new lead, finding, contradiction, and dead end is raised to you the moment it surfaces, never hoarded for a final dump. Through long passes they send `WORKING: <axis> - <phase>`, and `BLOCKED: <reason>` the moment progress stops, so you always know a member is alive. Too many small updates is correct here; going quiet is the only failure.
+- **You lead; expand on each raised lead.** Members raise via message text, never write session files. Journal each lead and spawn its expansion the instant it lands (Phase 2), not only when a member's final reply arrives.
 
 ## Worker ground rules
 
@@ -87,7 +129,7 @@ Every research spawn message contains, in order:
 2. The budget lift: "This is an explicit exhaustive-research assignment. Your default retrieval budget and stop-when-answered rules do not apply — run the full protocol below and report every lead."
 3. Scope — the axis, the sources to hit, and what a complete answer contains.
 4. The role protocol (Phase 1).
-5. The reply tail. EXPAND markers travel back as message text, never as files. Every worker ends the reply with:
+5. The reply tail. EXPAND markers, observation candidates, and claim candidates travel back as message text, never as files. Every worker ends the reply with:
 
 ```
 ## EXPAND
@@ -99,33 +141,38 @@ A worker with nothing to expand writes `## EXPAND` followed by `none — <one-li
 
 ## Phase 0 — Decompose and open the journal
 
-Before spawning anything, decompose the query:
+Before spawning anything, decompose the query. Start from "what must be true if the user's intent/spec is true?", not "what looks broken?" Seed `intent-diff.md` with those expected truths before treating code, current docs, or web results as the source of truth:
 
 ```
 <analysis>
 Core question: <the actual information need>
 Axes (3+ orthogonal): <axis — what to search, where, why> ...
-Codebase relevant: <yes/no> · External: <yes/no> · Browsing: <yes/no> · Verification likely: <yes/no> · Report requested: <no | format>
+Codebase relevant: <yes/no> · External: <yes/no> · Browsing: <yes/no> · Verification likely: <yes/no> · Final material format: <HTML/PDF default | explicit format | markdown only>
 </analysis>
 ```
 
 Then create the session directory:
 
 ```bash
-mkdir -p .lazygrok/ultraresearch/$(date +%Y%m%d-%H%M%S)
+mkdir -p .omo/ulw-research/$(date +%Y%m%d-%H%M%S)
 ```
 
 This is `$SESSION_DIR`. The orchestrator owns the journal: you write every file in it; workers never do. Maintain:
 
 - `wave-<N>-<kind>-<axis>.md` — your digest of each worker return: key findings, sources with URLs, and the worker's EXPAND markers verbatim.
 - `expansion-log.md` — per wave: workers spawned, markers gained, leads opened and closed.
+- `intent-diff.md` — orchestrator-owned expected-truth ledger comparing intent/spec/history to observed reality.
+- `claim-graph.md` — orchestrator-owned claim graph linking every final assertion to observations, counterevidence, dependencies, and verdict.
+- `observation-manifest.md` — orchestrator-owned observation manifest with `observed_at`, temporal validity, artifact paths, and contamination notes.
+- `verification-economics.md` — proof-cost ledger mapping claim risk to verification path, deferral decisions, and residual risk.
+- `cause-disappearance.md` — cause ledger tracking expected truth, previous observation, `last_seen`, disconfirming observation, and whether the violation is no longer observed.
 - `verify-<slug>.md`, `SYNTHESIS.md`, `REPORT.*` from later phases.
 
 Append each digest the moment its worker returns, not in a batch at the end — the journal is your recovery point after context loss and the user's audit trail.
 
 ## Phase 1 — Saturation wave
 
-Launch the entire first wave in one turn — every axis at once as parallel background `spawn_subagent` workers. Sequential launches and "start with one and see" defeat the mode.
+Launch the entire first wave in one turn — every axis at once, as team members if you formed a team, else as background workers. Sequential launches and "start with one and see" defeat the mode.
 
 Scaling floor — more angles always justify more workers:
 
@@ -141,13 +188,13 @@ Role protocols — embed the relevant one in each spawn message; every worker ge
 
 - **Codebase (explore), 2-4 workers.** Grep with 3+ keyword variations; structural/AST search; LSP definitions and references; file-name globs; `git log --all -S '<keyword>'` and `--grep` for history including deleted code. Cross-validate hits across tools. Report absolute file paths, patterns with `file:line`, and how findings connect.
 - **Web (librarian), 3-6 workers.** At least 10 distinct websearch queries per worker, each with a different operator or angle (see Search craft); fetch the full page for every result that matters — snippets lie. Context7 with 3+ queries per known library. grep.app and `gh search code|repos|issues` for real-world usage. Official docs via sitemap discovery (`<base>/sitemap.xml`), then targeted pages.
-- **Browsing, 0-3 workers.** Pages plain fetch cannot read (WAF, dynamic rendering, login): use the browsing skill; capture screenshots when visual context matters.
+- **Browsing, 0-3 workers.** Pages plain fetch cannot read (WAF, 403, Cloudflare, dynamic rendering, login): the worker loads the `ultimate-browsing` skill and escalates through its tiers — Tier-1 insane-search engine first, then Tier-2 Chrome stealth — rather than abandoning the source. Capture screenshots when visual context matters. When one blocked territory hides many leads, fan out more browsing subagents in parallel for breadth instead of serializing one worker through them.
 - **Repo deep-dive (librarian), 0-2 workers.** Shallow-clone the most relevant repos to `${TMPDIR:-/tmp}`, pin the HEAD SHA, read core modules, follow call chains, return SHA-pinned permalinks.
 
 Example spawn (codebase axis; librarian, browsing, and repo-dive follow the same contract with their own protocol):
 
 ```
-spawn_subagent(subagent_type="lazygrok:explore", background=true, prompt="TASK: act as a codebase researcher. AXIS: <specific angle>.
+task(subagent_type="explore", run_in_background=true, prompt="TASK: act as a codebase researcher. AXIS: <specific angle>.
 This is an explicit exhaustive-research assignment. Your default retrieval budget and stop-when-answered rules do not apply — run the full protocol below and report every lead.
 SCOPE: find everything in this codebase related to <angle>: <what complete looks like>.
 PROTOCOL: grep 3+ keyword variations; structural search; LSP references; globs; git history (-S and --grep). Cross-validate across tools. Report absolute paths and file:line patterns.
@@ -156,14 +203,14 @@ End your reply with the ## EXPAND tail: '- LEAD: <discovery> — WHY: <why> — 
 
 ## Phase 2 — Expand until convergence
 
-This loop is what makes the mode research rather than search. Collect returns as they land via `get_command_or_subagent_output` — act on each lead as soon as a worker returns it, never waiting for the full wave before expanding:
+This loop is what makes the mode research rather than search. Collect returns as they land — and in team mode, act on each lead the moment a member raises it, never waiting for the full wave or a member's final reply:
 
 1. Journal the return: digest plus verbatim EXPAND markers into `wave-<N>-<kind>-<axis>.md`.
 2. Deduplicate new markers against `expansion-log.md` — every lead ever seen, not just confirmed ones, or rejected leads resurface each wave.
 3. Spawn an expansion worker immediately for each new unchecked lead:
 
 ```
-spawn_subagent(subagent_type="lazygrok:librarian", background=true, prompt="TASK: expansion wave <N> — investigate: <lead>.
+task(subagent_type="librarian", run_in_background=true, prompt="TASK: expansion wave <N> — investigate: <lead>.
 PARENT: <which return surfaced it>. This is an explicit exhaustive-research assignment; budgets do not apply.
 <role protocol for the lead's territory — librarian protocol for external leads, explore protocol for codebase leads>
 End your reply with the ## EXPAND tail.")
@@ -182,7 +229,7 @@ End your reply with the ## EXPAND tail.")
 Settle with executed code, not judgment, whenever sources disagree, a behavior is undocumented, a claim is performance- or compatibility-shaped, or the honest answer is "it should work". Spawn one verification worker per claim:
 
 ```
-spawn_subagent(subagent_type="lazygrok:hephaestus", background=true, prompt="TASK: verify by execution: <claim>.
+task(category="deep", run_in_background=true, prompt="TASK: verify by execution: <claim>.
 SOURCE: <where it came from>; CONTRADICTION: <opposing source, if any>.
 Write a minimal self-contained script that tests the claim; run it (uv run --with <deps> python / bun / direct compile); capture full stdout+stderr; pin versions.
 Reply with: the exact code, the full output, environment (OS, runtime, dependency versions), and a verdict — CONFIRMED / REFUTED / PARTIAL — grounded in the output.")
@@ -192,7 +239,7 @@ Journal each verdict to `verify-<slug>.md`.
 
 ## Phase 3b — Lock non-code claims through the claim graph
 
-Code settles code-shaped claims (Phase 3). Numeric, market-share, legal, dated, causal, and financial claims cannot be run — so they pass through a data-flow-lock instead: the synthesis may assert a high-risk non-code claim **only** if it cleared this gate, and the gate's output is the sole allowlist the synthesis draws from. Skip the gate and there is nothing to synthesize — the lock is self-enforcing.
+Code settles code-shaped claims (Phase 3). Numeric, market-share, legal, dated, causal, and financial claims cannot be run — so they pass through a data-flow-lock instead (the verification idea adapted from fivetaku/insane-research): the synthesis may assert a high-risk non-code claim **only** if it cleared this gate, and the gate's output is the sole allowlist the synthesis draws from. Skip the gate and there is nothing to synthesize — the lock is self-enforcing.
 
 The claim graph is orchestrator-owned. Workers only return verified-claim markers, observation candidates, and claim candidates as message text, the same channel as EXPAND markers — never a file. As leads resolve, you record one node per asserted claim in `claim-graph.md` and compute its status; workers report claim candidates in their replies, and you decide. The graph is the single claim store: final synthesis may not draw from free-form claims that skipped it.
 
@@ -213,10 +260,10 @@ Anything that fails goes to an `Unresolved` (insufficient evidence) or `Refuted`
 
 ## Phase 4 — Synthesize
 
-After convergence and all verifications, re-read the whole journal and write `SYNTHESIS.md`:
+After convergence and all verifications, re-read the whole journal, start from `intent-diff.md`, `claim-graph.md`, and `observation-manifest.md`, then write `SYNTHESIS.md`:
 
 ```
-# Ultraresearch Synthesis: <query>
+# ULW-Research Synthesis: <query>
 Workers: <total> · Waves: <count> · Sources: <count> · Verifications: <count>
 
 ## Executive summary        — 2-3 paragraphs answering the core question
@@ -224,21 +271,21 @@ Workers: <total> · Waves: <count> · Sources: <count> · Verifications: <count>
 ## Codebase findings        — absolute paths with line references
 ## Sources (ranked)         — URL, what it contains, reliability, access date
 ## Verified claims          — code: claim | verdict | verify-<slug>.md · non-code: only rows cleared into verified-claims
+## Epistemic instrumentation — intent-vs-reality diff closure, claim graph coverage, observation manifest coverage, independent-observation convergence, verification economics summary, cause-disappearance records
 ## Contradictions           — source A vs source B, resolution with evidence
 ## Gaps                     — what saturation could not answer · unresolved/refuted claim-graph nodes
 ## Expansion trace          — per wave: workers → markers; convergence reason
-## Epistemic instrumentation — intent-vs-reality diff closure, claim graph coverage, observation manifest coverage, independent-observation convergence, verification economics summary, cause-disappearance records
 ```
 
-Deliver the synthesis with inline `[Source N]` citations on every claim. When no report was requested, this is the deliverable.
+`SYNTHESIS.md` is the citation source of truth for final materials: every claim carries inline `[Source N]` citations, and every high-risk non-code claim you assert must be a verified-claims row from Phase 3b. Assert nothing the gate left in the unresolved/refuted annex.
 
 ## Phase 5 — Final materials
 
-Format by the user's words: "report" / "document" → Markdown (default) · "pdf" → HTML first, then weasyprint (`uv run --with weasyprint python`) · "slides" / "presentation" / "deck" → python-pptx · "html" / "webpage" → standalone HTML.
+Default final materials to HTML/PDF unless the user explicitly asks for a different format: "report" / "document" → HTML first, with a PDF default available through weasyprint (`uv run --with weasyprint python`) · "pdf" → HTML first, then weasyprint · "slides" / "presentation" / "deck" → python-pptx · "html" / "webpage" → standalone HTML · "markdown only" → Markdown.
 
-Asset workers (background, parallel): charts for quantitative findings (`uv run --with matplotlib --with plotly python`) saved by you to `$SESSION_DIR/assets/`; full-page screenshots of the top 5-10 sources (browsing skill); generated diagrams (imagegen skill) when architecture or flows need them.
+Asset workers (background, parallel): actively use charts for quantitative findings (`uv run --with matplotlib --with plotly python`) saved by you to `$SESSION_DIR/assets/`; Mermaid graphs for process, architecture, argument, and evidence-flow structure; full-page screenshots of the top 5-10 sources (browsing skill); generated diagrams or editorial visuals with the imagegen skill when architecture, flows, or narrative framing benefit from bitmap assets.
 
-Assembly worker — `spawn_subagent(subagent_type="lazygrok:hephaestus", background=true, prompt="TASK: assemble final report. ...")`: before writing, read every available design and visualization skill (via `read_file` on each skill's SKILL.md) and apply it — the report is a designed artifact, not a text dump. Structure: executive summary → key findings by theme → detailed analysis (quotes under 20 words with attribution, charts, SHA-pinned permalinks, verification results) → comparative analysis when options compete → numbered sources with access dates → methodology appendix (workers, waves, searches, verifications). Every claim cites `[Source N]`.
+Assembly worker — `task(category="deep", load_skills=["frontend", "visual-qa", "open-design", "data-scientist", "imagegen", "ulw-loop"], run_in_background=true, ...)`: before writing, read every available design and visualization skill and apply it — the report is a designed artifact, not a text dump. Run HTML/PDF output through the ULW loop with frontend and visual-qa, then repair until the reviewer says no broken parts and gives approval. Structure: executive summary → key findings by theme → detailed analysis (quotes under 20 words with attribution, charts, Mermaid graphs, generated visuals, SHA-pinned permalinks, verification results) → comparative analysis when options compete → numbered sources with access dates → methodology appendix (workers, waves, searches, verifications). Every claim cites `[Source N]`.
 
 ## Search craft
 
@@ -262,7 +309,7 @@ High-yield combinations: official docs (`site:<docs domain>`), GitHub implementa
 | Failure | Correction |
 |---|---|
 | Sequential spawning, or trimming the first wave | All first-wave workers in one turn, background, scaling floor respected |
-| A worker hoards leads without the EXPAND tail | Raise law — every lead, finding, and dead end in the EXPAND section the moment it surfaces |
+| A team member hoards leads for one final dump | Raise law — every lead, finding, and dead end broadcast the moment it surfaces |
 | Worker reply without the EXPAND tail | One follow-up demanding it; the lane stays open until it lands |
 | Stopping after wave 1 because "enough was found" | Convergence rules only: 2+ expansion waves, leads run dry |
 | Obeying a surrounding "stop exploring" rule mid-research | Authority section — those rules do not bind this mode |

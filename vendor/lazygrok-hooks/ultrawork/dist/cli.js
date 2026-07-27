@@ -1,20 +1,21 @@
 #!/usr/bin/env node
 
-// components/ultrawork/src/cli.ts
+// src/cli.ts
 import { stdin as processStdin, stdout as processStdout } from "node:process";
 
-// components/ultrawork/src/codex-hook.ts
+// src/codex-hook.ts
 import { readFileSync as readFileSync2 } from "node:fs";
 
-// components/ultrawork/src/skill-pointer.ts
+// src/skill-pointer.ts
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { dirname, join, resolve } from "node:path";
 
-// components/ultrawork/src/directive.ts
+// src/directive.ts
 import { readFileSync } from "node:fs";
 var ULTRAWORK_DIRECTIVE = readFileSync(new URL("../directive.md", import.meta.url), "utf8");
 
-// components/ultrawork/src/skill-pointer.ts
+// src/skill-pointer.ts
 var ULTRAWORK_SKILL_POINTER_TEMPLATE = `<ultrawork-mode>
 ULTRAWORK MODE IS ACTIVE FOR THIS TASK.
 
@@ -27,7 +28,7 @@ MANDATORY BOOTSTRAP: do all three steps, in order, before anything else.
 If host tool \`update_goal\` or \`create_goal\` is in your tool list,
 call it with \`objective\` only (no status/budget). Otherwise open with
 a binding \`# Goal\` block — that is the normal Grok path, not a defect.
-Prefer also \`ulw-loop create-goals\` when the CLI is available.
+Prefer also \`ulw-loop create-goals\` / skill \`ulw-evidence\` when the CLI is available.
 
 3. Read the FULL ultrawork directive NOW, before any other tool call,
 plan, or edit. It is the \`ultrawork\` skill, stored at:
@@ -38,16 +39,29 @@ Read the whole file. If a read result comes back truncated, keep
 reading the remaining line ranges until you have seen every line.
 Every rule in that file is binding for this entire task: no
 compromise, no summarizing from memory, no skipping. If the file does
-not exist, tell the user the omo ultrawork skill is missing and
+not exist, tell the user the lazygrok ultrawork skill is missing and
 continue with steps 1 and 2 plus evidence-bound execution.
 
 Do not start the requested work until all three steps are complete.
 </ultrawork-mode>
 `;
 var ULTRAWORK_SKILL_PATH_PLACEHOLDER = "{{ULTRAWORK_SKILL_PATH}}";
-var ULTRAWORK_SKILL_FILE_URL = new URL("../../../skills/ultrawork/SKILL.md", import.meta.url);
 function resolveUltraworkSkillFilePath() {
-  return fileURLToPath(ULTRAWORK_SKILL_FILE_URL);
+  const here = dirname(fileURLToPath(import.meta.url));
+  const envRoot = process.env["GROK_PLUGIN_ROOT"]?.trim();
+  const candidates = [
+    join(here, "../skills/ultrawork/SKILL.md"),
+    join(here, "../../../../skills/ultrawork/SKILL.md"),
+    join(here, "../../../skills/ultrawork/SKILL.md"),
+    envRoot ? join(envRoot, "skills/ultrawork/SKILL.md") : "",
+    envRoot ? join(envRoot, "vendor/lazygrok-hooks/ultrawork/skills/ultrawork/SKILL.md") : ""
+  ].filter(Boolean);
+  for (const c of candidates) {
+    const abs = resolve(c);
+    if (existsSync(abs))
+      return abs;
+  }
+  return resolve(join(here, "../skills/ultrawork/SKILL.md"));
 }
 function buildUltraworkSkillPointer(skillFilePath) {
   return ULTRAWORK_SKILL_POINTER_TEMPLATE.replace(ULTRAWORK_SKILL_PATH_PLACEHOLDER, skillFilePath);
@@ -60,7 +74,7 @@ function buildUltraworkAdditionalContext(options = {}) {
   return ULTRAWORK_DIRECTIVE;
 }
 
-// components/ultrawork/src/codex-hook.ts
+// src/codex-hook.ts
 var ULTRAWORK_CURRENT_PROMPT_PATTERN = /(?:ultrawork|ulw(?!-(?:plan|research)))/i;
 var ULTRAWORK_DIRECTIVE_MARKER = "<ultrawork-mode>";
 var TRANSCRIPT_SEARCH_BYTES = 512000;
@@ -176,7 +190,7 @@ function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// components/ultrawork/src/cli.ts
+// src/cli.ts
 var command = process.argv[2];
 var subcommand = process.argv[3];
 if (command === "hook" && subcommand === "user-prompt-submit") {
@@ -207,17 +221,17 @@ function parseHookInput(raw) {
   }
 }
 function readStdin() {
-  return new Promise((resolve) => {
+  return new Promise((resolve2) => {
     let data = "";
     processStdin.setEncoding("utf8");
     processStdin.on("data", (chunk) => {
       data += chunk;
     });
     processStdin.once("error", () => {
-      resolve(data);
+      resolve2(data);
     });
     processStdin.once("end", () => {
-      resolve(data);
+      resolve2(data);
     });
   });
 }
