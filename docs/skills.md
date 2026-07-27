@@ -17,6 +17,7 @@ Hooks: `hooks/pre-tool-mutate.sh`, `hooks/post-tool-read.sh`, `hooks/session-sta
 | `agent-skill-gate` | (meta) | Read before mutating tools; hooks block writes until a catalog skill was Read |
 | `ralph-loop` | `/ralph-loop "task"` | Work-until-done via Stop-hook continuations |
 | `ulw-loop` | `/ulw-loop`, `/ultrawork` | Ralph loop + mandatory verifier before exit |
+| `ulw-workflow` | (not user-facing) | Internal panel protocol under `ulw` only |
 | `cancel-ralph` | `/cancel-ralph` | Clear active Ralph / ultrawork state |
 | `handoff` | `/handoff` | Structured HANDOFF CONTEXT for a new session |
 
@@ -38,7 +39,9 @@ When delegating subagents, paste skill **paths** from inspect into the subagent 
 - `skills/agent-skill-gate/SKILL.md`
 - `skills/ralph-loop/SKILL.md`
 - `skills/ulw-loop/SKILL.md`
+- `skills/ulw-workflow/SKILL.md`
 - `skills/cancel-ralph/SKILL.md`
 - `skills/handoff/SKILL.md`
+- `docs/examples/ulw-discover.rhai`, `docs/examples/ulw-review.rhai`
 
 Bundled rules in `rules/*.md` are injected on every `UserPromptSubmit` together with workspace `AGENTS.md` when present.

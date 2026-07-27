@@ -19,6 +19,19 @@ ultrawork add GitHub issue templates
 
 Same loop file as Ralph, but Stop requires a verifier subagent to emit `<promise>VERIFIED</promise>` before the loop clears. Default max iterations: 500.
 
+## ULW multi-agent panels (Grok `workflow` — agent-internal)
+
+**Users never run these.** Typing **`ulw`** is enough; the parent auto-calls panels
+when multi-file discovery or HEAVY review is required. Codex has no equivalent engine;
+LazyGrok uses Grok’s `workflow` tool under the hood.
+
+Scripts (install once for silent `name:` resolution):
+
+- `docs/examples/ulw-discover.rhai` → `~/.grok/workflows/ulw-discover.rhai`
+- `docs/examples/ulw-review.rhai` → `~/.grok/workflows/ulw-review.rhai`
+
+Agent protocol: [docs/ulw-workflow.md](../ulw-workflow.md).
+
 ## Handoff — continue in a new session
 
 ```text

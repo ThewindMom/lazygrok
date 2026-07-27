@@ -18,7 +18,7 @@
 | Web | `web_search` / `web_fetch` / `open_page` / `open_page_with_find` |
 | Plan mode | `enter_plan_mode` / `exit_plan_mode` |
 | Ask user | `ask_user_question` |
-| Scripted multi-agent | `workflow` |
+| Scripted multi-agent (internal under `ulw`) | `workflow` → `ulw-discover` / `ulw-review` — never ask user to run `/workflow` |
 | Background watch | `monitor` |
 | Schedule | `scheduler_create` / `scheduler_list` / `scheduler_delete` |
 

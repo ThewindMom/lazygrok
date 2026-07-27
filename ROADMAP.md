@@ -23,6 +23,7 @@ lazygrok targets **Grok Build CLI** only. It **complements** [oh-my-openagent](h
 - [ ] Optional: `grok plugin validate` in CI when Grok CLI is available on runners
 - [ ] Oracle / verifier subagent polish for `/ulw-loop` (documented defaults)
 - [ ] Acceptance: scripted/manual `ulw` multi-file task shows ≥2 parallel subagents before implement
+- [x] **ULW + Grok workflows** — silent `ulw-discover` / `ulw-review` under keyword `ulw` only (Codex has no workflow engine; user never runs `/workflow`)
 - [ ] GitHub Pages or docs site (homepage URL in repo settings)
 
 ## Mid term

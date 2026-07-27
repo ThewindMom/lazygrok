@@ -60,6 +60,7 @@ Analogous to omo’s **`.omo/`** in OpenCode workspaces. Never store plugin sour
 | `agent-skill-gate` | (meta; Read before mutating) | `session-start`, `user-prompt`, `pre-tool-use`, `post-tool-read` |
 | `ralph-loop` | `/ralph-loop "task"` | `user-prompt`, `stop` |
 | `ulw-loop` | `/ulw-loop "task"` | same + Oracle verification pending |
+| `ulw-workflow` | (internal) | silent panels under `ulw` — user never runs `/workflow` |
 | `cancel-ralph` | `/cancel-ralph` | clears `.lazygrok/ralph-loop.local.md` |
 | `handoff` | `/handoff` | `user-prompt` injects PHASE 0–4 instructions |
 | `prometheus-plan` | `/plan`, `/prometheus` | `user-prompt` + `pre-tool-use` |

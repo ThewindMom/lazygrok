@@ -60,6 +60,7 @@ When OmO/Codex docs say "call get_goal / create_goal / update_goal", translate t
 | Spawn a worker | `spawn_subagent({subagent_type:"lazygrok:<role>", prompt:"TASK: ...", background:true})` |
 | Wait for background result | `get_command_or_subagent_output({task_ids:[...]})` |
 | Stop a runaway | `kill_command_or_subagent({task_id:"..."})` |
+| Discovery / review (internal under `ulw`) | Auto `workflow` → `ulw-discover` / `ulw-review` — never ask user for `/workflow` |
 | Live checklist | `todo_write` |
 | Edit files | `search_replace` / `write` |
 | Shell | `run_terminal_command` |

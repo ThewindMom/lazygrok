@@ -48,13 +48,15 @@ continue with steps 1 and 2 plus evidence-bound execution.
 
 4. Live checklist: \`todo_write\` (exactly one \`in_progress\`).
 
-5. CODING MULTI-AGENT — after reading the skill, use only Grok tools:
-- Spawn: \`spawn_subagent({ subagent_type, prompt, background: true })\`. Wait: \`get_command_or_subagent_output\`. Kill: \`kill_command_or_subagent\`.
-- Unfamiliar / multi-file: same-turn background wave — \`lazygrok:explore\` (+ \`lazygrok:librarian\` if external docs/API) BEFORE product edits.
-- Independent slices: one worker each (\`lazygrok:lazygrok-worker-*\` / hephaestus). HEAVY: reviewer child after evidence.
+5. CODING MULTI-AGENT — after reading the skill, use only Grok tools.
+User switch is ONLY \`ulw\`/\`ultrawork\` — never ask them to run /workflow or name panels.
+- Multi-file / unfamiliar: BEFORE product edits, auto-call the \`workflow\` tool with name \`ulw-discover\` (or script_path under GROK_PLUGIN_ROOT/docs/examples/). Fallback: same-turn \`spawn_subagent\` explore (+ librarian if external).
+- Independent slices: one worker each (\`lazygrok:lazygrok-worker-*\` / hephaestus) via spawn_subagent.
+- HEAVY after evidence: auto-call \`workflow\` name \`ulw-review\` (or script_path); fallback code-reviewer spawn. Parent owns goals, RED→GREEN, commits, done claim — panels never ship.
+- Wait: \`get_command_or_subagent_output\` for spawns; wait for workflow run completion for panels. Kill: \`kill_command_or_subagent\`.
 - Child prompt: TASK / DELIVERABLE / SCOPE / VERIFY / STOP WHEN. Depth 1. Barrier before dependent implement.
 - Trivial single-file known fix may stay serial; record "no fan-out: trivial" in the notepad.
-- Tool allowlist: plugin rules/15-grok-tools-only.md. Only call tools in this session's tool list.
+- Do not narrate harness internals (workflow/Rhai) to the user. Tool allowlist: rules/15-grok-tools-only.md.
 
 Do not start the requested work until bootstrap is complete.
 LIGHT complete: ulw-loop light-quality-gate then checkpoint. HEAVY: reviewer gate in the skill.
