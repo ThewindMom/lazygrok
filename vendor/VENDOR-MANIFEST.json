@@ -11,7 +11,8 @@
       "source_file": "vendor/superpowers/SOURCE",
       "version_file": "vendor/superpowers/VERSION",
       "contents": "skills only",
-      "modifications": "none"
+      "modifications": "none",
+      "notes": "Still vendored on disk but NOT registered in plugin.json skills (LazyCodex-for-Grok skill trim 0.4.1)"
     },
     {
       "name": "cobra",
@@ -44,7 +45,7 @@
       "name": "lazygrok-hooks",
       "path": "vendor/lazygrok-hooks/",
       "upstream": "https://github.com/code-yeongyu/lazycodex",
-      "ref": "lazycodex-ai@4.19.2 (ultrawork+ulw-loop rebuilt from TS with Grok skill-pointer)",
+      "ref": "lazycodex-ai@4.19.2 (all components 4.19.2; ultrawork/ulw-loop Grok-patched + light-quality-gate)",
       "license": "MIT",
       "components": [
         "bootstrap",

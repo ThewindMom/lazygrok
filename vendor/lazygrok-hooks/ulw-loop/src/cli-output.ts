@@ -10,7 +10,8 @@ export const ULW_LOOP_HELP = `Usage:
   omo ulw-loop checkpoint --goal-id <id> --status complete|failed|blocked --evidence "..." --codex-goal-json <...> [--quality-gate-json <...>] [--no-advance] [--json]
   omo ulw-loop steer --kind <kind> ... --evidence "..." --rationale "..." [--proposals-json <json-or-path>] [--json]
   omo ulw-loop add-goal --title "..." --objective "..." [--json]
-  omo ulw-loop record-review-blockers --goal-id <id> --title "..." --objective "..." --evidence "..." --codex-goal-json <...> [--json]
+  omo ulw-loop record-review-blockers
+  omo ulw-loop light-quality-gate --goal-id <id> [--session-id <id>] [--json]
 
 All subcommands accept [--session-id <id>] to isolate state under .omo/ulw-loop/<id>/; without it, Codex session env is used when present.`;
 

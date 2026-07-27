@@ -1,11 +1,9 @@
 {
   "name": "lazygrok",
-  "version": "0.4.0",
-  "description": "LazyGrok \u2014 Grok-native port of lazycodex/oh-my-openagent (synced to lazycodex-ai@4.19.2 skills). Specialist agents + worker tiers, hashline MCP, skill gate, Ralph & OmO ulw-loop/ultrawork, todo/boulder continuation, handoff, hook pipelines, LSP/codegraph MCP.",
+  "version": "0.4.1",
+  "description": "LazyGrok \u2014 LazyCodex/OmO for Grok (lazycodex-ai@4.19.2). ULW loops, start-work/boulder, specialist agents, hashline, skill-gate, Ralph, hooks + MCP. Skills limited to LazyCodex port + Grok workflow necessities.",
   "skills": [
     "./skills",
-    "./vendor/superpowers/skills",
-    "./vendor/omo-skills",
     "./vendor/lazygrok-skills",
     "./vendor/lazygrok-hooks"
   ],

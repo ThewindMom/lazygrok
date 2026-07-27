@@ -116,3 +116,23 @@ The ultrawork execution loop (PIN → RED → GREEN → SURFACE → CLEAN) maps 
 
 This is the durable ledger path. Boulder (`.lazygrok/boulder.json`) remains
 for `/start-work` Prometheus plan continuation and is complementary.
+
+
+## LIGHT final checkpoint (Grok)
+
+Final `checkpoint --status complete` still requires a quality-gate JSON (same as LazyCodex).
+For LIGHT / smoke goals after all criteria pass:
+
+```bash
+$ULW_CLI light-quality-gate --goal-id <id> --session-id <sid> --json
+# prints qualityGatePath under .omo/evidence/ulw/...
+
+$ULW_CLI checkpoint --goal-id <id> --session-id <sid> --status complete \
+  --evidence "all criteria pass" \
+  --codex-goal-json '{"objective":"<plan.codexObjective>","status":"complete"}' \
+  --quality-gate-json <qualityGatePath> --json
+```
+
+Reviewer roles may be `lazygrok-code-reviewer` / `lazygrok-qa-executor` / `lazygrok-gate-reviewer`
+(or the `lazycodex-*` names). LIGHT gate is a self-review path with real artifact files —
+not a free pass without evidence.

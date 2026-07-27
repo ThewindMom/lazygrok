@@ -737,7 +737,11 @@ function defaultFileExists(filePath) {
   }
 }
 function defaultVersionProbe(binaryPath) {
-  return String(execFileSync(binaryPath, ["--version"], { encoding: "utf8", timeout: 5000 }));
+  return String(execFileSync(binaryPath, ["--version"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 5000
+  }));
 }
 function isAstGrepVersionOutput(output) {
   return output.toLowerCase().includes("ast-grep");
@@ -751,8 +755,8 @@ function hasAstGrepVersion(binaryPath, runVersionProbeSync) {
     return false;
   }
 }
-function pathCommandCandidates(platform) {
-  return platform === "linux" ? ["ast-grep", "sg"] : ["sg", "ast-grep"];
+function pathCommandCandidates() {
+  return ["ast-grep", "sg"];
 }
 function findSgBinarySync(options = {}) {
   const env = options.env ?? process.env;
@@ -769,7 +773,7 @@ function findSgBinarySync(options = {}) {
       if (fileExists(runtimeCandidate))
         return runtimeCandidate;
     }
-    for (const commandName of pathCommandCandidates(platform)) {
+    for (const commandName of pathCommandCandidates()) {
       const pathCandidate = which(commandName);
       if (pathCandidate === null || !fileExists(pathCandidate))
         continue;

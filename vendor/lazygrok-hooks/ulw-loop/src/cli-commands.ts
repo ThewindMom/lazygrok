@@ -11,6 +11,7 @@ import {
 	status,
 	steer,
 } from "./cli-subcommands.js";
+import { lightQualityGateCmd } from "./light-quality-gate.js";
 import { resolveUlwLoopSessionIdFromEnv, type UlwLoopScope } from "./paths.js";
 import { UlwLoopError } from "./types.js";
 
@@ -25,6 +26,7 @@ export const ULW_LOOP_SUBCOMMANDS = [
 	"criteria",
 	"record-evidence",
 	"record-review-blockers",
+	"light-quality-gate",
 ] as const;
 
 export type UlwLoopSubcommand = (typeof ULW_LOOP_SUBCOMMANDS)[number];
@@ -75,6 +77,8 @@ export async function ulwLoopCommand(argv: readonly string[]): Promise<number> {
 				return await captureEvidence(repoRoot, rest, json, scope);
 			case "record-review-blockers":
 				return await reviewBlockers(repoRoot, rest, json, scope);
+			case "light-quality-gate":
+				return await lightQualityGateCmd(repoRoot, rest, json, scope);
 			default:
 				return unhandledSubcommand(command);
 		}

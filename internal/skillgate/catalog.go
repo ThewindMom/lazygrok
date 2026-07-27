@@ -217,10 +217,11 @@ func discoverSkillsOnDisk(sessionID, workspace string) error {
 	scanRoot(workspace, "project")
 	if root, err := hookenv.PluginRoot(); err == nil {
 		scanRoot(root, "plugin")
-		bundledSkills := filepath.Join(root, "vendor", "superpowers", "skills")
-		if entries, err := os.ReadDir(bundledSkills); err == nil {
-			for _, name := range sortedNames(entries) {
-				add(filepath.Join(bundledSkills, name, "SKILL.md"), "plugin")
+		// LazyCodex-for-Grok skill roots (plugin.json): no superpowers pack.
+		for _, rel := range []string{"skills", "vendor/lazygrok-skills"} {
+			skillsRoot := filepath.Join(root, rel)
+			for _, name := range sortedNamesFromDir(skillsRoot) {
+				add(filepath.Join(skillsRoot, name, "SKILL.md"), "plugin")
 			}
 		}
 	}

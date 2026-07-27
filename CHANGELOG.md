@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 Releases are normally automated via [release-please](https://github.com/googleapis/release-please) when GitHub Actions billing is active. While Actions is disabled, use [`scripts/manual-release.sh`](scripts/manual-release.sh).
 
+## [0.4.1] (2026-07-27)
+
+### Changes
+* **Skill surface trimmed** to LazyCodex-for-Grok only: dropped superpowers pack registration and non-OmO filler skills; keep Ralph/ulw, skill-gate, hashline, prometheus, handoff, ulw-evidence
+* First-prompt inject uses **agent-skill-gate** (not using-superpowers)
+* Skill-gate catalog scans `skills/` + `vendor/lazygrok-skills` only
+
+### P2 fixes
+* Component package versions/dists aligned to **4.19.2** (bootstrap + codegraph re-synced)
+* Agent TOML models set to **`inherit`** (no Codex gpt-5.6 hardcodes)
+* **`ulw-loop light-quality-gate`**: Grok LIGHT final complete path with real attempt artifacts; accepts `lazygrok-*` reviewer role names
+* Smoke checkpoint complete verified end-to-end
+
 ## [0.4.0] (2026-07-27)
 
 ### Features

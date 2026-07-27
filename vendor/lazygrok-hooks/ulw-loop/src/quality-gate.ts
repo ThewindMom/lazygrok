@@ -23,6 +23,13 @@ const REVIEWER_ROLES = {
 	gateReview: "lazycodex-gate-reviewer",
 } as const;
 
+/** LazyGrok/Grok role aliases accepted alongside LazyCodex names. */
+const REVIEWER_ALIASES: Record<keyof typeof REVIEWER_ROLES, readonly string[]> = {
+	codeReview: ["lazycodex-code-reviewer", "lazygrok-code-reviewer"],
+	manualQa: ["lazycodex-qa-executor", "lazygrok-qa-executor"],
+	gateReview: ["lazycodex-gate-reviewer", "lazygrok-gate-reviewer"],
+};
+
 export {
 	classifyExternalAuthorizationBlocker,
 	clearGoalBlockerFields,
@@ -41,10 +48,13 @@ export interface ValidateQualityGateOptions {
 	readonly currentAttemptDir?: string;
 }
 
-function reviewerRoleField<T extends string>(value: unknown, expected: T, field: string): T {
+function reviewerRoleField(value: unknown, role: keyof typeof REVIEWER_ROLES, field: string): string {
 	const actual = textField(value, field);
-	if (actual !== expected) invalid(`${field} must be ${expected}.`, field);
-	return expected;
+	const allowed = REVIEWER_ALIASES[role];
+	if (!allowed.includes(actual))
+		invalid(`${field} must be one of: ${allowed.join(", ")}.`, field);
+	// Normalize to LazyCodex canonical for ledger stability
+	return REVIEWER_ROLES[role];
 }
 
 function surfaceField(value: unknown, field: string): UlwLoopManualQaSurface {
@@ -163,7 +173,7 @@ export function validateQualityGate(input: unknown, opts?: ValidateQualityGateOp
 	checkFile(gateReportPath, "gateReview.reportPath", opts);
 	return {
 		codeReview: {
-			by: reviewerRoleField(codeReview["by"], REVIEWER_ROLES.codeReview, "codeReview.by"),
+			by: reviewerRoleField(codeReview["by"], "codeReview", "codeReview.by"),
 			recommendation: literal(codeReview["recommendation"], "APPROVE", "codeReview.recommendation"),
 			codeQualityStatus: codeQualityStatusField(codeReview["codeQualityStatus"], "codeReview.codeQualityStatus"),
 			reportPath: codeReportPath,
@@ -171,7 +181,7 @@ export function validateQualityGate(input: unknown, opts?: ValidateQualityGateOp
 			blockers: emptyBlockers(codeReview["blockers"], "codeReview.blockers"),
 		},
 		manualQa: {
-			by: reviewerRoleField(manualQa["by"], REVIEWER_ROLES.manualQa, "manualQa.by"),
+			by: reviewerRoleField(manualQa["by"], "manualQa", "manualQa.by"),
 			status: literal(manualQa["status"], "passed", "manualQa.status"),
 			evidence: textField(manualQa["evidence"], "manualQa.evidence"),
 			surfaceEvidence,
@@ -179,7 +189,7 @@ export function validateQualityGate(input: unknown, opts?: ValidateQualityGateOp
 			artifactRefs,
 		},
 		gateReview: {
-			by: reviewerRoleField(gateReview["by"], REVIEWER_ROLES.gateReview, "gateReview.by"),
+			by: reviewerRoleField(gateReview["by"], "gateReview", "gateReview.by"),
 			recommendation: literal(gateReview["recommendation"], "APPROVE", "gateReview.recommendation"),
 			reportPath: gateReportPath,
 			evidence: textField(gateReview["evidence"], "gateReview.evidence"),

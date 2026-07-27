@@ -4,7 +4,7 @@ description: >
   MANDATORY before code changes, debugging, planning, or multi-step implementation in ANY
   repository. Discover skills via grok inspect, read_file every SKILL.md whose description matches
   the task, then use tools. Hooks block mutating tools until at least one catalog skill was
-  loaded via read_file. superpowers skills ship bundled in lazygrok (vendor/superpowers/skills).
+  loaded via read_file. LazyCodex-for-Grok skills ship in skills/ + vendor/lazygrok-skills (no superpowers pack).
 ---
 
 # Agent Skill Gate
@@ -27,8 +27,7 @@ Every Grok Composer session where you might call `grep`, `read_file` (for implem
 
 The **lazygrok** plugin (`grok plugin install github:mihazs/lazygrok --trust`) registers
 hooks via `hooks/hooks.json`. They deny mutating tools when the catalog is non-empty and
-no skill was read via `read_file` yet. Satisfy the gate by reading any applicable catalog entry, or this
-meta-skill file (path from `grok inspect`).
+no skill was read via `read_file` yet. Satisfy the gate by reading any applicable catalog entry, or this meta-skill file (path from `grok inspect`).
 
 ## Rules reference
 
