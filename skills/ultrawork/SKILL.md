@@ -1,8 +1,13 @@
 ---
 name: ultrawork
-description: Binding ultrawork mode directive for omo on Grok. When a prompt contains ultrawork or ulw, the omo UserPromptSubmit hook injects a short bootstrap that points at this file. Read the whole file and follow every rule in it for the rest of the task.
+description: >
+  Binding ultrawork mode for LazyGrok. Triggered when the user says ultrawork or ulw
+  (one keyword is enough — do not require /goal or other commands). Hook injects a
+  bootstrap that points at this file. Read the whole file and follow every rule for
+  the rest of the task.
 metadata:
-  short-description: Binding ultrawork mode directive
+  short-description: ULW mode — one keyword, full evidence-driven execution
+user_invocable: true
 ---
 
 <ultrawork-mode>
@@ -12,23 +17,36 @@ metadata:
 
 [CODE RED] Maximum precision. Outcome-first. Evidence-driven.
 
+# User trigger (only this)
+
+The user only needs to say **`ulw`** or **`ultrawork`** (anywhere in the prompt).
+Do **not** ask them to also run `/goal`, `/ulw-loop`, or `/ulw-evidence`. You perform
+registration and ledger setup yourself.
+
 # Role
 
-## Grok goal registration (host tools optional)
+## Goal registration (do all applicable layers — silent on missing tools)
 
-Grok often does **not** inject `create_goal` / `update_goal` / `get_goal`
-(especially when background workflows are enabled). That is normal.
+Strip `ulw` / `ultrawork` from the user text; remainder = **objective**.
 
-Silent priority — never narrate missing tools:
-1. If `update_goal` or `create_goal` is in the tool list → call with `objective` only (no status/budget).
-2. Else bind the turn with a markdown `# Goal` block (objective + success criteria).
-3. Always prefer durable structured goals via the ulw-loop CLI (`ulw-evidence` skill):
-   `node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals ...`
-   Prefer state under `.lazygrok/ulw-loop/`; if the CLI already created `.omo/ulw-loop/`, keep that run's root.
-4. Live checklist: `todo_write` (exactly one `in_progress`, mark completed immediately).
-5. Host `/goal` slash command is optional extra; do not block on it.
+1. **Grok host tools (when present in this session's tool list)**  
+   - `create_goal` → call with `objective` only (no status, no token_budget).  
+   - `update_goal` → use for progress / complete / blocked **only if** a host goal is already active (e.g. user previously used `/goal`). Never claim host completion without real evidence.  
+   - If neither tool exists: **not a defect** — continue. Do not lecture the user about missing tools.
 
-When OmO/Codex docs say "call get_goal / create_goal / update_goal", translate to this protocol.
+2. **Transcript contract (always)**  
+   Open with a markdown `# Goal` block: objective, tier (LIGHT/HEAVY), success criteria with scenarios, when-to-stop. This is for humans + compaction; it does **not** replace host `/goal` or the ULW ledger.
+
+3. **Durable ULW ledger (always for non-trivial work)** — skill `ulw-evidence`:  
+   ```bash
+   node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals --brief "<objective>" --json
+   ```  
+   Prefer `.lazygrok/ulw-loop/`; keep `.omo/ulw-loop/` if that run already started there.  
+   Record evidence with `record-evidence`; LIGHT final complete via `light-quality-gate` then `checkpoint`.
+
+4. **Live checklist (always):** `todo_write` — exactly one `in_progress`.
+
+Optional: if the user already ran `/goal` before saying ulw, host orchestration is a bonus — still do layers 2–4.
 
 
 ## Grok Tool Mapping

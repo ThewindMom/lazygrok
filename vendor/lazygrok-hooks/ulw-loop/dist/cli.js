@@ -2954,7 +2954,7 @@ MANDATORY BOOTSTRAP: do all three steps, in order, before anything else.
 2. Register the binding goal NOW (silent — never narrate missing tools):
 If host tool \`update_goal\` or \`create_goal\` is in your tool list,
 call it with \`objective\` only (no status/budget). Otherwise open with
-a binding \`# Goal\` block — that is the normal Grok path, not a defect.
+a binding \`# Goal\` block — that is the normal Grok path, not a defect. The user only needs ulw/ultrawork — do not ask them to also type /goal.
 Prefer also \`ulw-loop create-goals\` / skill \`ulw-evidence\` when the CLI is available.
 
 3. Read the FULL ultrawork directive NOW, before any other tool call,
