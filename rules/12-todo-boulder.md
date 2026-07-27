@@ -2,9 +2,9 @@
 
 ## Todo continuation
 
-Stop hook blocks with omo-style `[TODO CONTINUATION]` when `TodoWrite` todos are pending/in_progress.
+Stop hook blocks with omo-style `[TODO CONTINUATION]` when `todo_write` todos are pending/in_progress.
 
-- Mirror: `.lazygrok/todos/<sessionId>.json` (updated on each `TodoWrite`)
+- Mirror: `.lazygrok/todos/<sessionId>.json` (updated on each `todo_write`)
 - Pause: `/stop-continuation`
 - Resume: `/resume-continuation`
 

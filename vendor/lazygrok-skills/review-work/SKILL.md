@@ -2,23 +2,19 @@
 name: review-work
 description: "Post-implementation review orchestrator. Launches 5 parallel background sub-agents: Oracle (goal/constraint verification), Oracle (code quality), Oracle (security), unspecified-high (hands-on QA execution), unspecified-high (context mining from GitHub/git/Slack/Notion). All must pass for review to pass. MUST USE before a PR handoff or when the user explicitly asks to review completed work. Triggers: 'review work', 'review my work', 'review changes', 'QA my work', 'verify implementation', 'check my work', 'validate changes', 'post-implementation review'."
 ---
-## Grok Harness Tool Compatibility
+## Grok tools only
 
-This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools:
-
-| OpenCode example | Grok tool to use |
+| Need | Tool |
 | --- | --- |
-| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent({"message":"TASK: act as an explorer. ...","agent_type":"explorer","background":false})` |
-| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent({"message":"TASK: act as a librarian. ...","agent_type":"librarian","background":false})` |
-| `task(subagent_type="plan", ...)` | `spawn_subagent({"message":"TASK: act as a planning agent. ...","agent_type":"plan","background":false})` |
-| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazygrok-gate-reviewer","background":false})` |
-| `task(category="...", ...)` for implementation or QA | `spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":false})` |
-| `background_output(task_id="...")` | `get_command_or_subagent_output(...)` for mailbox signals |
-| `team_*(...)` | Use Grok native subagents via `spawn_subagent` and `get_command_or_subagent_output`; use `re-prompt via spawn_subagent` and `kill_command_or_subagent` only when exposed in the active tools list |
+| Spawn | `spawn_subagent({ subagent_type, prompt, background: true })` |
+| Wait | `get_command_or_subagent_output({ task_ids, timeout_ms })` |
+| Kill | `kill_command_or_subagent({ task_id })` |
+| Todos | `todo_write` |
+| Shell | `run_terminal_command` |
+| Edit | `search_replace` / `write` |
+| Read | `read_file` |
 
-Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into `~/.grok/agents/`: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `agent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `agent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
-
-Use the Grok Tool Mapping table. Always pass `subagent_type` and put the full assignment in `prompt`.
+Only call tools from this session's tool list. See plugin `rules/15-grok-tools-only.md`.
 
 
 ## Grok Subagent Reliability
@@ -75,9 +71,9 @@ aggregate result.
 | Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list. Do not use Codex multi_agent_v1/v2 tool names.
+Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
 
-When a skill or workflow still shows Codex MultiAgent examples, translate them with this table.
+If an example uses a foreign tool name, use the Grok tools table above instead.
 
 
 
@@ -121,7 +117,7 @@ For GOAL, CONSTRAINTS, BACKGROUND - review the full conversation history. The us
 
 ## Phase 1: Launch 5 Agents
 
-Launch ALL 5 in a single turn. Every agent uses `run_in_background=true`. No sequential launches. No waiting between them.
+Launch ALL 5 in a single turn. Every agent uses `background=true`. No sequential launches. No waiting between them.
 
 **Oracle agents receive everything in the prompt** (they cannot read files or run commands). Include DIFF + FILE_CONTENTS + all context directly in the prompt text.
 
@@ -134,10 +130,8 @@ Launch ALL 5 in a single turn. Every agent uses `run_in_background=true`. No seq
 This agent answers: "Did we build exactly what was asked, within the rules we were given?"
 
 ```
-task(
-  subagent_type="oracle",
-  run_in_background=true,
-  load_skills=[],
+spawn_subagent(subagent_type="oracle",
+  background=true,
   description="Verify implementation against original goal and constraints",
   prompt="""
 <review_type>GOAL & CONSTRAINT VERIFICATION</review_type>
@@ -213,10 +207,8 @@ This agent answers: "Does it actually work when you run it?"
 The QA agent follows a structured process: brainstorm scenarios exhaustively first, then self-review and augment, then create a task list, then execute systematically.
 
 ```
-task(
-  category="unspecified-high",
-  run_in_background=true,
-  load_skills=["playwright MCP tools", "playwright", "dev-browser"],
+spawn_subagent(subagent_type="unspecified-high",
+  background=true,
   description="QA by actually running and using the application",
   prompt="""
 <review_type>QA - HANDS-ON APP EXECUTION</review_type>
@@ -325,10 +317,8 @@ OUTPUT FORMAT:
 This agent answers: "Is the code well-written, maintainable, and consistent with the codebase?"
 
 ```
-task(
-  subagent_type="oracle",
-  run_in_background=true,
-  load_skills=[],
+spawn_subagent(subagent_type="oracle",
+  background=true,
   description="Review overall code quality, patterns, and architecture",
   prompt="""
 <review_type>CODE QUALITY REVIEW</review_type>
@@ -402,10 +392,8 @@ This agent answers: "Are there security vulnerabilities in these changes?"
 This is supplementary - it focuses exclusively on security. It does NOT comment on code style, architecture, or functionality unless those directly create a security risk.
 
 ```
-task(
-  subagent_type="oracle",
-  run_in_background=true,
-  load_skills=[],
+spawn_subagent(subagent_type="oracle",
+  background=true,
   description="Security-focused review of implementation changes",
   prompt="""
 <review_type>SECURITY REVIEW (supplementary)</review_type>
@@ -458,10 +446,8 @@ OUTPUT FORMAT:
 This agent answers: "Did we miss any context that should have informed this implementation?"
 
 ```
-task(
-  category="unspecified-high",
-  run_in_background=true,
-  load_skills=["git-master"],
+spawn_subagent(subagent_type="unspecified-high",
+  background=true,
   description="Mine all accessible contexts for missed requirements or background knowledge",
   prompt="""
 <review_type>CONTEXT MINING - MISSED REQUIREMENTS & BACKGROUND</review_type>

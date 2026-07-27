@@ -1,7 +1,9 @@
-> **Grok: n/a** — `team_*` / OpenCode team transport is not available on Grok Build. Use `spawn_subagent` with `lazygrok:*` roles instead. This file is retained for LazyCodex reference only.
+# Parallel work on Grok
 
-> **ON GROK BUILD: n/a as written.** Grok has no `team_*` / multi-pane team transport.
-> Use parallel `spawn_subagent` with self-contained prompts and orchestrator tracking instead.
+For parallel coding, use multiple same-turn `spawn_subagent` calls (`background: true`), then `get_command_or_subagent_output({ task_ids, timeout_ms })`. Parent orchestrates; depth 1.
 
-[team-mode]
-Team-mode reference detected. Orchestrate via team_* tools (team_create -> team_task_create + team_send_message); NEVER substitute with delegate_task — it is not equivalent. After every team_task_update that completes or fails a task, re-check team_task_list: if every task is terminal, run the closure sequence (team_shutdown_request + team_approve_shutdown per active member, then team_delete) in the same turn. Closing the team is the lead's responsibility, not the user's. If the team_* tools are absent, team_mode is disabled — tell the user to set team_mode.enabled=true and restart opencode.
+Roles: `lazygrok:explore`, `lazygrok:librarian`, `lazygrok:lazygrok-worker-*`, `lazygrok:lazygrok-code-reviewer`.
+
+Child prompt: TASK / DELIVERABLE / SCOPE / VERIFY / STOP WHEN.
+
+Only call tools from this session’s tool list (see rules/15-grok-tools-only).

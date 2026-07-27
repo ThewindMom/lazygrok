@@ -215,7 +215,7 @@ The draft must record the native Momus session/result, the independent Grok CLI 
 Every spawn starts with `TASK:`, then DELIVERABLE / SCOPE / VERIFY inside `message`; state the role inside `message` (agent_type is a routing hint, not a guaranteed TOML selection); use `background: true` unless full history is truly required:
 
 ```
-spawn_subagent({"message":"TASK: act as an explorer. DELIVERABLE: ... SCOPE: ... VERIFY: ...","agent_type":"explorer","background":false})
+spawn_subagent({"prompt":"TASK: act as an explorer. DELIVERABLE: ... SCOPE: ... VERIFY: ...","subagent_type":"explorer","background":false})
 ```
 
 Use the Grok Tool Mapping table. Always pass `subagent_type` and put the full assignment in `prompt`/`message`.

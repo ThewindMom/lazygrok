@@ -1,30 +1,14 @@
-> **Grok: n/a** — `team_*` / OpenCode team transport is not available on Grok Build. Use `spawn_subagent` with `lazygrok:*` roles instead. This file is retained for LazyCodex reference only.
+# Hyperplan (Grok)
 
-> **ON GROK BUILD: n/a as written.** Grok has no `team_*` / multi-pane team transport.
-> Use parallel `spawn_subagent` with self-contained prompts and orchestrator tracking instead.
+Before writing a large plan:
 
-<hyperplan-mode>
-**MANDATORY**: Say "HYPERPLAN MODE ENABLED!" as your first response, exactly once.
+1. Gather codebase facts with `read_file` / `grep` / `run_terminal_command` (and `codegraph_explore` if available).
+2. For broad unknown areas, same-turn parallel:
+   - `spawn_subagent({ subagent_type: "lazygrok:explore", prompt: "TASK: …", background: true })`
+   - optional `lazygrok:librarian` for external docs
+3. Wait with `get_command_or_subagent_output`.
+4. Hand sequencing to a planner when design is still open:
+   `spawn_subagent({ subagent_type: "lazygrok:prometheus", prompt: "TASK: produce plan under .lazygrok/plans/ …", background: true })`
+5. Live checklist: `todo_write`.
 
-The user invoked **hyperplan mode** — adversarial multi-agent planning via team-mode.
-
-LOAD THE HYPERPLAN SKILL IMMEDIATELY:
-
-```
-skill(name="hyperplan")
-```
-
-After loading, follow the skill's full workflow EXACTLY:
-1. Acknowledge and capture the planning request
-2. Spawn the adversarial team via `team_create` with category members `unspecified-low`, `unspecified-high`, `ultrabrain`, and `artistry`; include `deep` only if the category is enabled
-3. Round 1 — Independent analysis (each member produces findings)
-4. Round 2 — Cross-attack (each member ruthlessly attacks the other 4's findings)
-5. Round 3 — Defend, refine, or concede
-6. Distill defensible insights into a structured bundle (Lead does NOT write the plan)
-7. MANDATORY: hand the bundle to the `plan` agent via `task(subagent_type="plan", ...)` — the plan agent owns sequencing, parallelization, and verification gates
-8. Present the plan agent's output verbatim with provenance line, then clean up the team
-
-Do NOT improvise. Do NOT skip rounds. Do NOT write the plan yourself in step 6 — the handoff to the plan agent in step 7 is non-negotiable. Be the lead orchestrator and let the adversarial members do the cross-critique.
-
-If team-mode is unavailable (`team_*` tools missing), instruct the user to set `team_mode.enabled: true` in `~/.config/opencode/oh-my-opencode.jsonc` and restart opencode.
-</hyperplan-mode>
+Only call tools from this session’s tool list (see rules/15-grok-tools-only).

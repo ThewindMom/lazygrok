@@ -19,7 +19,40 @@ Upstream LazyCodex ultrawork on Grok tools:
 | Binding goal | ulw-loop ledger (`create-goals`) always; host `create_goal`/`update_goal` only if in tool list; always `# Goal` mirror |
 | Workers / review / explore | `lazygrok:lazygrok-worker-{low,medium,high}` · `lazygrok-code-reviewer` · `explore` · `librarian` · `prometheus` |
 
-Spawn prompts: `TASK:` + `DELIVERABLE` `SCOPE` `VERIFY` `STOP WHEN`. `background: true` unless full history required. Never invent Codex multi_agent APIs.
+Spawn prompts: `TASK:` + `DELIVERABLE` `SCOPE` `VERIFY` `STOP WHEN`. `background: true` unless full history required. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
+
+# CODING MULTI-AGENT (NON-NEGOTIABLE — LazyCodex feel on Grok)
+
+This is how LazyCodex parallel coding works on Grok. Violating it is a defect.
+
+## Tools
+Only this session's tools. Multi-agent: `spawn_subagent` / `get_command_or_subagent_output` / `kill_command_or_subagent` (`subagent_type` + `prompt` + `background: true`). Depth max 1. Full allowlist: rules/15-grok-tools-only.
+
+## When fan-out is required (coding)
+| Situation | Same-turn action |
+| --- | --- |
+| Unfamiliar module / multi-file / unclear ownership | **MUST** `spawn_subagent(subagent_type="lazygrok:explore" or "explore", background:true, prompt=TASK…)` before product edits |
+| Needs external docs/API/lib versions | **MUST** also spawn `lazygrok:librarian` / `librarian` in the **same turn** as explore |
+| Independent implementation slices | **MUST** one worker per independent slice (`lazygrok:lazygrok-worker-{low,medium,high}` or `hephaestus`) — parent does not implement those slices alone |
+| HEAVY tier or user demanded rigorous review | **MUST** `lazygrok:lazygrok-code-reviewer` after evidence (see Verification gate) |
+| LIGHT one-spot known fix (single file, obvious) | Parent may work alone — record “no fan-out: trivial” in notepad |
+
+## Wave discipline
+1. Spawn **every** independent child for the wave **first**, same turn.
+2. Keep doing non-dependent root work while they run.
+3. `get_command_or_subagent_output({task_ids:[...], timeout_ms})` until each is terminal or **explicitly** inconclusive.
+4. **Barrier:** no product `search_replace`/`write`, no plan draft that depends on discovery, no “done” while discovery/review children for that step are open.
+
+## Child prompt (required shape)
+```
+TASK: <imperative>
+DELIVERABLE: <what parent will integrate>
+SCOPE: <paths / limits>
+VERIFY: <how parent checks>
+STOP WHEN: <terminal condition>
+```
+
+Skipping the discovery wave on multi-file or unfamiliar coding is the same class of defect as LazyCodex skipping explore.
 
 
 # Role

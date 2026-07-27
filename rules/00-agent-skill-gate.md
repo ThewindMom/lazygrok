@@ -38,7 +38,7 @@ Do not hardcode skill names. Use the catalog.
 
 ## Subagents (`spawn_subagent`)
 
-Grok has no `load_skills`. Paste relevant skill **absolute paths** and summaries from the catalog into the subagent `prompt`. For code/gate reviewers, also pass a full diff path (parent writes `git diff … > /tmp/….diff`) — do not make children reverse-engineer git without shell.
+There is no Skill-load tool on Grok; Paste relevant skill **absolute paths** and summaries from the catalog into the subagent `prompt`. For code/gate reviewers, also pass a full diff path (parent writes `git diff … > /tmp/….diff`) — do not make children reverse-engineer git without shell.
 
 ## Fail-open
 

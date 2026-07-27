@@ -3,23 +3,19 @@ name: visual-qa
 description: "MUST USE after building/changing any UI or when asked whether a page, component, or TUI looks right. Rigorous visual QA across web/page and terminal UIs. Prefer playwright MCP tools for unauthenticated browser/page QA in Grok, then Playwright/agent-browser/dev-browser. Captures screenshot/TUI evidence with bundled diff scripts, runs design-system/functional and visual-fidelity/CJK reviewer passes, then synthesizes a good/bad verdict. Triggers: visual QA, screenshot/pixel diff, UI looks wrong, reference fidelity, design system check, responsive check, CJK text clipping, TUI alignment, box-drawing drift."
 ---
 
-## Grok Harness Tool Compatibility
+## Grok tools only
 
-This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools:
-
-| OpenCode example | Grok tool to use |
+| Need | Tool |
 | --- | --- |
-| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent({"message":"TASK: act as an explorer. ...","agent_type":"explorer","background":false})` |
-| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent({"message":"TASK: act as a librarian. ...","agent_type":"librarian","background":false})` |
-| `task(subagent_type="plan", ...)` | `spawn_subagent({"message":"TASK: act as a planning agent. ...","agent_type":"plan","background":false})` |
-| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazygrok-gate-reviewer","background":false})` |
-| `task(category="...", ...)` for implementation or QA | `spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":false})` |
-| `background_output(task_id="...")` | `get_command_or_subagent_output(...)` for mailbox signals |
-| `team_*(...)` | Use Grok native subagents via `spawn_subagent` and `get_command_or_subagent_output`; use `re-prompt via spawn_subagent` and `kill_command_or_subagent` only when exposed in the active tools list |
+| Spawn | `spawn_subagent({ subagent_type, prompt, background: true })` |
+| Wait | `get_command_or_subagent_output({ task_ids, timeout_ms })` |
+| Kill | `kill_command_or_subagent({ task_id })` |
+| Todos | `todo_write` |
+| Shell | `run_terminal_command` |
+| Edit | `search_replace` / `write` |
+| Read | `read_file` |
 
-Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into `~/.grok/agents/`: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `agent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `agent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
-
-Use the Grok Tool Mapping table. Always pass `subagent_type` and put the full assignment in `prompt`.
+Only call tools from this session's tool list. See plugin `rules/15-grok-tools-only.md`.
 
 
 # Visual QA - Dual-Oracle Web and TUI Verification
@@ -41,9 +37,9 @@ Use the Grok Tool Mapping table. Always pass `subagent_type` and put the full as
 | Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list. Do not use Codex multi_agent_v1/v2 tool names.
+Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
 
-When a skill or workflow still shows Codex MultiAgent examples, translate them with this table.
+If an example uses a foreign tool name, use the Grok tools table above instead.
 
 
 
@@ -143,7 +139,7 @@ Static screenshots miss what moves. For every interactive element and every anim
 
 This independent review is REQUIRED before any "done" claim. Do not self-review inside the main agent and call the UI verified - a self-graded pass is the failure mode this step exists to stop. Dispatch it yourself, every time, without waiting to be told. Give each reviewer the captures for every enumerated page from Step 2, not a sample, and tell it the page count so it can confirm none were skipped.
 
-Dispatch through your harness's own subagent tool. In OpenCode: `task(subagent_type="oracle", ...)`. In Grok: `spawn_subagent({"message": "...", "agent_type": "lazygrok-gate-reviewer", "background": false})` (the code blocks below are written in OpenCode `task(...)` form; translate them to that `spawn_subagent` call, putting the full prompt in `message`).
+Dispatch through your harness's own subagent tool. In OpenCode: `spawn_subagent(subagent_type="oracle", ...)`. In Grok: `spawn_subagent({"prompt": "...", "subagent_type": "lazygrok-gate-reviewer", "background": false})` (the code blocks below are written in OpenCode `spawn_subagent(...)` form; translate them to that `spawn_subagent` call, putting the full prompt in `message`).
 
 Send BOTH calls in a single message so they run concurrently. Each oracle is read-only: it reviews and reports, it cannot modify files. Each returns PASS, REVISE, or FAIL with concrete, located findings. Pass A proves the surface is a real design-system implementation, not a mock-only or faked-image substitute. Pass B directly opens screenshots and inspects source/content for visual and CJK defects.
 
@@ -152,9 +148,8 @@ Paste evidence directly into each prompt: source code, the plain-text TUI captur
 ### Pass A - Design-system and functional integrity (deeper, strict)
 
 ```
-task(subagent_type="oracle",
-  run_in_background=true,
-  load_skills=[],
+spawn_subagent(subagent_type="oracle",
+  background=true,
   description="Visual QA pass A: design-system and functional integrity",
   prompt="""
 REVIEW TYPE: DESIGN-SYSTEM AND FUNCTIONAL INTEGRITY (read-only)
@@ -201,9 +196,8 @@ BLOCKING: items that must be fixed; empty if PASS
 ### Pass B - Visual fidelity and CJK precision (focused)
 
 ```
-task(subagent_type="oracle",
-  run_in_background=true,
-  load_skills=[],
+spawn_subagent(subagent_type="oracle",
+  background=true,
   description="Visual QA pass B: visual fidelity and CJK precision",
   prompt="""
 REVIEW TYPE: VISUAL FIDELITY AND CJK PRECISION (read-only)
@@ -306,9 +300,8 @@ node "$SKILL_DIR/scripts/visual-qa.mjs" image-diff <reference.png> <actual.png>
    **OpenCode:**
 
    `````
-   task(subagent_type="oracle",
-     run_in_background=true,
-     load_skills=[],
+   spawn_subagent(subagent_type="oracle",
+     background=true,
      description="Clone/design-system fidelity review",
      prompt="""
    TASK: Act as a clone / design-system fidelity reviewer. Read-only.
@@ -333,7 +326,7 @@ node "$SKILL_DIR/scripts/visual-qa.mjs" image-diff <reference.png> <actual.png>
    )
    `````
 
-   **Grok:** `spawn_subagent({"message":"TASK: Act as a clone / design-system fidelity reviewer. ...","agent_type":"lazygrok-clone-fidelity-reviewer","background":false})`
+   **Grok:** `spawn_subagent({"prompt":"TASK: Act as a clone / design-system fidelity reviewer. ...","subagent_type": "lazygrok-clone-fidelity-reviewer","background":false})`
 
 RULE (mandatory, non-negotiable): the reference-fidelity task is NOT done until BOTH the pixel-compare AND the code-level design-system fidelity reviewer confirm that the **layer structure, the design system, and the design itself** match the target. If EITHER fails, it is a MANDATORY retry: re-implement the gaps and re-run BOTH verifications from the top. Repeat the retry loop until both pass on the same revision. Never declare reference-fidelity complete on a single pass, on visual-only evidence, or on code-only evidence - both oracles must confirm on the same build.
 

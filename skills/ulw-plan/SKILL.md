@@ -42,9 +42,9 @@ When OmO/Codex docs say "call get_goal / create_goal / update_goal", translate t
 | Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list. Do not use Codex multi_agent_v1/v2 tool names.
+Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
 
-When a skill or workflow still shows Codex MultiAgent examples, translate them with this table.
+If an example uses a foreign tool name, use the Grok tools table above instead.
 
 
 
@@ -123,7 +123,7 @@ When exploration is exhausted and the unknowns are answered, record the gate in 
 Fan out read-only research before deciding. Every spawn names DELIVERABLE / SCOPE / VERIFY inside `message`, states the role inside `message` (and passes `agent_type` as a routing hint - do not assume it alone selected a TOML role), and uses `background: true` unless full parent history is truly required:
 
 ```
-spawn_subagent({"message":"TASK: act as an explorer. DELIVERABLE: ... SCOPE: ... VERIFY: ...","agent_type":"explorer","background":false})
+spawn_subagent({"prompt":"TASK: act as an explorer. DELIVERABLE: ... SCOPE: ... VERIFY: ...","subagent_type": "explorer","background":false})
 ```
 
 Use the Grok Tool Mapping table. Always pass `subagent_type` and put the full assignment in `prompt`/`message`.

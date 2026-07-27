@@ -6,6 +6,20 @@ Releases are normally automated via [release-please](https://github.com/googleap
 
 ## [0.4.3] (2026-07-27)
 
+### Coding multi-agent (LazyCodex feel on Grok)
+* Always-on `rules/14-coding-multi-agent.md` + intent-gate `task()` → real `spawn_subagent` waves
+* Ultrawork hard **CODING MULTI-AGENT** block (skill + directive) + UPS skill-pointer step 5
+* `start-work-execution` spawn table fixed to Grok `subagent_type`/`prompt` (no fake `agent_type`/`message`)
+* Teammode reduced to n/a stub → parallel one-shot subagents only
+* Rebuild ultrawork dist so inject carries the multi-agent bootstrap
+
+### Grok tools only (no foreign harness names)
+* Always-on `rules/15-grok-tools-only.md` — allowlist of Grok session tools
+* Atlas / hyperplan / team prompts rewritten to `spawn_subagent` only (removed OpenCode `task()` bodies)
+* Ultrawork prompt variants synced to Grok directive (no Codex multi_agent text)
+* Vendor skill dual-surface `fork_turns`/`task_name` blocks replaced with Grok-only spawn paragraph
+* Prefer allowlist language over long “don’t call X” lists that prime wrong tools
+
 ### Ultrawork from code-yeongyu/lazycodex@4.19.2
 * Source of truth: https://github.com/code-yeongyu/lazycodex `plugins/omo` tag **v4.19.2**
 * Full LCX ultrawork SKILL body + mechanical Grok renames (`todo_write`, `spawn_subagent`, playwright, `lazygrok:*`)

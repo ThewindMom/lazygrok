@@ -70,7 +70,7 @@ When OmO/Codex docs say "call get_goal / create_goal / update_goal", translate t
 | Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list. Do not use Codex multi_agent_v1/v2 tool names.
+Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
 
 ### Skill paths + reviewer spawn payload (Grok)
 
@@ -90,6 +90,6 @@ There is **no Skill tool**. LazyGrok skills live under `GROK_PLUGIN_ROOT`
 - Reviewer agents include `run_terminal_command` for read-only git fallback;
   never tell them to use MCP `bash`/`Shell`.
 
-When a skill or workflow still shows Codex MultiAgent examples, translate them with this table.
+If an example uses a foreign tool name, use the Grok tools table above instead.
 
 

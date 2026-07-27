@@ -22,9 +22,9 @@ description: "Escalation skill for blocked or hard-to-reach web access — load 
 | Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list. Do not use Codex multi_agent_v1/v2 tool names.
+Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
 
-When a skill or workflow still shows Codex MultiAgent examples, translate them with this table.
+If an example uses a foreign tool name, use the Grok tools table above instead.
 
 
 

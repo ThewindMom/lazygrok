@@ -48,6 +48,14 @@ continue with steps 1 and 2 plus evidence-bound execution.
 
 4. Live checklist: \`todo_write\` (exactly one \`in_progress\`).
 
+5. CODING MULTI-AGENT — after reading the skill, use only Grok tools:
+- Spawn: \`spawn_subagent({ subagent_type, prompt, background: true })\`. Wait: \`get_command_or_subagent_output\`. Kill: \`kill_command_or_subagent\`.
+- Unfamiliar / multi-file: same-turn background wave — \`lazygrok:explore\` (+ \`lazygrok:librarian\` if external docs/API) BEFORE product edits.
+- Independent slices: one worker each (\`lazygrok:lazygrok-worker-*\` / hephaestus). HEAVY: reviewer child after evidence.
+- Child prompt: TASK / DELIVERABLE / SCOPE / VERIFY / STOP WHEN. Depth 1. Barrier before dependent implement.
+- Trivial single-file known fix may stay serial; record "no fan-out: trivial" in the notepad.
+- Tool allowlist: plugin rules/15-grok-tools-only.md. Only call tools in this session's tool list.
+
 Do not start the requested work until bootstrap is complete.
 LIGHT complete: ulw-loop light-quality-gate then checkpoint. HEAVY: reviewer gate in the skill.
 </ultrawork-mode>

@@ -53,6 +53,9 @@ Dynamic plugin root — `grok plugin update` does **not** require re-run. UPS pr
 | `create_goal` / `update_goal` | Optional host tools; default **ulw-loop CLI** + `# Goal` |
 | `update_plan` | `todo_write` |
 | `multi_agent_v1.spawn_agent` / `wait_agent` | `spawn_subagent` / `get_command_or_subagent_output` |
+| Parallel coding (explore/worker/review) | **Same-turn** `spawn_subagent` waves (depth 1); see `rules/14-coding-multi-agent.md` |
+| **Grok tools only** | Always-on `rules/15-grok-tools-only.md` — only call tools in the live session list |
+| Teammode durable teams | **n/a** on Grok — parallel one-shot subagents only |
 | `apply_patch` | `search_replace` / `write` |
 | In-app browser | `playwright` MCP (else agent-browser) |
 | `lazycodex-*` agents | `lazygrok:*` / `lazygrok-*.md` |

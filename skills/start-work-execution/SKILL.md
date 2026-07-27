@@ -3,23 +3,19 @@ name: start-work
 description: "Execute a Prometheus work plan in Grok with Boulder state, evidence ledger updates, worktree discipline, parallel subagents, and Stop-hook continuation. Use after planning when the user says start work, execute plan, continue plan, resume plan, or asks to run a .lazygrok/plans plan."
 ---
 
-## Grok Harness Tool Compatibility
+## Grok tools only
 
-This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools:
-
-| OpenCode example | Grok tool to use |
+| Need | Tool |
 | --- | --- |
-| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent({"message":"TASK: act as an explorer. ...","agent_type":"explorer","background":false})` |
-| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent({"message":"TASK: act as a librarian. ...","agent_type":"librarian","background":false})` |
-| `task(subagent_type="plan", ...)` | `spawn_subagent({"message":"TASK: act as a planning agent. ...","agent_type":"plan","background":false})` |
-| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazygrok-gate-reviewer","background":false})` |
-| `task(category="...", ...)` for implementation or QA | `spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":false})` |
-| `background_output(task_id="...")` | `get_command_or_subagent_output(...)` for mailbox signals |
-| `team_*(...)` | Use Grok native subagents via `spawn_subagent` and `get_command_or_subagent_output`; use `re-prompt via spawn_subagent` and `kill_command_or_subagent` only when exposed in the active tools list |
+| Spawn | `spawn_subagent({ subagent_type, prompt, background: true })` |
+| Wait | `get_command_or_subagent_output({ task_ids, timeout_ms })` |
+| Kill | `kill_command_or_subagent({ task_id })` |
+| Todos | `todo_write` |
+| Shell | `run_terminal_command` |
+| Edit | `search_replace` / `write` |
+| Read | `read_file` |
 
-Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into `~/.grok/agents/`: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `agent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `agent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
-
-Use the Grok Tool Mapping table. Always pass `subagent_type` and put the full assignment in `prompt`.
+Only call tools from this session's tool list. See plugin `rules/15-grok-tools-only.md`.
 
 
 ## ABSOLUTE RULE: YOU ARE AN ORCHESTRATOR — NEVER THE IMPLEMENTER
@@ -27,11 +23,11 @@ Use the Grok Tool Mapping table. Always pass `subagent_type` and put the full as
 **YOU DO NOT WRITE CODE. YOU DO NOT EDIT PRODUCT FILES. YOU DO NOT RUN QA YOURSELF. EVERY unit of implementation, test, QA, and review work MUST be delegated to a spawned subagent. NO EXCEPTIONS.** Your hands touch only plan selection, `.lazygrok/` (or `.omo/` if that run already started there) state (Boulder, ledger, plan checkboxes), decomposition, dispatch, verdicts, and evidence records. About to edit a product file or run an implementation command yourself? **STOP. SPAWN A WORKER INSTEAD.** Orchestrate at **MAXIMUM PARALLELISM**: every independent unit runs concurrently; only named dependencies serialize.
 
 ### Delegation by difficulty (Grok tier workers)
-When tier worker agents are installed (Grok), size each implementation lane by difficulty and pass the matching `agent_type` where the spawn schema exposes it: LOW (one-file fix, boilerplate, config/copy) -> `lazygrok-worker-low`; MEDIUM (standard feature, few files, known patterns) -> `lazygrok-worker-medium`; HIGH (new module, cross-module refactor, concurrency/security/migration) -> `lazygrok-worker-high`. Explorer/librarian research lanes keep their own roles. Difficulty (model power) is orthogonal to the LIGHT/HEAVY rigor tier in step 4 — judge each on its own facts. On spawn surfaces without `agent_type` (deployed v2), state the tier inside `message`.
+Size each implementation lane by difficulty and pass it as `subagent_type`: LOW → `lazygrok:lazygrok-worker-low`; MEDIUM → `lazygrok:lazygrok-worker-medium`; HIGH → `lazygrok:lazygrok-worker-high`. Explorer/librarian research lanes keep their own roles. Difficulty is orthogonal to LIGHT/HEAVY rigor in step 4.
 
 ## Grok Subagent Reliability
 
-Every `spawn_subagent` message is a self-contained executable assignment: `TASK: <imperative assignment>`, then `DELIVERABLE`, `SCOPE`, and `VERIFY`, with role instructions inside `message`. Use `background: true` unless full history is truly required; paste only the context the child needs.
+Every `spawn_subagent` **prompt** is a self-contained executable assignment: `TASK: <imperative assignment>`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, and `STOP WHEN`. Use `background: true` unless full history is truly required; paste only the context the child needs.
 
 Plan and reviewer agents may run for a long time: spawn them in the background and keep doing independent root work. Between `get_command_or_subagent_output` calls, back off — double the timeout up to ~5 minutes — instead of spinning short cycles. A timeout only means no new mailbox update arrived; treat a running child as alive. Require `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. Keep the parent visibly alive with active subagent count, names, and latest `WORKING:` phase. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running — then record inconclusive (never a pass), close if safe, and respawn a smaller `background: true` task with the missing deliverable.
 
@@ -72,9 +68,9 @@ When OmO/Codex docs say "call get_goal / create_goal / update_goal", translate t
 | Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list. Do not use Codex multi_agent_v1/v2 tool names.
+Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
 
-When a skill or workflow still shows Codex MultiAgent examples, translate them with this table.
+If an example uses a foreign tool name, use the Grok tools table above instead.
 
 
 

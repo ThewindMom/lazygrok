@@ -3,23 +3,19 @@ name: refactor
 description: "Intelligent refactor command. Triggers: refactor, refactoring, cleanup, restructure, extract, simplify, modernize."
 ---
 
-## Grok Harness Tool Compatibility
+## Grok tools only
 
-This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools:
-
-| OpenCode example | Grok tool to use |
+| Need | Tool |
 | --- | --- |
-| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent({"message":"TASK: act as an explorer. ...","agent_type":"explorer","background":false})` |
-| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent({"message":"TASK: act as a librarian. ...","agent_type":"librarian","background":false})` |
-| `task(subagent_type="plan", ...)` | `spawn_subagent({"message":"TASK: act as a planning agent. ...","agent_type":"plan","background":false})` |
-| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazygrok-gate-reviewer","background":false})` |
-| `task(category="...", ...)` for implementation or QA | `spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":false})` |
-| `background_output(task_id="...")` | `get_command_or_subagent_output(...)` for mailbox signals |
-| `team_*(...)` | Use Grok native subagents via `spawn_subagent` and `get_command_or_subagent_output`; use `re-prompt via spawn_subagent` and `kill_command_or_subagent` only when exposed in the active tools list |
+| Spawn | `spawn_subagent({ subagent_type, prompt, background: true })` |
+| Wait | `get_command_or_subagent_output({ task_ids, timeout_ms })` |
+| Kill | `kill_command_or_subagent({ task_id })` |
+| Todos | `todo_write` |
+| Shell | `run_terminal_command` |
+| Edit | `search_replace` / `write` |
+| Read | `read_file` |
 
-Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into `~/.grok/agents/`: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `agent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `agent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
-
-Use the Grok Tool Mapping table. Always pass `subagent_type` and put the full assignment in `prompt`.
+Only call tools from this session's tool list. See plugin `rules/15-grok-tools-only.md`.
 
 
 ## Usage
@@ -76,9 +72,9 @@ Performs intelligent, deterministic refactoring with full codebase awareness. Un
 | Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list. Do not use Codex multi_agent_v1/v2 tool names.
+Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
 
-When a skill or workflow still shows Codex MultiAgent examples, translate them with this table.
+If an example uses a foreign tool name, use the Grok tools table above instead.
 
 
 
@@ -140,45 +136,45 @@ todo_write([
 
 ## 1.1: Launch Parallel Explore Agents (BACKGROUND)
 
-Fire ALL of these simultaneously using \`call_omo_agent\`:
+Fire ALL of these simultaneously using \`spawn_subagent\`:
 
 \`\`\`
 // Agent 1: Find the refactoring target
-call_omo_agent(
+spawn_subagent(
   subagent_type="explore",
-  run_in_background=true,
+  background=true,
   prompt="Find all occurrences and definitions of [TARGET].
   Report: file paths, line numbers, usage patterns."
 )
 
 // Agent 2: Find related code
-call_omo_agent(
+spawn_subagent(
   subagent_type="explore",
-  run_in_background=true,
+  background=true,
   prompt="Find all code that imports, uses, or depends on [TARGET].
   Report: dependency chains, import graphs."
 )
 
 // Agent 3: Find similar patterns
-call_omo_agent(
+spawn_subagent(
   subagent_type="explore",
-  run_in_background=true,
+  background=true,
   prompt="Find similar code patterns to [TARGET] in the codebase.
   Report: analogous implementations, established conventions."
 )
 
 // Agent 4: Find tests
-call_omo_agent(
+spawn_subagent(
   subagent_type="explore",
-  run_in_background=true,
+  background=true,
   prompt="Find all test files related to [TARGET].
   Report: test file paths, test case names, coverage indicators."
 )
 
 // Agent 5: Architecture context
-call_omo_agent(
+spawn_subagent(
   subagent_type="explore",
-  run_in_background=true,
+  background=true,
   prompt="Find architectural patterns and module organization around [TARGET].
   Report: module boundaries, layer structure, design patterns in use."
 )
@@ -224,8 +220,8 @@ grep(pattern="[search_term]", path="src/", include="*.ts")
 ## 1.3: Collect Background Results
 
 \`\`\`
-background_output(task_id="[agent_1_id]")
-background_output(task_id="[agent_2_id]")
+get_command_or_subagent_output(task_id="[agent_1_id]")
+get_command_or_subagent_output(task_id="[agent_2_id]")
 ...
 \`\`\`
 
@@ -308,9 +304,9 @@ ls -la *_test.go
 
 \`\`\`
 // Find all tests related to target
-call_omo_agent(
+spawn_subagent(
   subagent_type="explore",
-  run_in_background=false,  // Need this synchronously
+  background=false,  // Need this synchronously
   prompt="Analyze test coverage for [TARGET]:
   1. Which test files cover this code?
   2. What test cases exist?
@@ -707,13 +703,13 @@ Record the chosen path in the todo_write list.
     {
       "kind": "category",
       "category": "quick",
-      "prompt": "You handle mechanical refactoring steps (LSP rename, extract variable, inline, simple move, signature change). Use LSP tools for correctness. Apply the task description's per-step instructions verbatim — no scope expansion. After edits, run lsp_diagnostics on touched files. Report via team_send_message(teamRunId=<id>, to=\"lead\", summary=<files touched>, body=<lsp status + diff summary>) + team_task_update(status=completed). Never run tests — the external verifier handles that. Never git add, never --continue."
+      "prompt": "You handle mechanical refactoring steps (LSP rename, extract variable, inline, simple move, signature change). Use LSP tools for correctness. Apply the task description's per-step instructions verbatim — no scope expansion. After edits, run lsp_diagnostics on touched files. Report via (parent integrates; no team tools) + (use todo_write). Never run tests — the external verifier handles that. Never git add, never --continue."
     },
     { "kind": "category", "category": "quick", "prompt": "Same contract as peer quick worker." },
     {
       "kind": "category",
       "category": "unspecified-low",
-      "prompt": "You handle logic-preserving refactors that need reasoning (extract function, restructure conditional, pattern transformation, cross-file API change). Read the task description's plan step carefully. Use the ast-grep skill helper or sg CLI to preview structural rewrites first, review the preview, then execute. If the step is ambiguous or would require out-of-scope changes, STOP and send team_send_message(teamRunId=<id>, to=\"lead\", summary=\"UNCLEAR\", body=<reason>) + team_task_update(status=pending). Same reporting contract as peer quick workers. Never run tests."
+      "prompt": "You handle logic-preserving refactors that need reasoning (extract function, restructure conditional, pattern transformation, cross-file API change). Read the task description's plan step carefully. Use the ast-grep skill helper or sg CLI to preview structural rewrites first, review the preview, then execute. If the step is ambiguous or would require out-of-scope changes, STOP and send (parent integrates; no team tools) + (use todo_write). Same reporting contract as peer quick workers. Never run tests."
     },
     { "kind": "category", "category": "unspecified-low", "prompt": "Same contract as peer unspecified-low worker." }
   ]
@@ -722,7 +718,7 @@ Record the chosen path in the todo_write list.
 
 Rationale for this composition:
 - **4 workers = team mode's parallel cap.** 5+ just queues.
-- **No verifier team member.** Verification needs \`deep\` reasoning (or \`unspecified-high\` fallback). In-team category routing downcasts to sisyphus-junior, which is weaker than required — the verifier runs OUTSIDE the team as a \`task(category="deep")\`.
+- **No verifier team member.** Verification needs \`deep\` reasoning (or \`unspecified-high\` fallback). In-team category routing downcasts to sisyphus-junior, which is weaker than required — the verifier runs OUTSIDE the team as a \`spawn_subagent(subagent_type="deep")\`.
 - **quick × 2** for mechanical edits, **unspecified-low × 2** for reasoning edits — mirrors the plan's split.
 
 **Team lifecycle** (one team, reused until Phase 6 cleanup):
@@ -730,19 +726,11 @@ Rationale for this composition:
 1. \`team_create(teamName="refactor-squad")\`. Record \`teamRunId\`.
 2. Broadcast the refactor Intent Card ONCE (keep task descriptions slim):
    \`\`\`
-   team_send_message(
-     teamRunId=<id>, to="*", kind="announcement",
-     summary="refactor-intent",
-     body=<codemap summary + constraints + established patterns from Phase 2>
-   )
+   (parent integrates; no team tools)
    \`\`\`
 3. Broadcast the verification spec ONCE:
    \`\`\`
-   team_send_message(
-     teamRunId=<id>, to="*", kind="announcement",
-     summary="verify-spec",
-     body=<exact test/typecheck/lint commands + expected pass counts + regression indicators from Phase 3.4>
-   )
+   (parent integrates; no team tools)
    \`\`\`
 4. For each plan step, \`team_task_create(teamRunId=<id>, subject="refactor step <N>: <short>", description=<per-step instructions from plan, including target files and line ranges, rollback strategy>, blockedBy=<from plan's per_step_assignment>)\`.
 
@@ -753,10 +741,8 @@ While any team task is \`pending | claimed | in_progress\`:
 - Wait for \`<system-reminder>\` or member messages. Avoid tight polling; a single \`team_status\` check is acceptable if no notification arrives within roughly 10 seconds of expected completion.
 - On a worker completion report, immediately dispatch an **external verifier** — verification runs OUTSIDE the team because team-member category routing downcasts to sisyphus-junior:
   \`\`\`
-  task(
-    category="deep",
-    load_skills=[],
-    run_in_background=true,
+  spawn_subagent(subagent_type="deep",
+    background=true,
     description="verify step <N>",
     prompt=<files touched + verify-spec commands + instruction to return "PASS" or "FAIL:<failing test + specific error + suggested revert hunks>">
   )
@@ -764,9 +750,9 @@ While any team task is \`pending | claimed | in_progress\`:
   If \`deep\` is unavailable, fall back to \`category="unspecified-high"\`. Do not create a commit checkpoint until the verifier returns PASS.
 - On a verifier PASS: make the commit checkpoint for that step (see original 5.3). Proceed.
 - On a verifier FAIL: Lead decides:
-  - **Retry with fix hint**: \`team_task_update(status=pending)\` on the original step + \`team_send_message(teamRunId=<id>, to=<original member>, summary="retry", body=<specific failure from verifier>)\`. Runtime reassigns.
+  - **Retry with fix hint**: \`(use todo_write)\` on the original step + \`(parent integrates; no team tools)\`. Runtime reassigns.
   - **Escalate**: after three FAIL cycles on the same step, STOP and consult the user with full evidence.
-- On a member UNCLEAR message: re-harvest context via a targeted \`task()\` outside the team, broadcast an updated Intent Card fragment, then reassign.
+- On a member UNCLEAR message: re-harvest context via a targeted \`spawn_subagent()\` outside the team, broadcast an updated Intent Card fragment, then reassign.
 
 Proceed to Phase 6 only when every team task is \`completed\` AND every paired verifier task returned PASS.
 
@@ -788,5 +774,5 @@ Append to the 6.6 summary a "Dispatch path" line and, when team path was used, t
 - Do not inline the Intent Card or verify-spec into task descriptions — rely on the broadcasts.
 - Do not recreate the team mid-session.
 - Do not run tests from Lead — the external verifier owns that lane.
-- Do not put \`oracle\` / \`librarian\` / \`deep\` into the team spec — oracle/librarian are team-ineligible, and \`deep\` under category routing downcasts to sisyphus-junior. Use them via \`task()\` outside the team when needed.
+- Do not put \`oracle\` / \`librarian\` / \`deep\` into the team spec — oracle/librarian are team-ineligible, and \`deep\` under category routing downcasts to sisyphus-junior. Use them via \`spawn_subagent()\` outside the team when needed.
 `

@@ -76,7 +76,7 @@ When the `team_*` tools are present, create a **debug-squad** team and split inv
 }
 ```
 
-**Assignment rule**: one hypothesis → one `team_task_create`. Give each hypothesis to the member whose evidence source is most likely to confirm or refute it. Broadcast the full hypothesis list once via `team_send_message(to="*")` so members know what the others are testing.
+**Assignment rule**: one hypothesis → one `team_task_create`. Give each hypothesis to the member whose evidence source is most likely to confirm or refute it. Broadcast the full hypothesis list once via `(parent integrates; no team tools)` so members know what the others are testing.
 
 **Lead responsibilities**:
 - Maintain the journal (members do not write to it).
@@ -91,12 +91,12 @@ When the `team_*` tools are present, create a **debug-squad** team and split inv
 Fan out async explore/deep subagents instead. Same rule: one hypothesis per subagent.
 
 ```
-task(subagent_type="explore", load_skills=[], run_in_background=true,
+spawn_subagent(subagent_type="explore", background=true,
      prompt="[CONTEXT: bug summary + which hypothesis you own + what state to look at]
      Runtime state investigation for hypothesis 1: ...")
-task(subagent_type="explore", load_skills=[], run_in_background=true,
+spawn_subagent(subagent_type="explore", background=true,
      prompt="Log/timing investigation for hypothesis 2: ...")
-task(category="deep", load_skills=[], run_in_background=true,
+spawn_subagent(subagent_type="deep", background=true,
      prompt="Reproduction minimizer for hypothesis 3: ...")
 ```
 

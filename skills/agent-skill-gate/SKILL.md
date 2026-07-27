@@ -39,7 +39,7 @@ Every Grok Composer session where you might call `grep`, `read_file` (for implem
 - A UI label `Skill <name>` without a successful absolute `read_file` does
   **not** satisfy the gate.
 - When spawning subagents that need a skill perspective, paste absolute
-  skill paths into the child `prompt` (Grok has no `load_skills`).
+  skill paths into the child `prompt` (paste absolute skill paths into the child prompt; no separate skill-load tool).
 
 ## Hook enforcement
 
