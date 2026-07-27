@@ -4,7 +4,20 @@ All notable changes to this project are documented in this file.
 
 Releases are normally automated via [release-please](https://github.com/googleapis/release-please) when GitHub Actions billing is active. While Actions is disabled, use [`scripts/manual-release.sh`](scripts/manual-release.sh).
 
+## [0.4.4] (2026-07-27)
+
+### Docs / first principles
+* README ownership table: **discover + review** use silent Grok `workflow` panels; **implement** stays parent + workers (no `ulw-implement`)
+* Clarify `docs/ulw-workflow.md`, `skills/ulw-workflow`, `docs/examples/README.md` three-phase model
+* CHANGELOG notes for silent panels already shipped in 0.4.3
+
 ## [0.4.3] (2026-07-27)
+
+### Silent Grok `workflow` panels under one keyword (`ulw`)
+* Auto **`ulw-discover`** / **`ulw-review`** via native `workflow` tool (agent-internal; user never names panels)
+* Shipped Rhai: `docs/examples/ulw-discover.rhai`, `docs/examples/ulw-review.rhai` → `~/.grok/workflows/`
+* Internal skill `ulw-workflow` (`user_invocable: false`) + `docs/ulw-workflow.md`
+* **Implement is not a workflow:** parent + `spawn_subagent` workers own RED→GREEN / commits / done claim
 
 ### Coding multi-agent (LazyCodex feel on Grok)
 * Always-on `rules/14-coding-multi-agent.md` + intent-gate `task()` → real `spawn_subagent` waves

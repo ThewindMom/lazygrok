@@ -25,10 +25,12 @@ Same loop file as Ralph, but Stop requires a verifier subagent to emit `<promise
 when multi-file discovery or HEAVY review is required. Codex has no equivalent engine;
 LazyGrok uses Grok’s `workflow` tool under the hood.
 
-Scripts (install once for silent `name:` resolution):
+Scripts (install once for silent `name:` resolution) — **discover + review only**:
 
 - `docs/examples/ulw-discover.rhai` → `~/.grok/workflows/ulw-discover.rhai`
 - `docs/examples/ulw-review.rhai` → `~/.grok/workflows/ulw-review.rhai`
+
+**No implement panel.** RED→GREEN stays on the parent (+ worker `spawn_subagent`).
 
 Agent protocol: [docs/ulw-workflow.md](../ulw-workflow.md).
 

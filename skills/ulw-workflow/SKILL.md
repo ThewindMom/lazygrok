@@ -21,13 +21,13 @@ Do not tell the user to run `/workflow`, name panels, or “enable hybrid mode.�
 | Omits `ulw` | Normal chat — no ULW panels |
 | Says `ulw` / `ultrawork` | Full ultrawork; auto discovery/review via Grok `workflow` when available |
 
-## Ownership
+## Ownership (three phases)
 
-| Owner | Responsibilities |
-|-------|------------------|
-| **Parent ULW** | `# Goal` + ledger, notepad, RED→GREEN, SURFACE QA, workers, commits, done claim |
-| **Internal discover panel** | Parallel explore (+ librarian if needed) → findings for notepad |
-| **Internal review panel** | Dimension review + adversarial verify → blockers vs notes |
+| Phase | Owner | Responsibilities |
+|-------|-------|------------------|
+| **Discover** | Internal **`ulw-discover`** panel (or explore spawn fallback) | Parallel explore (+ librarian if needed) → findings for notepad |
+| **Implement** | **Parent ULW** + worker `spawn_subagent` | `# Goal` + ledger, notepad, RED→GREEN, SURFACE QA, cleanup, commits, done claim — **no implement workflow** |
+| **Review** | Internal **`ulw-review`** panel after evidence (or code-reviewer spawn) | Dimension review + adversarial verify → blockers vs notes |
 
 ## Silent tool calls
 

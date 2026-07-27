@@ -13,13 +13,17 @@ single keyword.
 | No `ulw` | Normal chat — no ULW panels |
 | `ulw` / `ultrawork` | Full ultrawork; auto `ulw-discover` / `ulw-review` when needed |
 
-## Ownership
+## Ownership (three phases)
 
-| Owner | Responsibilities |
-|-------|------------------|
-| **Parent ULW** | Goals, notepad, RED→GREEN, SURFACE QA, workers, commits, done claim |
-| **`ulw-discover`** | Parallel explore (+ librarian) → findings packet |
-| **`ulw-review`** | Dimension review + adversarial verify → blockers vs notes |
+| Phase | Owner / tool | Responsibilities |
+|-------|----------------|------------------|
+| **Discover** | `workflow` → **`ulw-discover`** (fallback: explore/librarian spawn) | Parallel explore (+ librarian) → findings packet only |
+| **Implement** | **Parent ULW** + worker `spawn_subagent` | Goals, notepad, RED→GREEN, SURFACE QA, commits, done claim |
+| **Review** | `workflow` → **`ulw-review`** after evidence (fallback: code-reviewer spawn) | Dimension review + adversarial verify → blockers vs notes |
+
+**There is no `ulw-implement` workflow.** Implementation stays parent-owned so a panel
+finish cannot be treated as product shipped. Discover/review panels return packets;
+the parent integrates, codes, fixes, and claims done.
 
 ## Scripts
 
@@ -34,7 +38,7 @@ Silent resolution: `name` first, then `script_path` under `GROK_PLUGIN_ROOT/docs
 
 LazyCodex has no Rhai workflow engine. Grok does. LazyGrok uses that strength so multi-file
 ULW cannot skip explore, and HEAVY work gets a structured review panel — without teaching
-users a second product surface.
+users a second product surface, and without moving RED→GREEN ownership into a panel.
 
 Agent skill: `skills/ulw-workflow/SKILL.md` (`user_invocable: false`).
 Binding UX: `skills/ultrawork/SKILL.md`.

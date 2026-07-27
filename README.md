@@ -1,14 +1,14 @@
 # LazyGrok
 
-<!-- Plugin version is 0.4.3 -->
+<!-- Plugin version is 0.4.4 -->
 
-**LazyCodex / OmO for [Grok Build](https://x.ai)** — version **0.4.3**.
+**LazyCodex / OmO for [Grok Build](https://x.ai)** — version **0.4.4**.
 
 LazyGrok is **our** port of [code-yeongyu/lazycodex](https://github.com/code-yeongyu/lazycodex) **`plugins/omo` @ v4.19.2** onto Grok — not a mindless copy, and not “Codex with renames.” We keep LazyCodex’s ultrawork process (evidence, parallel specialists, Stop loops, skill gate) and **add what Grok has that Codex does not**: native **`workflow`** multi-agent panels, then hide that harness so you only ever say **`ulw`**.
 
 | | |
 | --- | --- |
-| **Plugin version** | `0.4.3` |
+| **Plugin version** | `0.4.4` |
 | **Upstream** | [code-yeongyu/lazycodex](https://github.com/code-yeongyu/lazycodex) tag **v4.19.2** (`plugins/omo`) |
 | **Install source** | `https://github.com/ThewindMom/lazygrok` |
 | **Skill roots** | `skills/` · `vendor/lazygrok-skills/` · `vendor/lazygrok-hooks/` |
@@ -33,10 +33,22 @@ What happens (agent-side; you should not think about this):
 1. `ULTRAWORK MODE ENABLED!`
 2. Binding goal (ulw-loop ledger + `# Goal`)
 3. Ultrawork skill (LazyCodex 4.19.2 body + Grok adapters)
-4. Automatic discovery fan-out when the tree is multi-file / unfamiliar
-5. RED → GREEN → real-surface evidence → cleanup
-6. Automatic review when the tier is HEAVY (or you demanded rigorous review)
+4. Automatic **discovery** fan-out when the tree is multi-file / unfamiliar
+5. **Implement** RED → GREEN → real-surface evidence → cleanup (parent + workers)
+6. Automatic **review** when the tier is HEAVY (or you demanded rigorous review)
 7. Commits + stop when criteria actually pass
+
+### Who owns which phase? (first principles)
+
+ULW is three phases. Grok’s `workflow` tool is used only where a **deterministic multi-agent panel** is the right tool — not for the product change itself.
+
+| Phase | Mechanism | Why |
+| --- | --- | --- |
+| **Discover** | Silent `workflow` → **`ulw-discover`** (else explore/librarian `spawn_subagent`) | Parallel read-only fan-out with budget/phase rail; findings only — never edits |
+| **Implement** | **Parent ULW** + optional `lazygrok-worker-*` / Hephaestus via **`spawn_subagent`** | RED→GREEN, notepad, evidence, commits, and the done claim must stay one owner. **No `ulw-implement` panel** (by design) |
+| **Review** | Silent `workflow` → **`ulw-review`** after evidence (HEAVY / rigorous) (else code-reviewer spawn) | Structured multi-dimension + adversarial verify against a prepared diff; parent still fixes blockers |
+
+There are exactly two shipped ULW panel scripts: `ulw-discover` and `ulw-review`. Implementation is never handed to a workflow so a panel finish cannot be mistaken for “shipped.”
 
 ---
 
@@ -48,15 +60,15 @@ What happens (agent-side; you should not think about this):
 
 | Grok strength | What we do with it |
 | --- | --- |
-| **`workflow` tool** (Rhai panels, `parallel()`, agent budget, phase rail, journal) | Force **discovery** and **review** fan-out under ULW so multi-file work cannot “soft skip” explore |
-| **`spawn_subagent` + wait/kill** | Implementation workers, plan, librarian — same LazyCodex wave discipline |
+| **`workflow` tool** (Rhai panels, `parallel()`, agent budget, phase rail, journal) | Force **discovery** and **HEAVY review** fan-out under ULW — not implementation |
+| **`spawn_subagent` + wait/kill** | **Implementation** workers, plan, librarian, and fallback explore/review — same LazyCodex wave discipline |
 | **Background runs + `/workflows` dashboard** | Agent uses them; **you** still only type `ulw` |
 | Host goals often **off** when workflows are on | Durable **ulw-loop ledger** + `# Goal` (not a bug) |
 | Plugin hooks + skill gate | Always-on LazyCodex-style discipline on Grok tools only |
 
 So the product thesis is:
 
-> **Port LazyCodex process fidelity. Use Grok’s workflow engine where Codex is weak. Keep the user model as simple as one keyword.**
+> **Port LazyCodex process fidelity. Use Grok’s workflow engine for forced explore + structured review (where Codex is weak). Keep implementation parent-owned. Keep the user model as simple as one keyword.**
 
 Upstream process text stays LazyCodex-shaped; harness adapters are permanent (`todo_write`, `spawn_subagent`, ledger when `create_goal` is missing, plugin paths, hooks, silent `ulw-discover` / `ulw-review`).
 
