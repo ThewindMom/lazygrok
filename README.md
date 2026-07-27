@@ -1,106 +1,138 @@
-# lazygrok
+# LazyGrok
 
-A Grok-native productivity plugin for Grok Build CLI, ported from [Oh My OpenAgent (OMO/lazycodex)](https://github.com/code-yeongyu/oh-my-openagent) v4.19.1 and adapted to Grok's APIs, tool names, and agent system.
+**LazyCodex / OmO for [Grok Build](https://x.ai)** — version **0.4.3**.
 
-## Parity with lazycodex v4.19.1
+LazyGrok ports [code-yeongyu/lazycodex](https://github.com/code-yeongyu/lazycodex) **`plugins/omo` @ v4.19.2** onto Grok’s tool surface (not a mindless Codex copy). Upstream process text and components stay LazyCodex; Grok gets permanent harness adapters (`todo_write`, `spawn_subagent`, ulw-loop ledger when host `create_goal` is missing, plugin paths, hooks).
 
-All 14 OMO components are vendored at **v4.19.1** (the latest release). The plugin tracks upstream lazycodex and is kept in sync through systematic gap analysis.
+| | |
+| --- | --- |
+| **Plugin version** | `0.4.3` |
+| **Upstream** | [code-yeongyu/lazycodex](https://github.com/code-yeongyu/lazycodex) tag **v4.19.2** (`plugins/omo`) |
+| **Install source** | `https://github.com/ThewindMom/lazygrok` |
+| **Skill roots** | `skills/` · `vendor/lazygrok-skills/` · `vendor/lazygrok-hooks/` (no superpowers pack) |
 
-| Area | OMO (lazycodex) | lazygrok |
-|------|-----------------|----------|
-| Components | 14 at v4.19.1 | ✅ 14 at v4.19.1 |
-| Hooks | 23 lifecycle hooks | ✅ 40 hook entries (all equivalents + Grok-native additions) |
-| Skills | 25 skills | ✅ 27 native + 22 vendored + 9 omo-skills + 14 superpowers = 72 total |
-| Agents | 12 agent roles | ✅ 19 agent definitions (12 ported + 7 Grok-native) |
-| MCP servers | 5 (codegraph, git_bash, lsp, grep_app, context7) | ✅ 9 (all 5 + hashline, lazygrok-lsp, lazygrok-lsp-tools, lazygrok-lsp-daemon) |
-| Slash commands | 4 | ✅ 8 |
-| ulw-loop dist | v4.19.1 | ✅ v4.19.1 |
+## Ultrawork in one keyword
 
-## What it provides
+Say **`ulw`** or **`ultrawork`** anywhere in the prompt (or `/ultrawork`). That is enough.
 
-### Agents (19)
+You do **not** need `/goal` or extra slash commands. Bootstrap:
 
-**Ported from OMO:** Sisyphus (coordinator), Atlas (plan executor), Hephaestus (implementer), Prometheus (planner), Metis (gap analyst), Momus (reviewer), Oracle (judgment), Librarian (research), Explore (search), Explorer (codebase search)
+1. `ULTRAWORK MODE ENABLED!`
+2. **Binding goal** = ulw-loop ledger (`create-goals`) always; `# Goal` mirror; host `create_goal` / `update_goal` only if present (silent if absent)
+3. Full **ultrawork** skill (LazyCodex 4.19.2 body + Grok renames)
+4. `todo_write` checklist
 
-**Grok-native:** lazygrok-executor, lazygrok-code-reviewer, lazygrok-qa-executor, lazygrok-gate-reviewer, lazygrok-clone-fidelity-reviewer, lazygrok-plan, lazygrok-librarian, lazygrok-metis, lazygrok-momus
+| Layer | Role |
+| --- | --- |
+| **ulw-loop ledger** | Source of truth for criteria + evidence (Codex `create_goal` equivalent on Grok) |
+| **`# Goal`** | Transcript / compaction contract |
+| **Host `/goal`** | Optional outer belt when goal mode is on |
+| **Grok workflows** | Optional pipelines for sub-jobs — not the ULW engine |
 
-### Skills (72 total)
+Upstream pin: [docs/ultrawork-upstream.md](docs/ultrawork-upstream.md).
 
-**27 Grok-native skills** in `skills/`:
-- **Workflows:** ultrawork, ulw-loop, ulw-plan, ulw-evidence, ralph-loop, prometheus-plan, start-work-execution, init-deep, repo-init, handoff
-- **Code quality:** code-review, review-work, disciplined-implementation, systematic-debugging, test-driven, refactoring, remove-ai-slops, git-master, git-workflow
-- **Tools:** hashline-edit, lsp, programming-references, agent-skill-gate, cancel-ralph, research
-- **Web:** ultimate-browsing (agent-browser + playwright MCP routing)
-- **Sessions:** coding-agent-sessions (cross-platform session finder with Grok scanner)
+## Grok harness map
 
-**22 vendored OMO skills** in `vendor/lazygrok-skills/` (full copies with `agents/` and `references/`):
-- programming, debugging, visual-qa, ultraresearch, start-work, lsp-setup, refactor, teammode, frontend, ast-grep, comment-checker, rules, ulw-plan, ulw-loop, ulw-research, lcx-doctor, lcx-report-bug, lcx-contribute-bug-fix, git-master, init-deep, review-work, remove-ai-slops
+| LazyCodex / OmO | Grok / LazyGrok |
+| --- | --- |
+| `create_goal` / `update_goal` | Optional host tools; default **ulw-loop CLI** + `# Goal` |
+| `update_plan` | `todo_write` |
+| `multi_agent_v1.spawn_agent` / `wait_agent` | `spawn_subagent` / `get_command_or_subagent_output` |
+| `apply_patch` | `search_replace` / `write` |
+| In-app browser | `playwright` MCP (else agent-browser) |
+| `lazycodex-*` agents | `lazygrok:*` / `lazygrok-*.md` |
+| `.omo/plans` | `.lazygrok/plans` (accept mid-run `.omo/ulw-loop/`) |
+| npm auto-update SessionStart | Not ported — use `grok plugin update` |
 
-**9 stripped OMO skills** in `vendor/omo-skills/` (lightweight, no `agents/`)
+## What’s included
 
-**14 superpowers skills** in `vendor/superpowers/skills/` (from obra/superpowers v5.1.0)
+### Skills (trimmed LazyCodex-for-Grok surface)
 
-### MCP Servers (9)
+**Top-level (`skills/`, 20):**  
+`ultrawork` · `ulw-loop` · `ulw-plan` · `ulw-evidence` · `ulw-ralph-loop` · `ralph-loop` · `cancel-ralph` · `prometheus-plan` · `start-work-execution` · `agent-skill-gate` · `hashline-edit` · `handoff` · `init-deep` · `lsp` · `git-master` · `review-work` · `refactoring` · `remove-ai-slops` · `coding-agent-sessions` · `ultimate-browsing`
+
+**Vendored OmO (`vendor/lazygrok-skills/`, 26):**  
+`programming` · `debugging` · `frontend` · `visual-qa` · `ultraresearch` / `ulw-research` · `start-work` · `ulw-loop` · `ulw-plan` · `ultrawork` · `ast-grep` · `comment-checker` · `rules` · `refactor` · `lsp-setup` · `teammode` · `lcx-doctor` · `lcx-report-bug` · `lcx-contribute-bug-fix` · … (plus mirrors of core ULW skills)
+
+As of **0.4.1+**, superpowers and non-OmO filler packs are **not** registered. First-prompt skill inject uses **agent-skill-gate**.
+
+### Agents (22)
+
+**OmO / LazyCodex roles:** Sisyphus, Atlas, Hephaestus, Prometheus, Metis, Momus, Oracle, Librarian, Explore, Explorer  
+
+**LazyGrok workers & gates:** `lazygrok-worker-{low,medium,high}` · `lazygrok-executor` · `lazygrok-code-reviewer` · `lazygrok-qa-executor` · `lazygrok-gate-reviewer` · `lazygrok-clone-fidelity-reviewer` · `lazygrok-plan` · `lazygrok-librarian` · `lazygrok-metis` · `lazygrok-momus`
+
+Agent models default to **`inherit`** (no hard-coded Codex gpt-5.6 IDs).
+
+### Components (`vendor/lazygrok-hooks/`)
+
+Aligned with LazyCodex 4.19.2 OmO components, Grok-patched where needed:
+
+`ultrawork` · `ulw-loop` · `bootstrap` · `codegraph` · `comment-checker` · `git-bash` · `git-bash-mcp` · `lsp` · `lsp-daemon` · `lsp-tools-mcp` · `rules` · `start-work-continuation` · `lazygrok-executor-verify` · `teammode` · `telemetry`
+
+Rebuild ULW dists: `scripts/rebuild-ulw-components.sh`.
+
+### MCP servers
 
 | Server | Purpose |
-|--------|---------|
-| `hashline` | Line-anchored file reading and editing with stale-anchor detection |
-| `lazygrok-codegraph` | SQLite knowledge graph of symbols, edges, and files |
-| `lazygrok-lsp` | Language Server Protocol diagnostics (ruff, pyright, etc.) |
-| `lazygrok-lsp-tools` | LSP tools (navigation, symbols, rename) |
-| `lazygrok-lsp-daemon` | Persistent LSP daemon for fast diagnostics |
-| `git_bash` | Git operations via MCP |
-| `grep_app` | Search across public GitHub repos via grep.app |
-| `context7` | Up-to-date library documentation |
-| `lsp` | Bundled LSP MCP server |
+| --- | --- |
+| `hashline` | Hash-anchored read/edit |
+| `lazygrok-codegraph` | Symbol/edge knowledge graph |
+| `lazygrok-lsp` / `lazygrok-lsp-tools` / `lazygrok-lsp-daemon` | LSP diagnostics & navigation |
+| `lsp` | Bundled LSP MCP |
+| `git_bash` | Git via MCP (when registered) |
 
-### Hooks (40 entries across 12 lifecycle events)
+(Plus host/user MCPs such as `grep_app` / `context7` if you add them globally.)
 
-**SessionStart:** Go binary (ralph/boulder/LSP stash/skill gate), rules loader, bootstrap provisioning, telemetry, codegraph bootstrap
-**UserPromptSubmit:** Go binary (ultrawork/ulw trigger detection), ultrawork steering, ulw-loop steering, rules matching
-**PreToolUse:** Go binary (spawn guard, plan mode gate), git-bash recommendation, ulw-loop goal budget enforcement, ulw-loop spawn guard
-**PostToolUse:** LSP diagnostics (Go + Node), comment-checker (Go + Node), rules matching, codegraph guidance, teammode thread title hygiene
-**Stop:** Go binary (ralph/ulw-loop continuation), start-work continuation, ulw-loop stop-resume
-**PostCompact:** Go binary, rules cache reset, LSP cache reset, git-bash reminder
-**Plus:** PostToolUseFailure, PermissionDenied, SubagentStart, SubagentStop, SessionEnd, Notification
+### Hooks
 
-### Slash Commands (8)
+**40 entries** across 14 lifecycle events (`hooks/hooks.json`), including:
 
-`/ultrawork` `/ulw-loop` `/ralph-loop` `/plan` `/start-work` `/handoff` `/stop-continuation` `/resume-continuation`
+- **UserPromptSubmit** — ultrawork / ulw-loop / rules  
+- **Stop** — Ralph / ulw-loop resume / start-work continuation  
+- **PreToolUse** — skill-gate, spawn guard, goal budget, git-bash  
+- **PostToolUse** — LSP, comment-checker, hashline cache, rules  
+- **SubagentStop** — executor-verify (includes `lazygrok-worker-*`)
 
-### Continuation Engine
+Performance-critical paths use the Go binary (`bin/lazygrok-hook-*`) via `hooks/run-hook.sh`.
 
-- **Ralph Loop:** autonomous work-until-done via Stop-hook continuations with bounded iterations, cooldowns, and repeated-state detection
-- **Ultrawork Loop:** Ralph loop + mandatory Oracle verification before exit (`<promise>VERIFIED</promise>` gate)
-- **ulw-loop v4.19.1:** structured goals (`goals.json`), evidence ledger (`ledger.jsonl`), checkpoints, steering, spawn guard, stop-resume with `.stuck` marker
-- **Bare `ulw <task>` trigger:** recognized alongside `/ulw-loop` and `/ultrawork`
+### Slash commands
 
-### Go Binary Hooks
+`/ultrawork` · `/ulw-loop` · `/ulw-ralph-loop` · `/ralph-loop` · `/plan` · `/start-work` · `/handoff` · `/stop-continuation` · `/resume-continuation`
 
-The plugin ships a compiled Go binary (`bin/lazygrok-hook-linux-amd64`) for performance-critical hooks:
-- Ralph/Ultrawork loop state management
-- Boulder state tracking
-- LSP diagnostic stash
-- Skill gate enforcement
-- Spawn guard (per-session fan-out cap, default 60)
-- ulw-loop stop bridge (incomplete goals check)
-- Comment-checker integration
+### Continuation & evidence
 
-### Epistemic Instrumentation
+| Mode | Behavior |
+| --- | --- |
+| **Ralph** | Stop-hook work-until-done + completion promise |
+| **ulw-ralph-loop** | Ralph + `<promise>VERIFIED</promise>` verifier gate |
+| **ulw-loop (OmO ledger)** | `goals.json` + `ledger.jsonl` + checkpoints; LIGHT: `light-quality-gate` then `checkpoint`; HEAVY: reviewer gate |
+| **start-work / boulder** | Prometheus plan execution with continuation |
 
-The `ultraresearch` skill includes a data-flow-lock gate requiring ≥2 independent source domains, ≥2 observation groups, counter-search, primary source verification, and temporal evidence before non-code claims are accepted.
+State prefers **`.lazygrok/`** (accepts mid-run **`.omo/ulw-loop/`** if already created).
 
 ## Installation
 
 ```bash
-grok plugin install mihazs/lazygrok --trust
+grok plugin install https://github.com/ThewindMom/lazygrok --trust
+# or short form if your marketplace maps it:
+# grok plugin install ThewindMom/lazygrok --trust
 ```
 
-Or from a local clone:
+Local clone:
 
 ```bash
-grok plugin install "$(pwd)" --trust
+git clone https://github.com/ThewindMom/lazygrok.git
+grok plugin install "$(pwd)/lazygrok" --trust
 ```
+
+Update:
+
+```bash
+grok plugin update lazygrok
+```
+
+Then **reload plugins** in the TUI (or start a new session) so skills/hooks match the new commit.
 
 ## Uninstall
 
@@ -108,38 +140,50 @@ grok plugin install "$(pwd)" --trust
 grok plugin uninstall lazygrok --confirm
 ```
 
-This removes only plugin-owned files. It does not delete unrelated Grok files.
+Removes plugin-owned install only; does not wipe unrelated Grok config.
 
 ## Configuration
 
-Configuration is loaded with this precedence (highest first):
+Precedence (highest first):
 
-1. Environment variables (`LAZYGROK_*`)
-2. Workspace config: `.lazygrok/config.jsonc`
-3. User config: `~/.grok/lazygrok/config.jsonc`
+1. Environment (`LAZYGROK_*`, `GROK_PLUGIN_ROOT`, …)
+2. Workspace: `.lazygrok/config.jsonc`
+3. User: `~/.grok/lazygrok/config.jsonc`
 4. Built-in defaults
 
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full reference.
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) and [docs/installation.md](docs/installation.md).
+
+## Docs
+
+| Doc | Contents |
+| --- | --- |
+| [docs/ultrawork-upstream.md](docs/ultrawork-upstream.md) | Ultrawork upstream pin & re-sync rule |
+| [docs/lazycodex-4.19.2-port-receipt.md](docs/lazycodex-4.19.2-port-receipt.md) | 4.19.2 port receipt |
+| [docs/lazygrok-grok-compat-report.md](docs/lazygrok-grok-compat-report.md) | Grok compatibility notes |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Install/hooks/goal issues |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes |
+
+Port / re-sync helper: `scripts/port-lazycodex-to-grok.py`.
+
+## Grok limitations (by design)
+
+- Subagents are one level deep (no recursive spawn from leaves)
+- Only `PreToolUse` can hard-block tools; other hooks are advisory/continuation
+- Host `create_goal` / `update_goal` often **absent** when background workflows are on — use the ledger
+- Do not expect Codex multi_agent mailbox APIs or npm SessionStart auto-update
 
 ## Privacy
 
-This plugin does **not** transmit any data to external services. See [docs/PRIVACY.md](docs/PRIVACY.md).
+No LazyGrok-owned telemetry to third parties. See [docs/PRIVACY.md](docs/PRIVACY.md).
 
-## Licensing
+## License
 
-MIT licensed. See [LICENSE](LICENSE) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+MIT — [LICENSE](LICENSE), [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-Vendored OMO components are used under their respective licenses. See `vendor/lazygrok-hooks/*/AGENTS.md` and `vendor/lazygrok-skills/*/ATTRIBUTION.md` for attribution.
-
-## Grok limitations
-
-- Subagents are one level deep — leaf agents cannot spawn children
-- Only `PreToolUse` hooks can block tool calls; all other hooks are passive
-- Agent model IDs must exist in the user's Grok configuration
-- No native output transformation (PostToolUse is passive)
+Vendored OmO components retain their upstream licenses/attribution under `vendor/lazygrok-hooks/` and `vendor/lazygrok-skills/`.
 
 ## Acknowledgments
 
-- [Oh My OpenAgent (OMO/lazycodex)](https://github.com/code-yeongyu/oh-my-openagent) by code-yeongyu — the primary upstream this plugin ports from
-- [obra/superpowers](https://github.com/obra/superpowers) — vendored skills (brainstorming, TDD, code review workflows)
-- [agent-browser](https://github.com/anthropics/agent-browser) — browser automation for ultimate-browsing skill
+- [code-yeongyu/lazycodex](https://github.com/code-yeongyu/lazycodex) (OmO / LazyCodex) — primary upstream  
+- [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) — historical OMO lineage  
+- Grok Build / xAI harness this port targets  
