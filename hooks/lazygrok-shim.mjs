@@ -47,23 +47,63 @@ process.stdin.on("end", () => {
     process.exit(0);
   }
 
-  // Map Grok event field names to Codex field names
-  const grokEvent = input.event || input.hookEventName || input.hook_event_name || "";
+  // Map Grok event field names to Codex field names.
+  // Grok dispatches snake_case (user_prompt_submit); OmO/Codex CLIs expect PascalCase (UserPromptSubmit).
+  const rawEvent = input.event || input.hookEventName || input.hook_event_name || "";
+  const EVENT_ALIASES = {
+    user_prompt_submit: "UserPromptSubmit",
+    UserPromptSubmit: "UserPromptSubmit",
+    session_start: "SessionStart",
+    SessionStart: "SessionStart",
+    pre_tool_use: "PreToolUse",
+    PreToolUse: "PreToolUse",
+    post_tool_use: "PostToolUse",
+    PostToolUse: "PostToolUse",
+    post_tool_use_failure: "PostToolUseFailure",
+    PostToolUseFailure: "PostToolUseFailure",
+    stop: "Stop",
+    Stop: "Stop",
+    stop_failure: "StopFailure",
+    StopFailure: "StopFailure",
+    subagent_start: "SubagentStart",
+    SubagentStart: "SubagentStart",
+    subagent_stop: "SubagentStop",
+    SubagentStop: "SubagentStop",
+    pre_compact: "PreCompact",
+    PreCompact: "PreCompact",
+    post_compact: "PostCompact",
+    PostCompact: "PostCompact",
+    session_end: "SessionEnd",
+    SessionEnd: "SessionEnd",
+    notification: "Notification",
+    Notification: "Notification",
+    permission_denied: "PermissionDenied",
+    PermissionDenied: "PermissionDenied",
+  };
+  const grokEvent = EVENT_ALIASES[rawEvent] || rawEvent;
   const sessionId = input.session_id || input.sessionId || input.sessionID || "";
   const workspace = input.workspace || input.workspaceRoot || input.cwd || process.cwd();
-  const prompt = input.prompt || input.userPrompt || input.user_prompt || input.message || "";
+  // Prompt may be nested under content / messages on some Grok builds
+  const prompt =
+    input.prompt ||
+    input.userPrompt ||
+    input.user_prompt ||
+    input.message ||
+    input.content ||
+    (typeof input.text === "string" ? input.text : "") ||
+    "";
   const toolName = input.tool || input.toolName || input.tool_name || "";
   const toolInput = input.tool_input || input.toolInput || input.arguments || input.input || {};
   const toolUseId = input.tool_use_id || input.toolUseId || input.toolCallId || "";
   const stopHookActive = input.stop_hook_active || input.stopHookActive || false;
   const subagentId = input.subagent_id || input.subagentId || "";
 
-  // Build the Codex-format event
+  // Build the Codex-format event (always PascalCase hook_event_name for OmO components)
   const codexEvent = {
     hook_event_name: grokEvent,
     session_id: sessionId,
     turn_id: sessionId, // Grok doesn't have turn_id, use session_id
-    transcript_path: null, // Grok doesn't expose transcript path
+    transcript_path: input.transcript_path || input.transcriptPath || null,
     cwd: workspace,
     model: input.model || "grok-build",
     permission_mode: input.permission_mode || "default",
