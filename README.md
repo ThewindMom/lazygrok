@@ -33,7 +33,15 @@ You do **not** need `/goal` or extra slash commands. Bootstrap:
 
 Upstream pin: [docs/ultrawork-upstream.md](docs/ultrawork-upstream.md).
 
-**Hard inject vs soft skill path:** the UPS hook inject is the LazyCodex-faithful bootstrap; skill-list activation is a soft fallback. Measure inject only via `~/.grok/state/lazygrok/ups-probe-latest.json` (never stale `hooks.log`). Details: [docs/ultrawork-inject.md](docs/ultrawork-inject.md). Offline proof: `node scripts/verify-ups-inject.mjs`.
+**Hard inject vs soft skill path:** the UPS hook inject is the LazyCodex-faithful bootstrap; skill-list activation is a soft fallback. Measure inject only via `~/.grok/state/lazygrok/ups-probe-latest.json` (never stale `hooks.log`). Details: [docs/ultrawork-inject.md](docs/ultrawork-inject.md).
+
+After install/update, **register file-discovery hooks** (Grok 0.2.x loads plugin hooks late — first prompt can miss them):
+
+```bash
+node ~/.grok/installed-plugins/lazygrok-*/scripts/install-user-hooks.mjs
+# or: node "${GROK_PLUGIN_ROOT}/scripts/install-user-hooks.mjs"
+node "${GROK_PLUGIN_ROOT}/scripts/verify-ups-inject.mjs"   # offline
+```
 
 ## Grok harness map
 

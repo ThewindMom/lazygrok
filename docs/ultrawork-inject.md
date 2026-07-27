@@ -65,13 +65,46 @@ node "${GROK_PLUGIN_ROOT}/scripts/verify-ups-inject.mjs"
 
 Cases: full envelope, event-only + history, race delayed history, non-ulw empty, probe artifact write.
 
-## Registration
+## Registration (critical on Grok 0.2.x)
 
-UPS chain in `hooks/hooks.json`:
+### Host load-order bug (verified live)
+
+On Grok **0.2.112**, session spawn loads **settings / `~/.grok/hooks/` file hooks only**. Plugin `hooks/hooks.json` is discovered (`has_hooks=true`) but often **not merged into the registry before the first prompt** (especially `grok -p` / headless). Debug signature:
+
+```text
+loaded hooks hook_count=3   # settings only — zero LazyGrok UPS
+# after user-hooks bridge:
+loaded hooks hook_count=9   # includes global/lazygrok:user_prompt_submit[0..3]
+```
+
+Live probe after bridge install showed **full official envelope** (not event-only):
+
+```json
+{
+  "hookEventName": "user_prompt_submit",
+  "sessionId": "...",
+  "prompt": "ulw say only ZAP2",
+  "injectOk": true,
+  "stdoutBytes": 1987
+}
+```
+
+Earlier “event-only stdin” dumps were mostly **synthetic self-tests**, not live host behavior.
+
+### Required install step
+
+```bash
+node "${GROK_PLUGIN_ROOT}/scripts/install-user-hooks.mjs"
+# writes ~/.grok/hooks/lazygrok.json  (absolute paths + GROK_PLUGIN_ROOT)
+```
+
+Re-run after every `grok plugin update lazygrok` (paths point at the install dir hash).
+
+### Plugin UPS chain (`hooks/hooks.json` + user bridge)
 
 0. `run-hook.sh user-prompt` (Go ralph / slash helpers)
 1. **`lazygrok-ups-probe.mjs ultrawork user-prompt-submit`** (probe + inject)
 2. `lazygrok-shim.mjs ulw-loop user-prompt-submit`
 3. `lazygrok-shim.mjs rules user-prompt-submit`
 
-If `ups-probe-latest.json` does not refresh after a new `ulw` session, the host is not running plugin UPS hooks for that turn (registration / trust / load order) — soft path may still work.
+Offline proof: `node scripts/verify-ups-inject.mjs` (full envelope, event-only+history, race retry, non-ulw empty, probe artifact).

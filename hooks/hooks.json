@@ -49,10 +49,6 @@
             "statusMessage": "(OmO) Checking CodeGraph Bootstrap"
           }
         ]
-      },
-      {
-        "matcher": "^startup$",
-        "hooks": []
       }
     ],
     "UserPromptSubmit": [
