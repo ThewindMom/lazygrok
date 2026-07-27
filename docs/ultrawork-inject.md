@@ -91,14 +91,14 @@ Live probe after bridge install showed **full official envelope** (not event-onl
 
 Earlier “event-only stdin” dumps were mostly **synthetic self-tests**, not live host behavior.
 
-### Required install step
+### Install once (not after every update)
 
 ```bash
 node "${GROK_PLUGIN_ROOT}/scripts/install-user-hooks.mjs"
-# writes ~/.grok/hooks/lazygrok.json  (absolute paths + GROK_PLUGIN_ROOT)
+# writes ~/.grok/hooks/lazygrok.json
 ```
 
-Re-run after every `grok plugin update lazygrok` (paths point at the install dir hash).
+v2 bridge commands **resolve** `~/.grok/installed-plugins/lazygrok-*` at runtime. After `grok plugin update`, keep using the same file — no re-install. The UPS probe also rewrites a missing/stale (v1 absolute-hash) bridge automatically.
 
 ### Plugin UPS chain (`hooks/hooks.json` + user bridge)
 

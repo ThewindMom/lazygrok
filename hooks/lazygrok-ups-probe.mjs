@@ -17,11 +17,46 @@ import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { env } from "node:process";
 import { homedir } from "node:os";
-import { writeFileSync, mkdirSync, appendFileSync } from "node:fs";
+import {
+	writeFileSync,
+	mkdirSync,
+	appendFileSync,
+	existsSync,
+	readFileSync,
+} from "node:fs";
+import { spawnSync } from "node:child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const realShim = resolve(__dirname, "lazygrok-shim.mjs");
+const installUserHooks = resolve(__dirname, "../scripts/install-user-hooks.mjs");
 const args = process.argv.slice(2);
+
+/**
+ * Keep ~/.grok/hooks/lazygrok.json on dynamic v2 so `grok plugin update`
+ * does not require a manual re-install. Best-effort; never block inject.
+ */
+function ensureUserHooksBridge() {
+	try {
+		const out = join(homedir(), ".grok/hooks/lazygrok.json");
+		const runner = join(homedir(), ".grok/hooks/lazygrok-run.sh");
+		let needs = !existsSync(out) || !existsSync(runner);
+		if (!needs) {
+			const raw = JSON.parse(readFileSync(out, "utf8"));
+			const meta = raw._lazygrokUserHooks;
+			// v3+ = stable dispatcher script + dynamic plugin root
+			needs = !meta?.dynamicPluginRoot || (meta.version ?? 0) < 3;
+		}
+		if (!needs || !existsSync(installUserHooks)) return;
+		spawnSync(process.execPath, [installUserHooks], {
+			stdio: "ignore",
+			timeout: 3000,
+		});
+	} catch {
+		// ignore
+	}
+}
+
+ensureUserHooksBridge();
 
 function classifyStdin(raw) {
 	const text = raw.toString("utf8");
