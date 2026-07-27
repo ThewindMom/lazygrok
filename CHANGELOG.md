@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 Releases are normally automated via [release-please](https://github.com/googleapis/release-please) when GitHub Actions billing is active. While Actions is disabled, use [`scripts/manual-release.sh`](scripts/manual-release.sh).
 
+## [0.4.3] (2026-07-27)
+
+### Ultrawork skill fidelity
+* **`skills/ultrawork/SKILL.md` is LazyCodex 4.19.2 ultrawork verbatim**, adjusted only for the Grok Build harness:
+  - Restored full LCX body: Role, Goal, Tier triage, Manual-QA channels, Bootstrap 0–3, Finding things, PIN→RED→GREEN→SURFACE→CLEAN, Waiting discipline, subagent reliability, verification gate, commits, constraints, output discipline, stop rules
+  - Harness map only: `todo_write`, `spawn_subagent` / `get_command_or_subagent_output` / `kill_command_or_subagent`, `playwright` MCP, `lazygrok:*` workers, `.lazygrok/plans/`
+  - Goal registration: host tools optional + always `# Goal` + ulw-loop `create-goals` (silent when host tools absent)
+  - One-keyword UX: `ulw` / `ultrawork` alone is enough
+* Mirrored to component `directive.md` + vendor skill copies; ulw-loop fallback directive synced
+
 ## [0.4.2] (2026-07-27)
 
 ### UX

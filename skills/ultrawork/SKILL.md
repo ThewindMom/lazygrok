@@ -1,12 +1,12 @@
 ---
 name: ultrawork
 description: >
-  Binding ultrawork mode for LazyGrok. Triggered when the user says ultrawork or ulw
-  (one keyword is enough — do not require /goal or other commands). Hook injects a
-  bootstrap that points at this file. Read the whole file and follow every rule for
-  the rest of the task.
+  Binding ultrawork mode directive for LazyGrok (omo) on Grok Build. When a prompt
+  contains ultrawork or ulw, the UserPromptSubmit hook injects a short bootstrap that
+  points at this file. One keyword is enough — do not require /goal or other commands.
+  Read the whole file and follow every rule in it for the rest of the task.
 metadata:
-  short-description: ULW mode — one keyword, full evidence-driven execution
+  short-description: Binding ultrawork mode directive (LazyCodex-faithful, Grok harness)
 user_invocable: true
 ---
 
@@ -21,55 +21,123 @@ user_invocable: true
 
 The user only needs to say **`ulw`** or **`ultrawork`** (anywhere in the prompt).
 Do **not** ask them to also run `/goal`, `/ulw-loop`, or `/ulw-evidence`. You perform
-registration and ledger setup yourself.
+goal registration and ledger setup yourself.
 
-# Role
+# Grok Build harness map
 
-## Goal registration (do all applicable layers — silent on missing tools)
-
-Strip `ulw` / `ultrawork` from the user text; remainder = **objective**.
-
-1. **Grok host tools (when present in this session's tool list)**  
-   - `create_goal` → call with `objective` only (no status, no token_budget).  
-   - `update_goal` → use for progress / complete / blocked **only if** a host goal is already active (e.g. user previously used `/goal`). Never claim host completion without real evidence.  
-   - If neither tool exists: **not a defect** — continue. Do not lecture the user about missing tools.
-
-2. **Transcript contract (always)**  
-   Open with a markdown `# Goal` block: objective, tier (LIGHT/HEAVY), success criteria with scenarios, when-to-stop. This is for humans + compaction; it does **not** replace host `/goal` or the ULW ledger.
-
-3. **Durable ULW ledger (always for non-trivial work)** — skill `ulw-evidence`:  
-   ```bash
-   node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals --brief "<objective>" --json
-   ```  
-   Prefer `.lazygrok/ulw-loop/`; keep `.omo/ulw-loop/` if that run already started there.  
-   Record evidence with `record-evidence`; LIGHT final complete via `light-quality-gate` then `checkpoint`.
-
-4. **Live checklist (always):** `todo_write` — exactly one `in_progress`.
-
-Optional: if the user already ran `/goal` before saying ulw, host orchestration is a bonus — still do layers 2–4.
-
-
-## Grok Tool Mapping
+This skill is LazyCodex ultrawork, run on the Grok Build tool surface. When the
+body mentions a Codex tool name that is not on this surface, use the mapping
+below — do not invent Codex multi-agent APIs.
 
 | Intent | Grok tool |
 | --- | --- |
-| Spawn a worker | `spawn_subagent({subagent_type:"lazygrok:<role>", prompt:"TASK: ...", background:true})` |
-| Wait for background result | `get_command_or_subagent_output({task_ids:[...]})` |
+| Live checklist | `todo_write` (exactly one `in_progress`) |
+| Spawn worker / specialist | `spawn_subagent({subagent_type:"lazygrok:<role>", prompt:"…", background:true})` |
+| Wait for background child | `get_command_or_subagent_output({task_ids:[...]})` |
 | Stop a runaway | `kill_command_or_subagent({task_id:"..."})` |
-| Live checklist | `todo_write` |
-| Edit files | `search_replace` / `write` |
+| Edit / write files | `search_replace` / `write` |
 | Shell | `run_terminal_command` |
 | Read files | `read_file` |
-| Binding goal | `# Goal` + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
+| Binding host goal (optional) | `create_goal` / `update_goal` **only if present in the tool list** |
+| Binding durable criteria | ulw-loop CLI via skill `ulw-evidence` (always for non-trivial work) |
 | Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
 | Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
 | Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list. Do not use Codex multi_agent_v1/v2 tool names.
+Prefer `subagent_type` from the installed LazyGrok agents list.
 
-When a skill or workflow still shows Codex MultiAgent examples, translate them with this table.
+# Role
+Expert coding agent. Ship verified work. No process narration.
 
+# Goal
+Deliver EXACTLY what the user asked, end-to-end working, proven by
+captured evidence: a failing-first proof that went RED→GREEN through
+the cheapest faithful channel, plus real-surface proof sized by the
+tier below. TESTS ALONE NEVER PROVE DONE — a green suite means the
+unit-level contract holds, not that the user-facing behavior works.
+
+# Tier triage (classify ONCE at bootstrap; record tier + one-line
+justification in the notepad; ratchet up only)
+Your change set is what THIS session will itself edit or execute;
+work handed to another session, thread, or delegated loop is payload
+and sizes THAT session's process, not yours. Launching it — sync,
+prompt, create, verify — is control-plane work: LIGHT however large
+the delegated project is.
+Default is LIGHT. Take HEAVY only when the change set hits a fact you
+can point to: a new module / layer / domain model / abstraction;
+auth, security, session-handling code, or permissions; building or
+changing an external integration (API, queue, payment, webhook) —
+calling an existing API is not one; a DB schema or migration;
+concurrency, transaction boundaries, or cache invalidation; a
+refactor crossing domain boundaries; or the user signaled care
+("carefully", "thoroughly", "design first") or demanded review of
+this session's work.
+When unsure, take HEAVY. If a HEAVY fact surfaces mid-task, upgrade
+immediately and redo whatever the LIGHT path skipped; never downgrade
+mid-task. The tier sizes process, never honesty: both tiers capture
+evidence, record cleanup receipts, and obey the never-suppress rules.
+
+LIGHT — the deliverable follows a known pattern with no open design
+decisions (one-spot bugfix, an endpoint following an existing
+pattern, a validation rule, a query tweak, copy/constants, launching
+or steering another session): plan directly in the notepad; 1-2
+success criteria (happy path + the riskiest edge); one real-surface
+proof of the user-visible deliverable, where auxiliary surfaces are
+first-class for CLI- or data-shaped work; self-review recorded in the
+notepad instead of the reviewer loop.
+HEAVY — anything a fact above names: 3+ success criteria (happy,
+edge, regression, adversarial risk), each with its own channel
+scenario and both evidence pieces; reviewer loop until unconditional
+approval.
+
+# Manual-QA channels
+Run real-surface proof yourself through the channel that faithfully
+exercises the surface; capture the artifact.
+
+  1. HTTP call — hit the live endpoint with `curl -i` (or a
+     Playwright APIRequestContext); capture status line + headers +
+     body.
+  2. Terminal / TUI - drive a real pty and prove it through the
+     xterm.js web terminal (see the TUI visual QA note below). tmux
+     `send-keys` is fine for a boot smoke; NEVER `tmux capture-pane`
+     for color / layout / CJK evidence, which degrades truecolor.
+  3. Browser use — in Grok, use `playwright` MCP tools
+     first when available and no authenticated/persistent user browser
+     profile is required. Otherwise use Chrome to drive the REAL page;
+     if Chrome is not available, download and use agent-browser
+     (https://github.com/vercel-labs/agent-browser). Capture action
+     log + screenshot path. Never downgrade to a non-browser surface
+     for a browser-facing criterion.
+  4. Computer use — when the surface is a desktop/GUI app rather than a
+     page, drive it via OS-level automation (a computer-use agent,
+     AppleScript, xdotool, etc.) against the running app; capture
+     action log + screenshot. USE THIS for any non-browser GUI
+     criterion; do not substitute a CLI dump for it.
+
+For EVERY scenario name the exact tool and the exact invocation
+upfront: the literal command / API call / page action with its concrete
+inputs (URL, payload, keystrokes, selectors) and the single binary
+observable that decides PASS vs FAIL. "run the endpoint", "open the
+page", "check it works" are NOT scenarios — write the `curl ...`, the
+`send-keys ...`, the Browser plugin action, the `page.click(...)`, the
+expected status/text.
+
+Auxiliary surfaces (CLI stdout / DB state diff / parsed config dump)
+are first-class evidence for CLI- or data-shaped criteria; use a
+channel scenario when the behavior is user-facing. `--dry-run`,
+printing the command, "should respond", and "looks correct" never
+count.
+
+For TUI visual QA, render the terminal through the real xterm.js web
+terminal and screenshot it - never a `tmux capture-pane` dump, which
+degrades color and wide-glyph width. In this repo:
+`node script/qa/web-terminal-visual-qa.mjs --title "<surface>" --command "<cmd>" --input "{Enter}" --evidence-dir <dir>`
+(live pty + xterm.js in Chrome; `--from-file <capture>` replays a raw
+stream). Outside this repo, capture equivalent browser-rendered terminal
+evidence: screenshot + plain transcript + cleanup receipt.
+
+# Bootstrap (DO ALL FOUR BEFORE ANY OTHER WORK — NO SKIPPING)
 
 ## 0. Survey the skills, gather context, then size the work
 First, survey the loaded skill list and read the description of each
@@ -92,12 +160,33 @@ A known procedure — however many steps — and questions about work you
 are delegating never justify a planner: plan directly in the notepad.
 Never spawn `plan` before the discovery wave has returned.
 
-## 1. Register the binding goal (Grok-native channels)
-You MUST register a binding goal via the Grok goal protocol (`# Goal` + ulw-loop CLI; host `create_goal` only if present). Call it with
-exactly `objective`; do not include `status`. Only when no goal tool
-exists on this surface, open your reply with a `# Goal` block treated
-as binding. Goals are unlimited; never invent a numeric budget or
-limit.
+## 1. Create the goal with binding success criteria
+You MUST register a binding goal for the whole run — NOT prose alone,
+NOT the notepad alone, NOT the plan alone. Skipping registration is a
+defect. On Grok Build the host often omits `create_goal` (especially when
+workflows are enabled); that is normal. Register via every layer that
+applies, silently when a tool is absent:
+
+1. **Host tools (when present in this session's tool list)**  
+   - `create_goal` → call with exactly `objective`; do not include `status`
+     or any budget/token fields.  
+   - `update_goal` → only if a host goal is already active (e.g. user ran
+     `/goal` earlier); never invent host completion without evidence.  
+   - Missing host goal tools are **not** a defect — continue.
+2. **Transcript contract (always)** — open with a markdown `# Goal` block
+   treated as binding: objective, tier, success criteria with scenarios,
+   when-to-stop. This survives compaction and is for humans + hooks.
+3. **Durable ULW ledger (always for non-trivial work)** — skill
+   `ulw-evidence`:
+   ```bash
+   node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals --brief "<objective>" --json
+   ```
+   Prefer `.lazygrok/ulw-loop/`; keep `.omo/ulw-loop/` if that run already
+   started there. Record evidence with `record-evidence`. LIGHT complete:
+   `light-quality-gate` then `checkpoint`; HEAVY uses the reviewer gate below.
+4. **Live checklist** — `todo_write` (see §3). Goals are unlimited; never
+   invent a numeric budget or limit.
+
 The criteria MUST list, upfront:
 - The user-visible deliverable in one line, and the tier with its
   justification.
@@ -296,31 +385,36 @@ child's run; a child without a stop condition wanders past its goal.
 State that it is an executable assignment, not a context handoff. Use `background: true` unless full history is truly
 required; paste only the context the child needs. Full-history forks can
 make the child continue old parent context instead of the delegated task.
-Use the Grok Tool Mapping table. Always pass `subagent_type` and put the full assignment in `prompt`/`message`.
-
+Always use Grok `spawn_subagent` with `subagent_type` + `prompt` + `background: true`. Wait with `get_command_or_subagent_output({task_ids:[...], timeout_ms})`. Stop runaways with `kill_command_or_subagent`. Re-task by spawning again with the missing deliverable — there is no separate followup/close API.
 
 # TOML-backed subagent routing compatibility
-Installed role TOMLs (`~/.grok/agents/`) bind ONLY via `agent_type`.
-`spawn_subagent` `spawn_subagent` schema does NOT (verified
-`message`, and expect the session model for children. Difficulty tiers
-when `agent_type` IS exposed: low -> `lazygrok-worker-low`
-(gpt-5.6-luna/high), medium -> `lazygrok-worker-medium`
-(gpt-5.6-luna/max), high -> `lazygrok-worker-high` (gpt-5.6-sol/max);
-explorer/librarian carry their own TOMLs (gpt-5.6-luna/low). Difficulty
-(model power) is orthogonal to LIGHT/HEAVY rigor (process size).
+Installed role agents bind via `subagent_type` on Grok's `spawn_subagent`.
+Always pass `subagent_type` from the installed LazyGrok agents list and put
+the full assignment in `prompt` (Grok does not use Codex `task_name` /
+`message`-only multi_agent schemas). Prefer `background: true` unless full
+history is truly required.
+
+Difficulty tiers when selecting workers:
+  low -> `lazygrok:lazygrok-worker-low`
+  medium -> `lazygrok:lazygrok-worker-medium`
+  high -> `lazygrok:lazygrok-worker-high`
+explorer/librarian/plan carry their own agent entries
+(`lazygrok:explore`, `lazygrok:librarian`, `lazygrok:prometheus`).
+Difficulty (model power) is orthogonal to LIGHT/HEAVY rigor (process size).
 
 Treat child status as a progress signal, not a timeout counter. For
 work likely to exceed one wait cycle, tell the child to send
 `WORKING: <task> - <current phase>` before long reading, testing, or
 review passes, and `BLOCKED: <reason>` only when it cannot progress.
-Track spawned agent names locally. Use `get_command_or_subagent_output` for mailbox
-signals, but a timeout only means no new mailbox update arrived.
+Track spawned agent ids locally. Use `get_command_or_subagent_output` for
+mailbox signals, but a timeout only means no new mailbox update arrived.
 Treat a running child as alive and keep doing independent root work.
 Fallback only when the child is completed without the
 deliverable, ack-only, or no longer running. If that followup is still
 silent or ack-only, record the result as inconclusive, do not count it
 as approval/pass, close it if safe, and respawn a smaller
 `background: true` task with the missing deliverable.
+
 
 # Subagent-dependent transition barrier
 Do not mark an `todo_write` step `completed` while an active child owns
@@ -353,8 +447,9 @@ one line why the tier held.
 
 Procedure (NON-NEGOTIABLE):
 1. Spawn a child with `background: true` and a self-contained reviewer
-   assignment in `message`.    TOML-backed reviewer role, so paste the reviewer requirements into
-   the message.
+   assignment in `prompt`. Prefer `subagent_type: "lazygrok:lazygrok-code-reviewer"`
+   (or gate/qa reviewers) when available; otherwise paste the reviewer
+   requirements into the prompt.
    Pass: goal, success-criteria, scenario evidence, full diff, notepad
    path.
 2. Verify each reviewer concern yourself. A concern blocks only when
