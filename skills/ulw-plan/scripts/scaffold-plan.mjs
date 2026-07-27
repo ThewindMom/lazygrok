@@ -81,7 +81,7 @@ export function resolveSafeOmoPath(cwd, relPath) {
 		throw new Error(`refused: path escapes the workspace root: ${relPath}`);
 	}
 	if (!/(^|[/\\])\.omo([/\\]|$)/i.test(rel)) {
-		throw new Error(`refused: ulw-plan may only write under .omo/: ${relPath}`);
+		throw new Error(`refused: ulw-plan may only write under .lazygrok/ or .omo/: ${relPath}`);
 	}
 	if (!resolved.toLowerCase().endsWith(".md")) {
 		throw new Error(`refused: ulw-plan may only write .md files: ${relPath}`);
@@ -125,12 +125,12 @@ async function assertSafeWriteParent(cwd, target) {
 	const omoRoot = resolve(cwd, ".omo");
 	const parent = dirname(target);
 	assertContainedPath(workspaceRoot, parent, `refused: path escapes the workspace root: ${target}`);
-	assertContainedPath(omoRoot, parent, `refused: ulw-plan may only write under .omo/: ${target}`);
+	assertContainedPath(omoRoot, parent, `refused: ulw-plan may only write under .lazygrok/ or .omo/: ${target}`);
 	await mkdirWithoutSymlinks(parent, workspaceRoot);
 	const omoReal = await realpath(omoRoot);
 	const parentReal = await realpath(parent);
 	assertContainedPath(workspaceReal, parentReal, `refused: path escapes the workspace root through symlinks: ${target}`);
-	assertContainedPath(omoReal, parentReal, `refused: ulw-plan may only write under .omo/ through real paths: ${target}`);
+	assertContainedPath(omoReal, parentReal, `refused: ulw-plan may only write under .lazygrok/ or .omo/ through real paths: ${target}`);
 }
 
 async function assertSafeWriteTarget(target) {

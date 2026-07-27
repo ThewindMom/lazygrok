@@ -1,3 +1,5 @@
+> **Grok: n/a** — `team_*` / OpenCode team transport is not available on Grok Build. Use `spawn_subagent` with `lazygrok:*` roles instead. This file is retained for LazyCodex reference only.
+
 > **ON GROK BUILD: n/a as written.** Grok has no `team_*` / multi-pane team transport.
 > Use parallel `spawn_subagent` with self-contained prompts and orchestrator tracking instead.
 

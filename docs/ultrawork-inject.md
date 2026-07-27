@@ -98,7 +98,7 @@ node "${GROK_PLUGIN_ROOT}/scripts/install-user-hooks.mjs"
 # writes ~/.grok/hooks/lazygrok.json
 ```
 
-v2 bridge commands **resolve** `~/.grok/installed-plugins/lazygrok-*` at runtime. After `grok plugin update`, keep using the same file — no re-install. The UPS probe also rewrites a missing/stale (v1 absolute-hash) bridge automatically.
+v4 bridge is a **full mirror** of plugin `hooks/hooks.json` (all events), via `lazygrok-run.sh` resolving `installed-plugins/lazygrok-*` at runtime. After `grok plugin update`, no re-install. Probe self-heals missing/stale bridges. Audit: `python3 scripts/audit-hooks.py full`.
 
 ### Plugin UPS chain (`hooks/hooks.json` + user bridge)
 

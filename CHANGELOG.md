@@ -13,10 +13,12 @@ Releases are normally automated via [release-please](https://github.com/googleap
 * skill-pointer: LCX bootstrap shape + ledger + LazyGrok path resolve; dists rebuilt
 * See `docs/ultrawork-upstream.md`
 
-### Hard UPS inject (Grok 0.2.x)
+### Hard UPS inject + full hook bridge (Grok 0.2.x)
 * Permanent `lazygrok-ups-probe.mjs` + race-safe prompt_history recovery in shim
-* **`scripts/install-user-hooks.mjs`** → `~/.grok/hooks/lazygrok.json` so UPS runs at spawn (plugin hooks alone load too late for first prompt)
-* Offline: `scripts/verify-ups-inject.mjs`; live measure: `~/.grok/state/lazygrok/ups-probe-latest.json` (not `hooks.log`)
+* **`scripts/install-user-hooks.mjs` (v4)** → full mirror of all plugin hooks under `~/.grok/hooks/` (dynamic plugin root)
+* **`scripts/audit-hooks.py`** — inventory, dry-run (39 commands), parse live debug, session inspect
+* Offline: `scripts/verify-ups-inject.mjs`; live: `ups-probe-latest.json` + debug fires
+* Dropped broken default **git_bash** MCP; ulw-plan prefers `.lazygrok/` drafts
 * Docs: `docs/ultrawork-inject.md` (soft skill path vs hard inject)
 
 ## [0.4.2] (2026-07-27)

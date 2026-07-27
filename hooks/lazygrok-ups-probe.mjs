@@ -43,8 +43,11 @@ function ensureUserHooksBridge() {
 		if (!needs) {
 			const raw = JSON.parse(readFileSync(out, "utf8"));
 			const meta = raw._lazygrokUserHooks;
-			// v3+ = stable dispatcher script + dynamic plugin root
-			needs = !meta?.dynamicPluginRoot || (meta.version ?? 0) < 3;
+			// v4+ = full plugin hooks mirror + dynamic plugin root
+			needs =
+				!meta?.dynamicPluginRoot ||
+				!meta?.fullMirror ||
+				(meta.version ?? 0) < 4;
 		}
 		if (!needs || !existsSync(installUserHooks)) return;
 		spawnSync(process.execPath, [installUserHooks], {

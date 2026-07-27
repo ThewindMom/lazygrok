@@ -1,36 +1,36 @@
 #!/usr/bin/env node
 /**
- * One-time bridge for LazyGrok hard UPS inject on Grok 0.2.x.
+ * Install full LazyGrok hook bridge under ~/.grok/hooks/ so Grok 0.2.x runs
+ * plugin hooks at session spawn (plugin hooks alone often load too late).
  *
  * Writes:
- *   ~/.grok/hooks/lazygrok-run.sh   — stable dispatcher (finds plugin each run)
- *   ~/.grok/hooks/lazygrok.json     — file hooks Grok loads at session spawn
+ *   ~/.grok/hooks/lazygrok-run.sh  — resolves installed-plugins/lazygrok-* each run
+ *   ~/.grok/hooks/lazygrok.json    — full mirror of plugin hooks/hooks.json commands
  *
- * Why a bridge?
- *   Grok loads plugin hooks late (often after the first prompt). File hooks
- *   under ~/.grok/hooks/ load at spawn — early enough for inject.
- *
- * Why not re-run after every update?
- *   lazygrok-run.sh resolves ~/.grok/installed-plugins/lazygrok-* dynamically.
- *   plugin update → new hash dir → same bridge still works.
- *
- * First install only:
- *   node …/scripts/install-user-hooks.mjs
+ * First install only; survives `grok plugin update` (dynamic plugin root).
  */
-import { writeFileSync, mkdirSync, chmodSync, existsSync, readFileSync } from "node:fs";
+import {
+	writeFileSync,
+	mkdirSync,
+	chmodSync,
+	existsSync,
+	readFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PLUGIN_ROOT = resolve(__dirname, "..");
 const USER_HOOKS_DIR = join(homedir(), ".grok", "hooks");
 const RUNNER = join(USER_HOOKS_DIR, "lazygrok-run.sh");
 const OUT = join(USER_HOOKS_DIR, "lazygrok.json");
+const PLUGIN_HOOKS = join(PLUGIN_ROOT, "hooks/hooks.json");
 
 function runnerScript() {
 	return [
 		"#!/usr/bin/env bash",
-		"# LazyGrok stable hook dispatcher — installed by install-user-hooks.mjs",
-		"# Resolves the current plugin install each invocation (survives plugin update).",
+		"# LazyGrok full hook dispatcher — install-user-hooks.mjs v4",
 		"set -euo pipefail",
 		'PLUGIN="${GROK_PLUGIN_ROOT:-}"',
 		'if [[ -z "${PLUGIN}" || ! -d "${PLUGIN}" ]]; then',
@@ -42,30 +42,25 @@ function runnerScript() {
 		"    fi",
 		"  done",
 		"fi",
-		'if [[ -z "${PLUGIN}" || ! -f "${PLUGIN}/hooks/lazygrok-ups-probe.mjs" ]]; then',
-		'  echo "lazygrok-run: no plugin under ~/.grok/installed-plugins/lazygrok-*" >&2',
+		'if [[ -z "${PLUGIN}" || ! -d "${PLUGIN}/hooks" ]]; then',
+		'  echo "lazygrok-run: plugin not found" >&2',
 		"  exit 0",
 		"fi",
 		'export GROK_PLUGIN_ROOT="${PLUGIN}"',
-		'MODE="${1:-}"',
+		'KIND="${1:-}"',
 		"shift || true",
-		'case "$MODE" in',
-		'  user-prompt) exec bash "${PLUGIN}/hooks/run-hook.sh" user-prompt "$@" ;;',
-		'  stop)        exec bash "${PLUGIN}/hooks/run-hook.sh" stop "$@" ;;',
-		"  ultrawork-ups)",
-		'    exec node "${PLUGIN}/hooks/lazygrok-ups-probe.mjs" ultrawork user-prompt-submit "$@"',
+		'case "$KIND" in',
+		"  run-hook)",
+		'    exec bash "${PLUGIN}/hooks/run-hook.sh" "$@"',
 		"    ;;",
-		"  ulw-loop-ups)",
-		'    exec node "${PLUGIN}/hooks/lazygrok-shim.mjs" ulw-loop user-prompt-submit "$@"',
+		"  shim)",
+		'    exec node "${PLUGIN}/hooks/lazygrok-shim.mjs" "$@"',
 		"    ;;",
-		"  rules-ups)",
-		'    exec node "${PLUGIN}/hooks/lazygrok-shim.mjs" rules user-prompt-submit "$@"',
-		"    ;;",
-		"  ulw-loop-stop)",
-		'    exec node "${PLUGIN}/hooks/lazygrok-shim.mjs" ulw-loop stop "$@"',
+		"  ups-probe)",
+		'    exec node "${PLUGIN}/hooks/lazygrok-ups-probe.mjs" "$@"',
 		"    ;;",
 		"  *)",
-		'    echo "lazygrok-run: unknown mode: $MODE" >&2',
+		'    echo "lazygrok-run: unknown kind: $KIND (want run-hook|shim|ups-probe)" >&2',
 		"    exit 0",
 		"    ;;",
 		"esac",
@@ -73,45 +68,85 @@ function runnerScript() {
 	].join("\n");
 }
 
-function hooksPayload(runnerPath) {
+/**
+ * Map plugin command → bridge command via stable runner.
+ * Unknown shapes preserved with PLUGIN expand via env only (best effort).
+ */
+function bridgeCommand(pluginCmd, runnerPath) {
 	const r = runnerPath.replace(/'/g, `'\\''`);
-	const bash = (mode, timeout, statusMessage) => {
-		const h = {
-			type: "command",
-			command: `bash '${r}' ${mode}`,
-			timeout,
-		};
-		if (statusMessage) h.statusMessage = statusMessage;
-		return { hooks: [h] };
-	};
-	return {
+	const c = String(pluginCmd).trim();
+
+	// bash "${GROK_PLUGIN_ROOT}/hooks/run-hook.sh" <args...>
+	let m = c.match(
+		/^bash\s+"?\$\{GROK_PLUGIN_ROOT\}\/hooks\/run-hook\.sh"?\s+(.+)$/,
+	);
+	if (m) return `bash '${r}' run-hook ${m[1].trim()}`;
+
+	// node "${GROK_PLUGIN_ROOT}/hooks/lazygrok-ups-probe.mjs" <args>
+	m = c.match(
+		/^node\s+"?\$\{GROK_PLUGIN_ROOT\}\/hooks\/lazygrok-ups-probe\.mjs"?\s+(.+)$/,
+	);
+	if (m) return `bash '${r}' ups-probe ${m[1].trim()}`;
+
+	// node "${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs" <args>
+	m = c.match(
+		/^node\s+"?\$\{GROK_PLUGIN_ROOT\}\/hooks\/lazygrok-shim\.mjs"?\s+(.+)$/,
+	);
+	if (m) return `bash '${r}' shim ${m[1].trim()}`;
+
+	// node "${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim-capture.mjs" … → probe path
+	m = c.match(
+		/^node\s+"?\$\{GROK_PLUGIN_ROOT\}\/hooks\/lazygrok-shim-capture\.mjs"?\s+(.+)$/,
+	);
+	if (m) return `bash '${r}' ups-probe ${m[1].trim()}`;
+
+	throw new Error(`unmapped plugin hook command: ${pluginCmd}`);
+}
+
+function buildBridgeFromPlugin(pluginHooksPath, runnerPath) {
+	const raw = JSON.parse(readFileSync(pluginHooksPath, "utf8"));
+	const events = raw.hooks || raw;
+	const out = {
 		_lazygrokUserHooks: {
-			version: 3,
+			version: 4,
 			dynamicPluginRoot: true,
 			runner: "lazygrok-run.sh",
+			fullMirror: true,
+			source: "hooks/hooks.json",
 			writtenBy: "install-user-hooks.mjs",
 		},
-		hooks: {
-			UserPromptSubmit: [
-				bash("user-prompt", 20),
-				bash("ultrawork-ups", 8, "(OmO) Checking Ultrawork Trigger"),
-				bash("ulw-loop-ups", 10, "(OmO) Checking Ulw-Loop Steering"),
-				bash("rules-ups", 10, "(OmO) Loading Project Rules"),
-			],
-			Stop: [
-				bash("stop", 20),
-				bash("ulw-loop-stop", 15, "(OmO) Ulw-Loop Continuation"),
-			],
-		},
+		hooks: {},
 	};
+	let count = 0;
+	for (const [event, groups] of Object.entries(events)) {
+		if (!Array.isArray(groups)) continue;
+		out.hooks[event] = groups.map((g) => {
+			const hooks = (g.hooks || []).map((hh) => {
+				count += 1;
+				const next = { ...hh };
+				if (typeof hh.command === "string") {
+					next.command = bridgeCommand(hh.command, runnerPath);
+				}
+				return next;
+			});
+			const group = { hooks };
+			if (g.matcher != null) group.matcher = g.matcher;
+			return group;
+		});
+	}
+	return { payload: out, count };
 }
 
 export function writeUserHooksBridge() {
+	if (!existsSync(PLUGIN_HOOKS)) {
+		throw new Error(`missing plugin hooks: ${PLUGIN_HOOKS}`);
+	}
 	mkdirSync(USER_HOOKS_DIR, { recursive: true });
 	writeFileSync(RUNNER, runnerScript());
 	chmodSync(RUNNER, 0o755);
-	writeFileSync(OUT, JSON.stringify(hooksPayload(RUNNER), null, 2) + "\n");
-	return { runner: RUNNER, hooks: OUT };
+	const { payload, count } = buildBridgeFromPlugin(PLUGIN_HOOKS, RUNNER);
+	writeFileSync(OUT, JSON.stringify(payload, null, 2) + "\n");
+	return { runner: RUNNER, hooks: OUT, count, events: Object.keys(payload.hooks).length };
 }
 
 export function bridgeNeedsHeal() {
@@ -119,15 +154,16 @@ export function bridgeNeedsHeal() {
 	try {
 		const raw = JSON.parse(readFileSync(OUT, "utf8"));
 		const meta = raw._lazygrokUserHooks;
-		return !meta?.dynamicPluginRoot || (meta.version ?? 0) < 3;
+		return !meta?.fullMirror || (meta.version ?? 0) < 4;
 	} catch {
 		return true;
 	}
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-	const { runner, hooks } = writeUserHooksBridge();
-	console.log(`Wrote ${hooks}`);
-	console.log(`Wrote ${runner} (dynamic plugin root)`);
-	console.log("First install only — survives grok plugin update without re-run.");
+	const r = writeUserHooksBridge();
+	console.log(`Wrote ${r.hooks}`);
+	console.log(`Wrote ${r.runner}`);
+	console.log(`Mirrored ${r.count} hook commands across ${r.events} events (full plugin mirror)`);
+	console.log("First install only — survives grok plugin update (dynamic root).");
 }

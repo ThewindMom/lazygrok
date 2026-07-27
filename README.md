@@ -35,13 +35,16 @@ Upstream pin: [docs/ultrawork-upstream.md](docs/ultrawork-upstream.md).
 
 **Hard inject vs soft skill path:** the UPS hook inject is the LazyCodex-faithful bootstrap; skill-list activation is a soft fallback. Measure inject only via `~/.grok/state/lazygrok/ups-probe-latest.json` (never stale `hooks.log`). Details: [docs/ultrawork-inject.md](docs/ultrawork-inject.md).
 
-**First install only** (Grok loads plugin hooks late; we bridge via `~/.grok/hooks/`):
+**First install only** (Grok loads plugin hooks late; we mirror **all** plugin hooks via `~/.grok/hooks/`):
 
 ```bash
 node ~/.grok/installed-plugins/lazygrok-*/scripts/install-user-hooks.mjs
+# optional full audit:
+python3 ~/.grok/installed-plugins/lazygrok-*/scripts/audit-hooks.py full
+node ~/.grok/installed-plugins/lazygrok-*/scripts/verify-ups-inject.mjs
 ```
 
-That file uses a **dynamic** plugin root — `grok plugin update lazygrok` does **not** require re-running it. The UPS probe also self-heals a missing/stale bridge. Optional offline check: `node …/scripts/verify-ups-inject.mjs`.
+Dynamic plugin root — `grok plugin update` does **not** require re-run. UPS probe self-heals a missing/stale bridge (v4 full mirror).
 
 ## Grok harness map
 
