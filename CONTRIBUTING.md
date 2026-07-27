@@ -12,7 +12,7 @@ Thank you for helping improve lazygrok.
 |--|------------|-----------------|
 | Harness | Grok Build CLI | OpenCode, Codex, multi-harness |
 | Workspace state | `.lazygrok/` | `.omo/` |
-| Install | `grok plugin install github:mihazs/lazygrok` | npm / bun installers |
+| Install | `grok plugin install github:ThewindMom/lazygrok` | npm / bun installers |
 
 When porting behavior from omo, adapt paths and hooks for Grok’s plugin model. Do not copy OpenCode-specific assumptions into this repo.
 
@@ -78,7 +78,7 @@ Do **not** bump `plugin.json` version on feature PRs — release-please updates 
 
 The script tags `HEAD`, pushes the tag, and creates/updates the GitHub Release from the CHANGELOG section.
 
-Current release: [v0.1.0](https://github.com/mihazs/lazygrok/releases/tag/v0.1.0).
+Current release: [v0.1.0](https://github.com/ThewindMom/lazygrok/releases/tag/v0.1.0).
 
 See [README.md](README.md).
 
@@ -87,9 +87,9 @@ See [README.md](README.md).
 GitHub description and topics are not stored in git. After major positioning changes, update via:
 
 ```bash
-gh repo edit mihazs/lazygrok \
+gh repo edit ThewindMom/lazygrok \
   --description "lazygrok: Essential productivity plugin for Grok Build CLI — skill gate, Ralph & Ultrawork loops, todo/boulder continuation, handoff, unified Stop chain (oh-my-openagent inspired)" \
-  --homepage "https://github.com/mihazs/lazygrok"
+  --homepage "https://github.com/ThewindMom/lazygrok"
 # Topics: grok-build grok-plugin lazygrok grok-cli ralph-loop agentic-workflow ai-coding productivity multi-agent xai
 ```
 

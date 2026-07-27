@@ -12,7 +12,7 @@ Inspired by [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent). 
 |----|--------|
 | A **Grok plugin** (`plugin.json`, `hooks/hooks.json`, bundled skills/rules) | A standalone CLI or application users run from this repo |
 | Go hook binary (`bin/lazygrok-hook-*`) + thin `hooks/run-hook.sh` | User application code |
-| Install target: `grok plugin install github:mihazs/lazygrok --trust` | Global copies under `~/.grok/hooks/` (deprecated; plugin-only) |
+| Install target: `grok plugin install github:ThewindMom/lazygrok --trust` | Global copies under `~/.grok/hooks/` (deprecated; plugin-only) |
 
 After install, Grok loads hooks from `GROK_PLUGIN_ROOT` (installed copy under `~/.grok/installed-plugins/lazygrok-*`, often symlinked to a local clone).
 

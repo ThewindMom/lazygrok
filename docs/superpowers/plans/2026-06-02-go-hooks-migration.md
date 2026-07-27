@@ -18,7 +18,7 @@
 
 | Path | Responsibility |
 |------|----------------|
-| [`go.mod`](go.mod) | Module `github.com/mihazs/lazygrok` |
+| [`go.mod`](go.mod) | Module `github.com/ThewindMom/lazygrok` |
 | [`cmd/lazygrok-hook/main.go`](cmd/lazygrok-hook/main.go) | Cobra root + subcommands |
 | [`internal/hookenv/env.go`](internal/hookenv/env.go) | `GROK_*` paths, stdin JSON → `Event` |
 | [`internal/hookio/emit.go`](internal/hookio/emit.go) | `EmitAllow`, `EmitDeny`, `EmitStopBlock`, `EmitAdditionalContext` |
@@ -64,7 +64,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/mihazs/lazygrok/internal/hookio"
+	"github.com/ThewindMom/lazygrok/internal/hookio"
 )
 
 func TestEmitAllow(t *testing.T) {
@@ -94,7 +94,7 @@ func TestEmitDenyWritesReason(t *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /home/mihazs/Dev/lazygrok
+cd /home/thewind/Projects/00_Random_Coding/lazygrok
 go test ./internal/hookio/... -count=1
 ```
 
@@ -105,7 +105,7 @@ Expected: FAIL (`package hookio` not found)
 `go.mod`:
 
 ```go
-module github.com/mihazs/lazygrok
+module github.com/ThewindMom/lazygrok
 
 go 1.22
 
@@ -190,8 +190,8 @@ package main
 import (
 	"os"
 
-	"github.com/mihazs/lazygrok/internal/hookenv"
-	"github.com/mihazs/lazygrok/internal/hookio"
+	"github.com/ThewindMom/lazygrok/internal/hookenv"
+	"github.com/ThewindMom/lazygrok/internal/hookio"
 	"github.com/spf13/cobra"
 )
 

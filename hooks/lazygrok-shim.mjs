@@ -24,7 +24,14 @@ import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { env } from "node:process";
 import { homedir } from "node:os";
-import { readFileSync, mkdirSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import {
+	readFileSync,
+	mkdirSync,
+	writeFileSync,
+	existsSync,
+	readdirSync,
+} from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -102,42 +109,67 @@ function pick(input, ...keys) {
 }
 
 /**
- * Recover user prompt when stdin lacks it (observed live: {"event":"user_prompt_submit"} only).
- * Prefer prompt_history.jsonl (written at submit with session_id + prompt), then chat_history.
+ * Recover user prompt when stdin lacks it.
+ * Prefer prompt_history.jsonl (session_id + prompt), then chat_history.
+ * Race-safe: host may flush history after UPS hook starts — retry briefly.
  */
-function recoverPromptFromSession(sessionId, workspaceRoot) {
-	try {
-		const sessionsRoot = join(homedir(), ".grok", "sessions");
-		const encoded = workspaceRoot ? encodeURIComponent(workspaceRoot) : "";
-		const candidates = [];
-		if (encoded) {
-			candidates.push(join(sessionsRoot, encoded, "prompt_history.jsonl"));
-			if (sessionId) candidates.push(join(sessionsRoot, encoded, sessionId, "chat_history.jsonl"));
+function listSessionCandidates(sessionId, workspaceRoot) {
+	const sessionsRoot = join(homedir(), ".grok", "sessions");
+	const encoded = workspaceRoot ? encodeURIComponent(workspaceRoot) : "";
+	const candidates = [];
+	if (encoded) {
+		candidates.push(join(sessionsRoot, encoded, "prompt_history.jsonl"));
+		if (sessionId) {
+			candidates.push(join(sessionsRoot, encoded, sessionId, "chat_history.jsonl"));
 		}
-		// Any workspace prompt_history under sessions/
-		if (existsSync(sessionsRoot)) {
-			for (const d of readdirSync(sessionsRoot)) {
-				candidates.push(join(sessionsRoot, d, "prompt_history.jsonl"));
-				if (sessionId) candidates.push(join(sessionsRoot, d, sessionId, "chat_history.jsonl"));
+	}
+	if (existsSync(sessionsRoot)) {
+		for (const d of readdirSync(sessionsRoot)) {
+			candidates.push(join(sessionsRoot, d, "prompt_history.jsonl"));
+			if (sessionId) {
+				candidates.push(join(sessionsRoot, d, sessionId, "chat_history.jsonl"));
 			}
 		}
+	}
+	return candidates;
+}
 
-		// 1) prompt_history: {session_id, prompt, timestamp}
+function recoverPromptOnce(sessionId, workspaceRoot) {
+	try {
+		const candidates = listSessionCandidates(sessionId, workspaceRoot);
 		for (const p of candidates) {
 			if (!p.endsWith("prompt_history.jsonl") || !existsSync(p)) continue;
 			const fromHist = extractFromPromptHistory(p, sessionId);
-			if (fromHist) return fromHist;
+			if (fromHist) return { prompt: fromHist, source: "prompt_history" };
 		}
-		// 2) chat_history last <user_query>
 		for (const p of candidates) {
 			if (!p.endsWith("chat_history.jsonl") || !existsSync(p)) continue;
 			const fromChat = extractLastUserQuery(p);
-			if (fromChat) return fromChat;
+			if (fromChat) return { prompt: fromChat, source: "chat_history" };
 		}
-		return "";
+		return { prompt: "", source: "none" };
 	} catch {
-		return "";
+		return { prompt: "", source: "none" };
 	}
+}
+
+/** Sync recovery (used when no async path). Prefer async recoverPromptFromSessionAsync. */
+function recoverPromptFromSession(sessionId, workspaceRoot) {
+	return recoverPromptOnce(sessionId, workspaceRoot).prompt;
+}
+
+/**
+ * Retry recovery: 0 + 25/50/100/200 ms (total ~375ms) so UPS can wait for prompt_history flush.
+ */
+async function recoverPromptFromSessionAsync(sessionId, workspaceRoot) {
+	const waits = [0, 25, 50, 100, 200];
+	let last = { prompt: "", source: "none" };
+	for (const ms of waits) {
+		if (ms > 0) await delay(ms);
+		last = recoverPromptOnce(sessionId, workspaceRoot);
+		if (last.prompt.trim()) return { ...last, attempts: waits.indexOf(ms) + 1 };
+	}
+	return { ...last, attempts: waits.length };
 }
 
 function extractFromPromptHistory(path, sessionId) {
@@ -186,8 +218,10 @@ function extractLastUserQuery(historyPath) {
 	return "";
 }
 
-function extractPrompt(input, raw) {
-	// Official grok-build fields first
+/**
+ * Resolve prompt + recovery metadata. Async for race-safe history recovery.
+ */
+async function extractPromptMeta(input, raw) {
 	const direct = asString(
 		pick(
 			input,
@@ -202,7 +236,9 @@ function extractPrompt(input, raw) {
 			"user_message",
 		),
 	);
-	if (direct.trim()) return direct;
+	if (direct.trim()) {
+		return { prompt: direct, source: "stdin", attempts: 0 };
+	}
 
 	for (const bagKey of ["input", "payload", "data", "hook_input", "hookInput"]) {
 		const bag = input[bagKey];
@@ -210,7 +246,9 @@ function extractPrompt(input, raw) {
 			const nested = asString(
 				pick(bag, "prompt", "userPrompt", "user_prompt", "message", "content", "text"),
 			);
-			if (nested.trim()) return nested;
+			if (nested.trim()) {
+				return { prompt: nested, source: "stdin_nested", attempts: 0 };
+			}
 		}
 	}
 
@@ -221,18 +259,27 @@ function extractPrompt(input, raw) {
 		env.GROK_WORKSPACE_ROOT ||
 		env.CLAUDE_PROJECT_DIR ||
 		process.cwd();
-	const recovered = recoverPromptFromSession(sessionId, workspace);
-	if (recovered.trim()) return recovered;
+	const recovered = await recoverPromptFromSessionAsync(sessionId, workspace);
+	if (recovered.prompt.trim()) {
+		return {
+			prompt: recovered.prompt,
+			source: recovered.source,
+			attempts: recovered.attempts,
+		};
+	}
 
-	if (typeof raw === "string" && /(?:ultrawork|\bulw\b)/i.test(raw)) return raw;
-	return "";
+	if (typeof raw === "string" && /(?:ultrawork|\bulw\b)/i.test(raw)) {
+		return { prompt: raw, source: "raw_regex", attempts: 0 };
+	}
+	return { prompt: "", source: "none", attempts: recovered.attempts || 0 };
 }
 
-function maybeDebugDump(payload) {
+function dumpUpsResult(payload) {
 	try {
 		const dir = join(homedir(), ".grok/state/lazygrok");
 		mkdirSync(dir, { recursive: true });
 		writeFileSync(join(dir, "last-ups-shim.json"), JSON.stringify(payload, null, 2));
+		writeFileSync(join(dir, "last-ups-result.json"), JSON.stringify(payload, null, 2));
 	} catch {
 		// ignore
 	}
@@ -241,37 +288,52 @@ function maybeDebugDump(payload) {
 const chunks = [];
 process.stdin.on("data", (chunk) => chunks.push(chunk));
 process.stdin.on("end", () => {
-	const raw = Buffer.concat(chunks).toString("utf8").trim();
-	if (!raw) {
-		// Stdin empty — try env + session recovery (Grok sets GROK_SESSION_ID / GROK_WORKSPACE_ROOT)
-		const sessionId = env.GROK_SESSION_ID || "";
-		const workspace = env.GROK_WORKSPACE_ROOT || env.CLAUDE_PROJECT_DIR || process.cwd();
-		const recovered = recoverPromptFromSession(sessionId, workspace);
-		if (!recovered || !/(?:ultrawork|\bulw\b)/i.test(recovered)) {
+	void (async () => {
+		const raw = Buffer.concat(chunks).toString("utf8").trim();
+		if (!raw) {
+			const sessionId = env.GROK_SESSION_ID || "";
+			const workspace = env.GROK_WORKSPACE_ROOT || env.CLAUDE_PROJECT_DIR || process.cwd();
+			const recovered = await recoverPromptFromSessionAsync(sessionId, workspace);
+			if (!recovered.prompt || !/(?:ultrawork|\bulw\b)/i.test(recovered.prompt)) {
+				if (componentName === "ultrawork") {
+					dumpUpsResult({
+						reason: "empty_stdin_no_ulw_recovery",
+						component: componentName,
+						envSessionId: sessionId || null,
+						recovery: recovered,
+						at: new Date().toISOString(),
+					});
+				}
+				process.exit(0);
+			}
+			const fabricated = {
+				hookEventName: env.GROK_HOOK_EVENT || "user_prompt_submit",
+				sessionId,
+				cwd: workspace,
+				workspaceRoot: workspace,
+				prompt: recovered.prompt,
+			};
+			await processEnvelope(fabricated, JSON.stringify(fabricated), {
+				prompt: recovered.prompt,
+				source: recovered.source,
+				attempts: recovered.attempts,
+			});
+			return;
+		}
+
+		let input;
+		try {
+			input = JSON.parse(raw);
+		} catch {
+			process.stdout.write(raw);
 			process.exit(0);
 		}
-		const fabricated = {
-			hookEventName: env.GROK_HOOK_EVENT || "user_prompt_submit",
-			sessionId,
-			cwd: workspace,
-			workspaceRoot: workspace,
-			prompt: recovered,
-		};
-		processEnvelope(fabricated, JSON.stringify(fabricated));
-		return;
-	}
-
-	let input;
-	try {
-		input = JSON.parse(raw);
-	} catch {
-		process.stdout.write(raw);
-		process.exit(0);
-	}
-	processEnvelope(input, raw);
+		const meta = await extractPromptMeta(input, raw);
+		await processEnvelope(input, raw, meta);
+	})();
 });
 
-function processEnvelope(input, raw) {
+async function processEnvelope(input, raw, promptMeta) {
 	// Official: hookEventName; legacy tests/docs: event / hook_event_name
 	const rawEvent =
 		pick(input, "hookEventName", "hook_event_name", "event") ||
@@ -286,7 +348,7 @@ function processEnvelope(input, raw) {
 		env.GROK_WORKSPACE_ROOT ||
 		env.CLAUDE_PROJECT_DIR ||
 		process.cwd();
-	const prompt = extractPrompt(input, raw);
+	const prompt = promptMeta?.prompt ?? "";
 	const toolName = asString(pick(input, "toolName", "tool_name", "tool"));
 	const toolInput = pick(input, "toolInput", "tool_input", "arguments", "input") || {};
 	const toolUseId = asString(pick(input, "toolUseId", "tool_use_id", "toolCallId"));
@@ -370,23 +432,26 @@ function processEnvelope(input, raw) {
 	child.on("exit", (code) => {
 		if (componentName === "ultrawork" && grokEvent === "UserPromptSubmit") {
 			const ok = stdout.includes("ultrawork-mode") || stdout.includes("ULTRAWORK MODE");
-			if (!ok) {
-				maybeDebugDump({
-					reason: "empty_ultrawork_stdout",
-					component: componentName,
-					rawEvent,
-					grokEvent,
-					promptLen: prompt.length,
-					promptPreview: prompt.slice(0, 300),
-					keys: Object.keys(input || {}),
-					envHookEvent: env.GROK_HOOK_EVENT || null,
-					envSessionId: env.GROK_SESSION_ID || null,
-					exitCode: code,
-					stderrPreview: stderr.slice(0, 500),
-					codexEvent,
-					rawPreview: String(raw).slice(0, 3000),
-				});
-			}
+			dumpUpsResult({
+				reason: ok ? "inject_ok" : "empty_ultrawork_stdout",
+				injectOk: ok,
+				component: componentName,
+				rawEvent,
+				grokEvent,
+				promptLen: prompt.length,
+				promptPreview: prompt.slice(0, 300),
+				promptSource: promptMeta?.source || "unknown",
+				recoveryAttempts: promptMeta?.attempts ?? 0,
+				keys: Object.keys(input || {}),
+				envHookEvent: env.GROK_HOOK_EVENT || null,
+				envSessionId: env.GROK_SESSION_ID || null,
+				exitCode: code,
+				stdoutBytes: stdout.length,
+				stderrPreview: stderr.slice(0, 500),
+				codexEvent,
+				rawPreview: String(raw).slice(0, 3000),
+				at: new Date().toISOString(),
+			});
 		}
 		process.exit(code || 0);
 	});

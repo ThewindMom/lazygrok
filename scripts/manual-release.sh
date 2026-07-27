@@ -29,7 +29,7 @@ trap 'rm -f "$NOTES_FILE"' EXIT
   echo "## Install"
   echo
   echo '```bash'
-  echo "grok plugin install github:mihazs/lazygrok@${TAG} --trust"
+  echo "grok plugin install github:ThewindMom/lazygrok@${TAG} --trust"
   echo "grok plugin enable lazygrok"
   echo '```'
   echo

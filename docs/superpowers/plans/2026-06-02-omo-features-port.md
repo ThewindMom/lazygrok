@@ -95,7 +95,7 @@ echo "intent-gate: OK"
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /home/mihazs/Dev/lazygrok
+cd /home/thewind/Projects/00_Random_Coding/lazygrok
 export GROK_PLUGIN_ROOT="$(pwd)"
 bash hooks/test-intent-gate.sh
 ```

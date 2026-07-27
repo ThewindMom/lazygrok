@@ -6,7 +6,7 @@
 2. **Reload** in TUI: `Ctrl+L` (opens Hooks & Plugins) → Plugins tab → `r` (reload all plugins); then Hooks tab → `l` (reload hooks). Or start a **new Grok session**.
 3. Reinstall from source or GitHub (update may leave stale snapshot):
    ```bash
-   grok plugin install github:mihazs/lazygrok --trust
+   grok plugin install github:ThewindMom/lazygrok --trust
    # or for local clone:
    grok plugin install "$(pwd)" --trust
    ```
@@ -33,7 +33,7 @@ The remove script now prunes these automatically.
 ```bash
 grok plugin install /path/to/lazygrok --trust
 # or
-grok plugin install github:mihazs/lazygrok --trust
+grok plugin install github:ThewindMom/lazygrok --trust
 ```
 
 ## Mutating tools blocked (skill gate)
@@ -45,7 +45,7 @@ Hooks deny `Write` / `StrReplace` / `Delete` until at least one catalog `SKILL.m
 
 ## Agent skips skills (Composer 2.5)
 
-Grok may show `<skill_information>` in the prompt — that is **not** loaded skill content. lazygrok injects `<AGENT_SKILL_GATE_PROACTIVE>` on each turn with **Read** paths; follow those before other tools. There is no Skill tool in Grok (use Read on `SKILL.md`). Update the plugin and reload hooks (`grok plugin install` + new session).
+Grok may show `<skill_information>` in the prompt — that is **not** loaded skill content. lazygrok injects `<AGENT_SKILL_GATE_PROACTIVE>` on each turn with **Read** paths; follow those before other tools. There is no Skill tool in Grok (use `read_file` on the **absolute** `SKILL.md` path from the catalog / `GROK_PLUGIN_ROOT`). Never open workspace-relative `skills/<name>/SKILL.md` for LazyGrok plugin skills — they live under `~/.grok/installed-plugins/lazygrok-*/skills/` (and `vendor/lazygrok-skills/`). A UI chip `Skill <name>` without a successful absolute read is not activation. Reviewer subagents need parent-prepared `git diff` paths plus `run_terminal_command`; do not invent MCP `bash`/`Shell`. Update the plugin and reload hooks (`grok plugin install` + new session).
 
 ## Ultrawork says "No update_goal tool available"
 

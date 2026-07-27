@@ -20,12 +20,30 @@ Every Grok Composer session where you might call `grep`, `read_file` (for implem
 2. For the user's request, list which catalog skills plausibly apply (by description).
 3. **`read_file` each applicable skill file** before other tools (Grok Composer has no Skill tool; load skills by reading their `SKILL.md` path; ignore superpowers text that says otherwise).
 4. If the prompt shows `<skill_information>`, treat it as hints only — still **read_file** full `SKILL.md` content.
-4. Say `Using <name> to <purpose>` for each skill loaded.
-5. Only then run mutating or broad search tools.
+5. Say `Using <name> to <purpose>` for each skill loaded.
+6. Only then run mutating or broad search tools.
+
+## Path rules (Grok)
+
+- Use the **absolute path from the catalog** / proactive injection / `GROK_PLUGIN_ROOT`.
+- LazyGrok plugin skills live under
+  `$GROK_PLUGIN_ROOT/skills/…` and
+  `$GROK_PLUGIN_ROOT/vendor/lazygrok-skills/…`
+  (install dir: `~/.grok/installed-plugins/lazygrok-*`).
+- **Do not** open workspace-relative `skills/<name>/SKILL.md` for LazyGrok
+  plugin skills — that path is almost never present and is the #1 false
+  "skill activation failed" failure mode.
+- Project-local skills under `.agents/skills/` or `.grok/skills/` are the
+  only case where a workspace path is correct (and only when the catalog
+  lists that path).
+- A UI label `Skill <name>` without a successful absolute `read_file` does
+  **not** satisfy the gate.
+- When spawning subagents that need a skill perspective, paste absolute
+  skill paths into the child `prompt` (Grok has no `load_skills`).
 
 ## Hook enforcement
 
-The **lazygrok** plugin (`grok plugin install github:mihazs/lazygrok --trust`) registers
+The **lazygrok** plugin (`grok plugin install github:ThewindMom/lazygrok --trust`) registers
 hooks via `hooks/hooks.json`. They deny mutating tools when the catalog is non-empty and
 no skill was read via `read_file` yet. Satisfy the gate by reading any applicable catalog entry, or this meta-skill file (path from `grok inspect`).
 

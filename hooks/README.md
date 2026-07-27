@@ -1,6 +1,6 @@
 # Grok hooks layout
 
-Plugin manifest: **`hooks/hooks.json`** (loaded via `GROK_PLUGIN_ROOT`). **Do not** add parallel `~/.grok/hooks/*.json` for this stack — use `grok plugin install github:mihazs/lazygrok --trust` (or `$(pwd)` from a local clone).
+Plugin manifest: **`hooks/hooks.json`** (loaded via `GROK_PLUGIN_ROOT`). **Do not** add parallel `~/.grok/hooks/*.json` for this stack — use `grok plugin install github:ThewindMom/lazygrok --trust` (or `$(pwd)` from a local clone).
 
 ## Runtime
 

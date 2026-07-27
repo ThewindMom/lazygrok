@@ -8,10 +8,10 @@
     "./vendor/lazygrok-hooks"
   ],
   "author": {
-    "name": "mihazs"
+    "name": "ThewindMom"
   },
-  "homepage": "https://github.com/mihazs/lazygrok",
-  "repository": "https://github.com/mihazs/lazygrok",
+  "homepage": "https://github.com/ThewindMom/lazygrok",
+  "repository": "https://github.com/ThewindMom/lazygrok",
   "license": "MIT",
   "categories": [
     "productivity",

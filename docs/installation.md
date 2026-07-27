@@ -3,28 +3,28 @@
 ## Requirements
 
 - [Grok Build CLI](https://github.com/xai-org/grok) with plugin support (`grok plugin install`, `grok plugin enable`)
-- Network access to GitHub for `github:mihazs/lazygrok`
+- Network access to GitHub for `github:ThewindMom/lazygrok`
 
 Hooks ship as prebuilt **`bin/lazygrok-hook-*`** binaries (no Python required). **superpowers** skills are bundled under `vendor/superpowers/skills/` — no separate superpowers install required. Optional: **`grok`** for skill catalog refresh (`grok inspect --json`); **`node`** for LSP post-edit diagnostics when using the bundled LSP MCP.
 
 ## Install from GitHub
 
 ```bash
-grok plugin install github:mihazs/lazygrok --trust
+grok plugin install github:ThewindMom/lazygrok --trust
 grok plugin enable lazygrok
 ```
 
-Pinned to a release (see [Releases](https://github.com/mihazs/lazygrok/releases)):
+Pinned to a release (see [Releases](https://github.com/ThewindMom/lazygrok/releases)):
 
 ```bash
-grok plugin install github:mihazs/lazygrok@v0.1.0 --trust
+grok plugin install github:ThewindMom/lazygrok@v0.1.0 --trust
 grok plugin enable lazygrok
 ```
 
 ## Local development
 
 ```bash
-git clone https://github.com/mihazs/lazygrok.git
+git clone https://github.com/ThewindMom/lazygrok.git
 cd lazygrok
 grok plugin install "$(pwd)" --trust
 grok plugin enable lazygrok
@@ -46,7 +46,7 @@ If you previously copied hooks or skills into `~/.grok/hooks/` or `~/.grok/rules
 
 ```bash
 bash scripts/remove-global-overlays.sh
-grok plugin install github:mihazs/lazygrok --trust
+grok plugin install github:ThewindMom/lazygrok --trust
 grok plugin enable lazygrok
 ```
 

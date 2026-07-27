@@ -69,8 +69,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim-capture.mjs\" ultrawork user-prompt-submit",
-            "timeout": 5,
+            "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-ups-probe.mjs\" ultrawork user-prompt-submit",
+            "timeout": 8,
             "statusMessage": "(OmO) Checking Ultrawork Trigger"
           }
         ]

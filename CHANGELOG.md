@@ -50,7 +50,7 @@ Releases are normally automated via [release-please](https://github.com/googleap
 * No multi_agent_v2/teammode transport; no npm auto-update SessionStart
 * `coding-agent-sessions` Grok platform scanner kept after LCX merge
 
-## [0.2.1](https://github.com/mihazs/lazygrok/releases/tag/v0.2.1) (2026-06-03)
+## [0.2.1](https://github.com/ThewindMom/lazygrok/releases/tag/v0.2.1) (2026-06-03)
 
 ### Fixes
 
@@ -58,7 +58,7 @@ Releases are normally automated via [release-please](https://github.com/googleap
 * Expanded "Hooks do not run after install" troubleshooting with detailed reload steps (Plugins `r`, Hooks `l`), reinstall from path, verification commands (plugin list/details, TUI Hooks tab under Plugin source, recent non-test state dirs under `~/.grok/state/skill-gate/` and `using-superpowers/` after a prompt), and scrollback annotation notes.
 * `scripts/remove-global-overlays.sh` now also sanitizes stale plugin IDs from the enabled list (removes old `user/xxx/lazygrok` and `superpowers` entries, ensures canonical short names like `lazygrok` are present; backs up config). This complements the global hooks/skills/rules cleanup and `grok plugin enable`.
 
-## [0.2.0](https://github.com/mihazs/lazygrok/releases/tag/v0.2.0) (2026-06-03)
+## [0.2.0](https://github.com/ThewindMom/lazygrok/releases/tag/v0.2.0) (2026-06-03)
 
 ### Features
 
@@ -80,7 +80,7 @@ Releases are normally automated via [release-please](https://github.com/googleap
 * lefthook pre-commit rebuilds `bin/lazygrok-hook-*`
 * SessionStart runs on all session starts (removed narrow matcher)
 
-## [0.1.0](https://github.com/mihazs/lazygrok/releases/tag/v0.1.0) (2026-06-02)
+## [0.1.0](https://github.com/ThewindMom/lazygrok/releases/tag/v0.1.0) (2026-06-02)
 
 ### Features
 

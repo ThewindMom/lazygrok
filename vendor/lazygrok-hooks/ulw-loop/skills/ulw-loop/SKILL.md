@@ -72,6 +72,24 @@ When OmO/Codex docs say "call get_goal / create_goal / update_goal", translate t
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
 Prefer `subagent_type` from the installed LazyGrok agents list. Do not use Codex multi_agent_v1/v2 tool names.
 
+### Skill paths + reviewer spawn payload (Grok)
+
+There is **no Skill tool**. LazyGrok skills live under `GROK_PLUGIN_ROOT`
+(or `$HOME/.grok/installed-plugins/lazygrok-*`), **not** workspace `skills/`.
+
+- Load skills with `read_file` on **absolute** catalog paths only.
+- A UI chip `Skill <name>` without a successful absolute `read_file` does not count.
+- Before spawning `lazygrok-code-reviewer` / `lazygrok-gate-reviewer` / QA
+  reviewers, the **parent** must:
+  1. Write the full base…HEAD diff to disk (`git diff … > /tmp/ulw-review.diff`).
+  2. Resolve `PLUGIN_ROOT` and paste absolute skill paths into the child prompt:
+     `$PLUGIN_ROOT/skills/remove-ai-slops/SKILL.md` and
+     `$PLUGIN_ROOT/vendor/lazygrok-skills/programming/SKILL.md`.
+  3. Pass goal, criteria, evidence paths, changed files, notepad path, and
+     report path under `.lazygrok/evidence/`.
+- Reviewer agents include `run_terminal_command` for read-only git fallback;
+  never tell them to use MCP `bash`/`Shell`.
+
 When a skill or workflow still shows Codex MultiAgent examples, translate them with this table.
 
 

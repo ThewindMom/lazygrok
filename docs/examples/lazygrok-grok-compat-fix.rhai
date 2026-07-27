@@ -91,7 +91,7 @@ let shards = [
     #{
         id: "p1-reviewers",
         brief: "P1: three reviewer agents evidence write path",
-        detail: "Edit agents/lazygrok-code-reviewer.md, agents/lazygrok-gate-reviewer.md, agents/lazygrok-clone-fidelity-reviewer.md. Add write to tools array (keep read_file grep list_dir). Change report path .omo/evidence/ to .lazygrok/evidence/. Say: prefer writing the report file; if write fails, put full report in the return message. Replace Skill-tool loading language with: Read skills/remove-ai-slops/SKILL.md and programming skill via read_file when available, else apply criteria from this prompt. Keep read-only-for-product-code semantics (do not implement product fixes).",
+        detail: "Edit agents/lazygrok-code-reviewer.md, agents/lazygrok-gate-reviewer.md, agents/lazygrok-clone-fidelity-reviewer.md. tools must include read_file, grep, list_dir, write, run_terminal_command. Report under .lazygrok/evidence/; if write fails, full report in return message. Skill load: absolute plugin paths only via GROK_PLUGIN_ROOT (skills/remove-ai-slops/SKILL.md and vendor/lazygrok-skills/programming/SKILL.md) — never workspace-relative skills/; parent must pass full diff path. Keep read-only-for-product-code semantics.",
     },
     #{
         id: "p1-plan-lib-explorer",

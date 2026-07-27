@@ -1,5 +1,7 @@
 # LazyGrok
 
+<!-- Plugin version is 0.4.3 -->
+
 **LazyCodex / OmO for [Grok Build](https://x.ai)** — version **0.4.3**.
 
 LazyGrok ports [code-yeongyu/lazycodex](https://github.com/code-yeongyu/lazycodex) **`plugins/omo` @ v4.19.2** onto Grok’s tool surface (not a mindless Codex copy). Upstream process text and components stay LazyCodex; Grok gets permanent harness adapters (`todo_write`, `spawn_subagent`, ulw-loop ledger when host `create_goal` is missing, plugin paths, hooks).
@@ -30,6 +32,8 @@ You do **not** need `/goal` or extra slash commands. Bootstrap:
 | **Grok workflows** | Optional pipelines for sub-jobs — not the ULW engine |
 
 Upstream pin: [docs/ultrawork-upstream.md](docs/ultrawork-upstream.md).
+
+**Hard inject vs soft skill path:** the UPS hook inject is the LazyCodex-faithful bootstrap; skill-list activation is a soft fallback. Measure inject only via `~/.grok/state/lazygrok/ups-probe-latest.json` (never stale `hooks.log`). Details: [docs/ultrawork-inject.md](docs/ultrawork-inject.md). Offline proof: `node scripts/verify-ups-inject.mjs`.
 
 ## Grok harness map
 

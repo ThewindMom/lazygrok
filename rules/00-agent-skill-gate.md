@@ -21,17 +21,24 @@ Run `grok inspect` (or rely on SessionStart hook cache at `~/.grok/state/skill-g
 
 Read-only work (questions, diagnostics, review without edits) should still load skills when descriptions match; for pure explanation with no file changes, reading the meta-skill `agent-skill-gate` once satisfies the hook minimum.
 
+## Path rules
+
+- Always use **absolute** paths from the catalog / proactive block / `GROK_PLUGIN_ROOT`.
+- LazyGrok plugin skills: `$GROK_PLUGIN_ROOT/skills/…` and `$GROK_PLUGIN_ROOT/vendor/lazygrok-skills/…`.
+- **Never** treat workspace `skills/<name>/SKILL.md` as the LazyGrok catalog (common false failure).
+- A UI `Skill <name>` chip without a successful absolute Read does not satisfy the gate.
+
 ## Any installed skill
 
 - **Project** skills under `.agents/skills/` or `.grok/skills/` in the workspace
 - **User** skills under `~/.grok/skills/` (other tools; not lazygrok duplicates)
-- **Plugin** skills from installed Grok plugins (lazygrok, superpowers, etc.)
+- **Plugin** skills from installed Grok plugins (lazygrok under `~/.grok/installed-plugins/lazygrok-*`)
 
 Do not hardcode skill names. Use the catalog.
 
-## Subagents (`task()`)
+## Subagents (`spawn_subagent`)
 
-Grok has no `load_skills`. Paste relevant skill **paths** and summaries from the catalog into the subagent `prompt`.
+Grok has no `load_skills`. Paste relevant skill **absolute paths** and summaries from the catalog into the subagent `prompt`. For code/gate reviewers, also pass a full diff path (parent writes `git diff … > /tmp/….diff`) — do not make children reverse-engineer git without shell.
 
 ## Fail-open
 

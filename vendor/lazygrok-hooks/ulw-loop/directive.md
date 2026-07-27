@@ -120,8 +120,11 @@ loosely relevant skill. Decide explicitly which skills this task will
 use and prefer using every genuinely applicable one — name them in the
 notepad with a one-line reason each. Skipping a skill that fits the
 task is a defect. Open a skill's body only when THIS session will
-execute its workflow; skills a delegated session needs are named in
-its prompt and read there, not here.
+execute its workflow — via `read_file` on the **absolute** catalog path
+(`GROK_PLUGIN_ROOT` / `~/.grok/installed-plugins/lazygrok-*/…`), never
+workspace-relative `skills/…` for LazyGrok plugin skills. Skills a
+delegated session needs are named with absolute paths in its prompt and
+read there, not here.
 Next, fire the first discovery wave under Finding things below.
 Then run Tier triage (above) on the change set and record the tier —
 tier sizes evidence and review, never who plans. Size planning by
@@ -351,6 +354,22 @@ required; paste only the context the child needs. Full-history forks can
 make the child continue old parent context instead of the delegated task.
 Use Grok `spawn_subagent` with `subagent_type` + `prompt` + `background: true`. Wait with `get_command_or_subagent_output({task_ids, timeout_ms})`. Stop with `kill_command_or_subagent`. Re-task by spawning again.
 
+## Skill paths for this session and children (NON-NEGOTIABLE on Grok)
+There is **no Skill tool**. Catalog skills live under the LazyGrok plugin
+install (`GROK_PLUGIN_ROOT`, or `$HOME/.grok/installed-plugins/lazygrok-*`),
+**not** under the workspace `skills/` directory.
+- Load a skill only by `read_file` of its **absolute** `SKILL.md` path from
+  the skill catalog / `AGENT_SKILL_GATE_PROACTIVE` / `GROK_PLUGIN_ROOT`.
+- Workspace-relative `skills/<name>/SKILL.md` is almost always wrong for
+  LazyGrok skills — do not try it first.
+- A UI chip labeled `Skill <name>` is **not** proof the body loaded; only a
+  successful `read_file` of the absolute path counts.
+- When spawning a child that must apply a skill perspective, paste the
+  absolute skill path(s) into `prompt` (or the full criterion text). Do not
+  tell the child "load skills/foo" relative to the repo.
+- Shell for children that need git/diff/tests is Grok
+  `run_terminal_command`. Never invent MCP tools named `bash` or `Shell`.
+
 # TOML-backed subagent routing compatibility
 Installed role agents bind via `subagent_type` on Grok `spawn_subagent`.
 Always pass `subagent_type` from the LazyGrok agents list; put the assignment in `prompt`.
@@ -402,22 +421,39 @@ diff, run diagnostics, confirm each criterion's evidence, and state in
 one line why the tier held.
 
 Procedure (NON-NEGOTIABLE):
-1. Spawn a child with `background: true` and a self-contained reviewer
-   assignment in `prompt`. Prefer `subagent_type: "lazygrok:lazygrok-code-reviewer"` when available; otherwise paste reviewer requirements into the prompt.
-   Pass: goal, success-criteria, scenario evidence, full diff, notepad
-   path.
-2. Verify each reviewer concern yourself. A concern blocks only when
+1. **Parent prepares review payload BEFORE spawn** (do not dump this on
+   the child to reverse-engineer):
+   - Write the full merge/base diff to a file, e.g.
+     `git diff --stat origin/main...HEAD > /tmp/ulw-review-stat.txt`
+     and `git diff origin/main...HEAD > /tmp/ulw-review.diff`
+     (use the real base the goal names).
+   - Resolve plugin root once:
+     `PLUGIN_ROOT="${GROK_PLUGIN_ROOT:-$(ls -d "$HOME"/.grok/installed-plugins/lazygrok-* 2>/dev/null | sort | tail -1)}"`
+   - Absolute skill paths for reviewers:
+     `$PLUGIN_ROOT/skills/remove-ai-slops/SKILL.md` and
+     `$PLUGIN_ROOT/vendor/lazygrok-skills/programming/SKILL.md`.
+2. Spawn a child with `background: true` and a self-contained reviewer
+   assignment in `prompt`. Prefer
+   `subagent_type: "lazygrok:lazygrok-code-reviewer"` when available;
+   otherwise paste reviewer requirements into the prompt.
+   **Must pass in `prompt`:** goal, success-criteria, scenario evidence
+   paths, **full diff path** (or inlined diff if small), changed-file
+   list, notepad path, report path under `.lazygrok/evidence/`, and the
+   absolute skill paths above. State that the child has
+   `run_terminal_command` for read-only git if the diff file is missing
+   — never require inventing MCP shell tools.
+3. Verify each reviewer concern yourself. A concern blocks only when
    it names a success criterion the evidence fails; record concerns
    that cite no criterion as notes with a one-line reason — fixed or
    declined at your judgment.
-3. Fix every criterion-cited blocker. Re-run ONLY the scenario QA
+4. Fix every criterion-cited blocker. Re-run ONLY the scenario QA
    affected by the fix; capture fresh evidence for the delta. Update
    notepad.
-4. Re-submit to the SAME reviewer at most twice, passing only the
+5. Re-submit to the SAME reviewer at most twice, passing only the
    delta diff, the blockers it cited, and the already-approved criteria
    marked out-of-scope. An approval whose only remaining items are
    notes counts as approval.
-5. On approval, declare done. If criterion-cited blockers remain after
+6. On approval, declare done. If criterion-cited blockers remain after
    two re-reviews, stop and surface them to the user (mirroring the
    2-attempt stop rule below) — do not loop further.
 
