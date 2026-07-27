@@ -102,30 +102,60 @@ function pick(input, ...keys) {
 }
 
 /**
- * Recover latest user prompt from session chat_history when stdin lacks prompt
- * (observed: some UPS fires arrive as {"event":"user_prompt_submit"} only).
+ * Recover user prompt when stdin lacks it (observed live: {"event":"user_prompt_submit"} only).
+ * Prefer prompt_history.jsonl (written at submit with session_id + prompt), then chat_history.
  */
 function recoverPromptFromSession(sessionId, workspaceRoot) {
-	if (!sessionId || !workspaceRoot) return "";
 	try {
-		// Grok session dirs: ~/.grok/sessions/<encodeURIComponent(cwd)>/<sessionId>/
-		const encoded = encodeURIComponent(workspaceRoot);
-		const base = join(homedir(), ".grok", "sessions", encoded, sessionId);
-		const historyPath = join(base, "chat_history.jsonl");
-		if (!existsSync(historyPath)) {
-			// Fallback: search under sessions for this session id
-			const sessionsRoot = join(homedir(), ".grok", "sessions");
-			if (!existsSync(sessionsRoot)) return "";
-			for (const d of readdirSync(sessionsRoot)) {
-				const p = join(sessionsRoot, d, sessionId, "chat_history.jsonl");
-				if (existsSync(p)) return extractLastUserQuery(p);
-			}
-			return "";
+		const sessionsRoot = join(homedir(), ".grok", "sessions");
+		const encoded = workspaceRoot ? encodeURIComponent(workspaceRoot) : "";
+		const candidates = [];
+		if (encoded) {
+			candidates.push(join(sessionsRoot, encoded, "prompt_history.jsonl"));
+			if (sessionId) candidates.push(join(sessionsRoot, encoded, sessionId, "chat_history.jsonl"));
 		}
-		return extractLastUserQuery(historyPath);
+		// Any workspace prompt_history under sessions/
+		if (existsSync(sessionsRoot)) {
+			for (const d of readdirSync(sessionsRoot)) {
+				candidates.push(join(sessionsRoot, d, "prompt_history.jsonl"));
+				if (sessionId) candidates.push(join(sessionsRoot, d, sessionId, "chat_history.jsonl"));
+			}
+		}
+
+		// 1) prompt_history: {session_id, prompt, timestamp}
+		for (const p of candidates) {
+			if (!p.endsWith("prompt_history.jsonl") || !existsSync(p)) continue;
+			const fromHist = extractFromPromptHistory(p, sessionId);
+			if (fromHist) return fromHist;
+		}
+		// 2) chat_history last <user_query>
+		for (const p of candidates) {
+			if (!p.endsWith("chat_history.jsonl") || !existsSync(p)) continue;
+			const fromChat = extractLastUserQuery(p);
+			if (fromChat) return fromChat;
+		}
+		return "";
 	} catch {
 		return "";
 	}
+}
+
+function extractFromPromptHistory(path, sessionId) {
+	const lines = readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean);
+	// Prefer match on sessionId; else last non-bash prompt
+	let last = "";
+	for (let i = lines.length - 1; i >= 0; i--) {
+		try {
+			const o = JSON.parse(lines[i]);
+			const prompt = typeof o.prompt === "string" ? o.prompt.trim() : "";
+			if (!prompt || o.is_bash) continue;
+			if (sessionId && o.session_id === sessionId) return prompt;
+			if (!last) last = prompt;
+		} catch {
+			// continue
+		}
+	}
+	return last;
 }
 
 function extractLastUserQuery(historyPath) {
