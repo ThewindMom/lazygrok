@@ -79,7 +79,7 @@ type loopArgs struct {
 }
 
 func matchedLoopCommand(prompt string) bool {
-	re := regexp.MustCompile(`(?i)^/?(?:ralph-loop|ulw-loop|ultrawork|ulw)\b`)
+	re := regexp.MustCompile(`(?i)^/?(?:ralph-loop|ulw-loop|ultrawork|ulw)(?:\s|$)`)
 	return re.MatchString(prompt)
 }
 

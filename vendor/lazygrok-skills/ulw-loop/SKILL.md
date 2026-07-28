@@ -1,6 +1,7 @@
 ---
 name: ulw-loop
 description: Goal-like loop that uses ultrawork mode to decompose work into systematic, evidence-bound steps.
+user-invocable: true
 metadata:
   short-description: Goal-like ultrawork loop for systematic decomposition
 ---
@@ -79,4 +80,3 @@ Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOP
 Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
 
 If an example uses a foreign tool name, use the Grok tools table above instead.
-

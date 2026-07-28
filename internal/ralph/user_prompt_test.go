@@ -23,3 +23,9 @@ func TestUlwSlashAliasWithoutTaskIsRecognized(t *testing.T) {
 		t.Error("/ulw should be recognized so the caller can request a task")
 	}
 }
+
+func TestUlwSlashAliasDoesNotCaptureLongerCommands(t *testing.T) {
+	if matchedLoopCommand("/ulw-ralph-loop fix bug") {
+		t.Error("/ulw must not capture /ulw-ralph-loop")
+	}
+}

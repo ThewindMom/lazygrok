@@ -171,6 +171,27 @@ def transform_text(text: str) -> str:
     return out
 
 
+def normalize_skill_user_invocable(path: Path) -> bool:
+    if not path.exists():
+        return False
+
+    text = path.read_text(encoding="utf-8")
+    updated = re.sub(
+        r"(?m)^user_invocable:\s*(true|false)$",
+        r"user-invocable: \1",
+        text,
+        count=1,
+    )
+    if "user-invocable:" not in updated[:800]:
+        updated = updated.replace(
+            "metadata:\n  short-description:",
+            "user-invocable: true\nmetadata:\n  short-description:",
+            1,
+        )
+    path.write_text(updated, encoding="utf-8")
+    return updated != text
+
+
 def normalize_ultrawork_skill(path: Path) -> bool:
     if not path.exists():
         return False
@@ -189,20 +210,9 @@ def normalize_ultrawork_skill(path: Path) -> bool:
         text,
         count=1,
     )
-    updated = re.sub(
-        r"(?m)^user_invocable:\s*(true|false)$",
-        r"user-invocable: \1",
-        updated,
-        count=1,
-    )
-    if "user-invocable:" not in updated[:800]:
-        updated = updated.replace(
-            "metadata:\n  short-description:",
-            "user-invocable: true\nmetadata:\n  short-description:",
-            1,
-        )
     path.write_text(updated, encoding="utf-8")
-    return updated != text
+    metadata_changed = normalize_skill_user_invocable(path)
+    return updated != text or metadata_changed
 
 
 def inject_front_matter_sections(
@@ -697,22 +707,51 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
             hook_directive.write_text(d, encoding="utf-8")
             report.append("synced vendor ultrawork/directive.md from 4.19.3 fallback")
 
-        ultrawork_skill_paths = [
-            top_skills / "ultrawork" / "SKILL.md",
-            vendor_skills / "ultrawork" / "SKILL.md",
+        hook_ultrawork_skill = (
             lg
             / "vendor"
             / "lazygrok-hooks"
             / "ultrawork"
             / "skills"
             / "ultrawork"
+            / "SKILL.md"
+        )
+        ultrawork_skill_paths = [
+            hook_ultrawork_skill,
+            top_skills / "ultrawork" / "SKILL.md",
+            vendor_skills / "ultrawork" / "SKILL.md",
+        ]
+        normalize_ultrawork_skill(hook_ultrawork_skill)
+        canonical_ultrawork = hook_ultrawork_skill.read_text(encoding="utf-8")
+        normalized = 0
+        for path in ultrawork_skill_paths[1:]:
+            if (
+                not path.exists()
+                or path.read_text(encoding="utf-8") != canonical_ultrawork
+            ):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(canonical_ultrawork, encoding="utf-8")
+                normalized += 1
+        report.append(
+            f"synchronized native Grok ultrawork skill into {normalized} changed copies"
+        )
+
+        ulw_loop_skill_paths = [
+            top_skills / "ulw-loop" / "SKILL.md",
+            vendor_skills / "ulw-loop" / "SKILL.md",
+            lg
+            / "vendor"
+            / "lazygrok-hooks"
+            / "ulw-loop"
+            / "skills"
+            / "ulw-loop"
             / "SKILL.md",
         ]
         normalized = sum(
-            normalize_ultrawork_skill(path) for path in ultrawork_skill_paths
+            normalize_skill_user_invocable(path) for path in ulw_loop_skill_paths
         )
         report.append(
-            f"normalized native Grok ultrawork metadata in {normalized} changed copies"
+            f"normalized Grok ulw-loop metadata in {normalized} changed copies"
         )
 
         # teammode: ensure n/a banner on Grok

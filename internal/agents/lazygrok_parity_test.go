@@ -101,23 +101,74 @@ func TestLazygrokMcpServersRegistered(t *testing.T) {
 			t.Errorf("MCP server %q not registered in .mcp.json", name)
 		}
 	}
+	if _, ok := mcp.McpServers["git_bash"]; ok {
+		t.Error("git_bash must not be registered on Grok/Linux")
+	}
 	if len(mcp.McpServers) < 6 {
 		t.Errorf("expected >= 6 MCP servers, got %d", len(mcp.McpServers))
 	}
 }
 
-func TestUlwCommandMatchesUltraworkCommand(t *testing.T) {
-	commandsDir := filepath.Join("..", "..", "commands")
-	ultrawork, err := os.ReadFile(filepath.Join(commandsDir, "ultrawork.md"))
-	if err != nil {
-		t.Fatalf("cannot read commands/ultrawork.md: %v", err)
-	}
-	ulw, err := os.ReadFile(filepath.Join(commandsDir, "ulw.md"))
+func TestUlwCommandActivatesUltraworkSkill(t *testing.T) {
+	ulw, err := os.ReadFile(filepath.Join("..", "..", "commands", "ulw.md"))
 	if err != nil {
 		t.Fatalf("cannot read commands/ulw.md: %v", err)
 	}
-	if string(ulw) != string(ultrawork) {
-		t.Error("commands/ulw.md must remain an exact alias of commands/ultrawork.md")
+	for _, required := range []string{
+		"ULTRAWORK MODE ENABLED!",
+		"read_file",
+		"ultrawork",
+	} {
+		if !strings.Contains(string(ulw), required) {
+			t.Errorf("commands/ulw.md missing activation requirement %q", required)
+		}
+	}
+}
+
+func TestUltraworkSkillCopiesMatch(t *testing.T) {
+	root := filepath.Join("..", "..")
+	paths := []string{
+		filepath.Join(root, "skills", "ultrawork", "SKILL.md"),
+		filepath.Join(root, "vendor", "lazygrok-hooks", "ultrawork", "skills", "ultrawork", "SKILL.md"),
+		filepath.Join(root, "vendor", "lazygrok-skills", "ultrawork", "SKILL.md"),
+	}
+	canonical, err := os.ReadFile(paths[0])
+	if err != nil {
+		t.Fatalf("cannot read canonical Ultrawork skill: %v", err)
+	}
+	for _, path := range paths[1:] {
+		copy, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("cannot read Ultrawork skill copy %s: %v", path, err)
+		}
+		if string(copy) != string(canonical) {
+			t.Errorf("Ultrawork skill copy %s differs from %s", path, paths[0])
+		}
+	}
+}
+
+func TestUlwLoopSkillCopiesUseGrokFrontmatter(t *testing.T) {
+	root := filepath.Join("..", "..")
+	paths := []string{
+		filepath.Join(root, "skills", "ulw-loop", "SKILL.md"),
+		filepath.Join(root, "vendor", "lazygrok-hooks", "ulw-loop", "skills", "ulw-loop", "SKILL.md"),
+		filepath.Join(root, "vendor", "lazygrok-skills", "ulw-loop", "SKILL.md"),
+	}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("cannot read ulw-loop skill copy %s: %v", path, err)
+		}
+		frontmatter := string(data)
+		if end := strings.Index(frontmatter[3:], "---"); end >= 0 {
+			frontmatter = frontmatter[:end+3]
+		}
+		if !strings.Contains(frontmatter, "user-invocable: true") {
+			t.Errorf("%s missing user-invocable: true", path)
+		}
+		if strings.Contains(frontmatter, "user_invocable") {
+			t.Errorf("%s uses unsupported user_invocable spelling", path)
+		}
 	}
 }
 

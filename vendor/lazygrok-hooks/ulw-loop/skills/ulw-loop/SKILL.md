@@ -1,7 +1,7 @@
 ---
 name: ulw-loop
 description: Goal-like loop that uses ultrawork mode to decompose work into systematic, evidence-bound steps.
-user_invocable: true
+user-invocable: true
 metadata:
   short-description: Goal-like ultrawork loop for systematic decomposition
 ---
@@ -102,4 +102,3 @@ There is **no Skill tool**. LazyGrok skills live under `GROK_PLUGIN_ROOT`
   never tell them to use MCP `bash`/`Shell`.
 
 If an example uses a foreign tool name, use the Grok tools table above instead.
-
