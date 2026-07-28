@@ -3,7 +3,7 @@ name: prometheus-plan
 description: >
   Strategic planning mode (/plan): interview, gap analysis, write work plans under
   .lazygrok/plans/, optional review, then /start-work to activate boulder execution.
-user_invocable: true
+user-invocable: true
 ---
 
 # Prometheus Plan (`/plan`)

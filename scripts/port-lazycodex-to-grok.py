@@ -171,7 +171,7 @@ def transform_text(text: str) -> str:
     return out
 
 
-def normalize_skill_user_invocable(path: Path) -> bool:
+def normalize_skill_user_invocable(path: Path, *, add_if_missing: bool = False) -> bool:
     if not path.exists():
         return False
 
@@ -182,7 +182,7 @@ def normalize_skill_user_invocable(path: Path) -> bool:
         text,
         count=1,
     )
-    if "user-invocable:" not in updated[:800]:
+    if add_if_missing and "user-invocable:" not in updated[:800]:
         updated = updated.replace(
             "metadata:\n  short-description:",
             "user-invocable: true\nmetadata:\n  short-description:",
@@ -211,7 +211,7 @@ def normalize_ultrawork_skill(path: Path) -> bool:
         count=1,
     )
     path.write_text(updated, encoding="utf-8")
-    metadata_changed = normalize_skill_user_invocable(path)
+    metadata_changed = normalize_skill_user_invocable(path, add_if_missing=True)
     return updated != text or metadata_changed
 
 
@@ -748,10 +748,19 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
             / "SKILL.md",
         ]
         normalized = sum(
-            normalize_skill_user_invocable(path) for path in ulw_loop_skill_paths
+            normalize_skill_user_invocable(path, add_if_missing=True)
+            for path in ulw_loop_skill_paths
         )
         report.append(
             f"normalized Grok ulw-loop metadata in {normalized} changed copies"
+        )
+
+        normalized = sum(
+            normalize_skill_user_invocable(path)
+            for path in top_skills.glob("*/SKILL.md")
+        )
+        report.append(
+            f"normalized legacy Grok skill metadata in {normalized} changed files"
         )
 
         # teammode: ensure n/a banner on Grok

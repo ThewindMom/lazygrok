@@ -3,7 +3,7 @@ name: lsp
 description: >
   Language Server Protocol tools via the bundled lsp MCP server — diagnostics,
   navigation, symbols, and rename. Use after edits to verify types and catch errors.
-user_invocable: false
+user-invocable: false
 ---
 
 # LSP tools (MCP `lsp` / `lazygrok-lsp`)

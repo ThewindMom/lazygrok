@@ -4,7 +4,7 @@ description: >
   Start a Ralph Loop — autonomous work-until-done via Stop-hook continuations.
   Use when the user says ralph loop, /ralph-loop, or wants the agent to keep going
   until it emits a completion promise tag. Pair with cancel-ralph to stop.
-user_invocable: true
+user-invocable: true
 ---
 
 # Ralph Loop

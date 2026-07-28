@@ -3,7 +3,7 @@ name: hashline-edit
 description: >
   Hash-anchored search_replace edits using LINE#ID tags from read_file output. PreToolUse
   blocks stale anchors when the file changed since the last cached read.
-user_invocable: false
+user-invocable: false
 ---
 
 # Hashline edits (LINE#ID)

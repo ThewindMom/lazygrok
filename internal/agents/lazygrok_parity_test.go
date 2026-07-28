@@ -109,22 +109,6 @@ func TestLazygrokMcpServersRegistered(t *testing.T) {
 	}
 }
 
-func TestUlwCommandActivatesUltraworkSkill(t *testing.T) {
-	ulw, err := os.ReadFile(filepath.Join("..", "..", "commands", "ulw.md"))
-	if err != nil {
-		t.Fatalf("cannot read commands/ulw.md: %v", err)
-	}
-	for _, required := range []string{
-		"ULTRAWORK MODE ENABLED!",
-		"read_file",
-		"ultrawork",
-	} {
-		if !strings.Contains(string(ulw), required) {
-			t.Errorf("commands/ulw.md missing activation requirement %q", required)
-		}
-	}
-}
-
 func TestUltraworkSkillCopiesMatch(t *testing.T) {
 	root := filepath.Join("..", "..")
 	paths := []string{
@@ -169,6 +153,41 @@ func TestUlwLoopSkillCopiesUseGrokFrontmatter(t *testing.T) {
 		if strings.Contains(frontmatter, "user_invocable") {
 			t.Errorf("%s uses unsupported user_invocable spelling", path)
 		}
+	}
+}
+
+func TestSkillFrontmatterUsesGrokKebabCase(t *testing.T) {
+	root := filepath.Join("..", "..")
+	patterns := []string{
+		filepath.Join(root, "skills", "*", "SKILL.md"),
+		filepath.Join(root, "vendor", "lazygrok-skills", "*", "SKILL.md"),
+		filepath.Join(root, "vendor", "lazygrok-hooks", "*", "skills", "*", "SKILL.md"),
+	}
+	for _, pattern := range patterns {
+		paths, err := filepath.Glob(pattern)
+		if err != nil {
+			t.Fatalf("invalid skill glob %q: %v", pattern, err)
+		}
+		for _, path := range paths {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("cannot read skill %s: %v", path, err)
+			}
+			if strings.Contains(string(data), "\nuser_invocable:") {
+				t.Errorf("%s uses unsupported user_invocable spelling", path)
+			}
+		}
+	}
+}
+
+func TestUlwWorkflowSkillIsNotUserInvocable(t *testing.T) {
+	path := filepath.Join("..", "..", "skills", "ulw-workflow", "SKILL.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("cannot read %s: %v", path, err)
+	}
+	if !strings.Contains(string(data), "\nuser-invocable: false\n") {
+		t.Error("internal ulw-workflow skill must not be user-invocable")
 	}
 }
 

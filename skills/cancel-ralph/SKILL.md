@@ -3,7 +3,7 @@ name: cancel-ralph
 description: >
   Cancel an active Ralph or Ultrawork loop. Use when the user says /cancel-ralph,
   cancel ralph, cancel ultrawork, or wants to stop the autonomous work-until-done loop.
-user_invocable: true
+user-invocable: true
 ---
 
 # Cancel Ralph / Ultrawork Loop
