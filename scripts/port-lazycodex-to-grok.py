@@ -192,6 +192,34 @@ def normalize_skill_user_invocable(path: Path, *, add_if_missing: bool = False) 
     return updated != text
 
 
+def safe_top_level_skill_files(skill_root: Path, allowed_root: Path) -> list[Path]:
+    if skill_root.is_symlink() or not skill_root.is_dir():
+        return []
+
+    try:
+        resolved_allowed_root = allowed_root.resolve(strict=True)
+        resolved_skill_root = skill_root.resolve(strict=True)
+        resolved_skill_root.relative_to(resolved_allowed_root)
+    except (FileNotFoundError, RuntimeError, ValueError):
+        return []
+
+    safe_files = []
+    for skill_dir in sorted(skill_root.iterdir()):
+        if skill_dir.is_symlink() or not skill_dir.is_dir():
+            continue
+        skill_file = skill_dir / "SKILL.md"
+        if skill_file.is_symlink() or not skill_file.is_file():
+            continue
+        try:
+            resolved_skill_file = skill_file.resolve(strict=True)
+            resolved_skill_file.relative_to(resolved_skill_root)
+            resolved_skill_file.relative_to(resolved_allowed_root)
+        except (FileNotFoundError, RuntimeError, ValueError):
+            continue
+        safe_files.append(skill_file)
+    return safe_files
+
+
 def normalize_ultrawork_skill(path: Path) -> bool:
     if not path.exists():
         return False
@@ -757,7 +785,7 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
 
         normalized = sum(
             normalize_skill_user_invocable(path)
-            for path in top_skills.glob("*/SKILL.md")
+            for path in safe_top_level_skill_files(top_skills, lg)
         )
         report.append(
             f"normalized legacy Grok skill metadata in {normalized} changed files"
