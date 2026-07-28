@@ -4,12 +4,12 @@
 
 **LazyCodex / OmO for [Grok Build](https://x.ai)** — version **0.4.4**.
 
-LazyGrok is **our** port of [code-yeongyu/lazycodex](https://github.com/code-yeongyu/lazycodex) **`plugins/omo` @ v4.19.2** onto Grok — not a mindless copy, and not “Codex with renames.” We keep LazyCodex’s ultrawork process (evidence, parallel specialists, Stop loops, skill gate) and **add what Grok has that Codex does not**: native **`workflow`** multi-agent panels, then hide that harness so you only ever say **`ulw`**.
+LazyGrok is **our** port of [code-yeongyu/lazycodex](https://github.com/code-yeongyu/lazycodex) **`plugins/omo` @ v4.19.3** onto Grok — not a mindless copy, and not “Codex with renames.” We keep LazyCodex’s ultrawork process (evidence, parallel specialists, Stop loops, skill gate) and **add what Grok has that Codex does not**: native **`workflow`** multi-agent panels, then hide that harness so you only ever say **`ulw`**.
 
 | | |
 | --- | --- |
 | **Plugin version** | `0.4.4` |
-| **Upstream** | [code-yeongyu/lazycodex](https://github.com/code-yeongyu/lazycodex) tag **v4.19.2** (`plugins/omo`) |
+| **Upstream** | [code-yeongyu/lazycodex](https://github.com/code-yeongyu/lazycodex) tag **v4.19.3** (`plugins/omo`) |
 | **Install source** | `https://github.com/ThewindMom/lazygrok` |
 | **Skill roots** | `skills/` · `vendor/lazygrok-skills/` · `vendor/lazygrok-hooks/` |
 
@@ -20,7 +20,7 @@ LazyGrok is **our** port of [code-yeongyu/lazycodex](https://github.com/code-yeo
 | Work | What you do |
 | --- | --- |
 | **Light** (typo, one-liner, “just answer”) | Chat normally. **Do not** say `ulw`. |
-| **Serious** (multi-file, design risk, ship-with-evidence) | Put **`ulw`** or **`ultrawork`** in the prompt (or `/ultrawork`). |
+| **Serious** (multi-file, design risk, ship-with-evidence) | Put **`ulw`** or **`ultrawork`** in the prompt (or use `/ulw` / `/ultrawork`). |
 
 That is the whole UX. You do **not** run `/workflow`, name discover/review panels, open a hybrid mode, or babysit multi-agent plumbing. LazyGrok does that under ULW.
 
@@ -32,7 +32,7 @@ What happens (agent-side; you should not think about this):
 
 1. `ULTRAWORK MODE ENABLED!`
 2. Binding goal (ulw-loop ledger + `# Goal`)
-3. Ultrawork skill (LazyCodex 4.19.2 body + Grok adapters)
+3. Ultrawork skill (LazyCodex 4.19.3 body + Grok adapters)
 4. Automatic **discovery** fan-out when the tree is multi-file / unfamiliar
 5. **Implement** RED → GREEN → real-surface evidence → cleanup (parent + workers)
 6. Automatic **review** when the tier is HEAVY (or you demanded rigorous review)
@@ -90,11 +90,11 @@ Panel scripts (shipped; installed for silent use):
 - `docs/examples/ulw-discover.rhai` → `~/.grok/workflows/ulw-discover.rhai`
 - `docs/examples/ulw-review.rhai` → `~/.grok/workflows/ulw-review.rhai`
 
-Agent reference only: skill `ulw-workflow` (`user_invocable: false`). See [docs/ulw-workflow.md](docs/ulw-workflow.md).
+Agent reference only: skill `ulw-workflow` (`user-invocable: false`). See [docs/ulw-workflow.md](docs/ulw-workflow.md).
 
 Upstream pin: [docs/ultrawork-upstream.md](docs/ultrawork-upstream.md).
 
-**Hard inject vs soft skill path:** UPS hook inject is the LazyCodex-faithful bootstrap; skill-list activation is a soft fallback. Measure inject via `~/.grok/state/lazygrok/ups-probe-latest.json` (never stale `hooks.log`). Details: [docs/ultrawork-inject.md](docs/ultrawork-inject.md).
+**Activation:** Grok's native skill matching sees `ulw` / `ultrawork`, selects the shipped skill, and the model reads its full `SKILL.md`. `/ulw` and `/ultrawork` are deterministic command entry points. UserPromptSubmit hooks remain compatibility diagnostics, but passive hook stdout is not the activation path. Details: [docs/ultrawork-inject.md](docs/ultrawork-inject.md).
 
 **First install only** (Grok loads plugin hooks late; we mirror hooks via `~/.grok/hooks/`):
 
@@ -150,9 +150,11 @@ Agent models default to **`inherit`** (no hard-coded Codex model IDs).
 
 ### Components (`vendor/lazygrok-hooks/`)
 
-Aligned with LazyCodex 4.19.2 OmO components, Grok-patched where needed:
+Aligned with LazyCodex 4.19.3 OmO components, Grok-patched where needed:
 
 `ultrawork` · `ulw-loop` · `bootstrap` · `codegraph` · `comment-checker` · `git-bash` · `git-bash-mcp` · `lsp` · `lsp-daemon` · `lsp-tools-mcp` · `rules` · `start-work-continuation` · `lazygrok-executor-verify` · `teammode` · `telemetry`
+
+The `git-bash` sources stay vendored for upstream compatibility, but the `git_bash` MCP is intentionally not registered or supported on Grok/Linux.
 
 Rebuild ULW dists: `scripts/rebuild-ulw-components.sh`.
 
@@ -164,7 +166,8 @@ Rebuild ULW dists: `scripts/rebuild-ulw-components.sh`.
 | `lazygrok-codegraph` | Symbol/edge knowledge graph |
 | `lazygrok-lsp` / `lazygrok-lsp-tools` / `lazygrok-lsp-daemon` | LSP diagnostics & navigation |
 | `lsp` | Bundled LSP MCP |
-| `git_bash` | Git via MCP (when registered) |
+
+`git_bash` is not an available LazyGrok MCP server on Grok/Linux; use Grok's normal terminal/git tools.
 
 ### Hooks
 
@@ -180,7 +183,7 @@ Performance-critical paths use the Go binary (`bin/lazygrok-hook-*`) via `hooks/
 
 ### Slash commands
 
-`/ultrawork` · `/ulw-loop` · `/ulw-ralph-loop` · `/ralph-loop` · `/plan` · `/start-work` · `/handoff` · `/stop-continuation` · `/resume-continuation`
+`/ulw` · `/ultrawork` · `/ulw-loop` · `/ulw-ralph-loop` · `/ralph-loop` · `/plan` · `/start-work` · `/handoff` · `/stop-continuation` · `/resume-continuation`
 
 (You still do not need these for basic ULW — the keyword is enough.)
 
@@ -256,6 +259,7 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) and [docs/installation.md](do
 | --- | --- |
 | [docs/ulw-workflow.md](docs/ulw-workflow.md) | Internal ULW + Grok workflow panels (agent protocol) |
 | [docs/ultrawork-upstream.md](docs/ultrawork-upstream.md) | Ultrawork upstream pin & re-sync rule |
+| [docs/lazycodex-4.19.3-port-receipt.md](docs/lazycodex-4.19.3-port-receipt.md) | 4.19.3 delta port receipt |
 | [docs/lazycodex-4.19.2-port-receipt.md](docs/lazycodex-4.19.2-port-receipt.md) | 4.19.2 port receipt |
 | [docs/lazygrok-grok-compat-report.md](docs/lazygrok-grok-compat-report.md) | Grok compatibility notes |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Install/hooks/goal issues |

@@ -1,13 +1,17 @@
 ---
 name: ultrawork
 description: >
-  Binding ultrawork mode directive for LazyGrok (omo) on Grok. When a prompt contains
-  ultrawork or ulw, the UserPromptSubmit hook injects a short bootstrap that points at
-  this file. Read the whole file and follow every rule in it for the rest of the task.
-  Upstream: code-yeongyu/lazycodex plugins/omo@4.19.2 (Grok harness renames only).
+  Binding ultrawork mode directive for LazyGrok (omo) on Grok. When a prompt
+  contains ultrawork or ulw, Grok's native skill matching selects this skill;
+  Before any tool call or other assistant text, output exactly
+  `ULTRAWORK MODE ENABLED!` as the first line; do not announce the skill read.
+  Then read this file completely and follow every rule for the rest of the task.
+  UserPromptSubmit hooks remain compatibility support only; passive hook stdout
+  is not the Grok activation path.
+  Upstream: code-yeongyu/lazycodex plugins/omo@4.19.3 (Grok harness renames only).
 metadata:
-  short-description: Binding ultrawork mode directive (LazyCodex 4.19.2)
-user_invocable: true
+  short-description: Binding ultrawork mode directive (LazyCodex 4.19.3)
+user-invocable: true
 ---
 
 <ultrawork-mode>

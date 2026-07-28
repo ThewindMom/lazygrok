@@ -5,7 +5,7 @@ description: >
   <promise>VERIFIED</promise> before exit. Use for /ulw-ralph-loop or when you
   want promise+verifier continuation without the full OmO goal ledger.
   For goal-ledger ultrawork prefer the `ulw-loop` skill (OmO create-goals / evidence).
-user_invocable: true
+user-invocable: true
 ---
 
 # ULW Ralph Loop (promise + verifier)

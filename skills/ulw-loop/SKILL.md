@@ -1,7 +1,7 @@
 ---
 name: ulw-loop
 description: Goal-like loop that uses ultrawork mode to decompose work into systematic, evidence-bound steps.
-user_invocable: true
+user-invocable: true
 metadata:
   short-description: Goal-like ultrawork loop for systematic decomposition
 ---
@@ -53,6 +53,17 @@ When OmO/Codex docs say "call get_goal / create_goal / update_goal", translate t
 - Fallback only when the child is completed without the deliverable, ack-only after `spawn_subagent (re-task: new prompt to same role)`, explicitly `BLOCKED:`, or no longer running. Then record inconclusive and respawn a smaller `background: true` task with the missing deliverable.
 - Use `git-master` for git-tracked edits: inspect recent and touched-path commit history, then commit each verified work unit atomically in the repository's observed language, scope, and message style with only that unit's files staged. Never carry verified units into a later omnibus commit.
 
+## Parallelism decision: decide once, do not default to fan-out
+
+Grok has no durable team transport, so record one execution verdict after the work units are known: parent-owned, one worker, or parallel `spawn_subagent` workers.
+
+- Parallelize only when units are independent, substantial, and running them together actually finishes sooner.
+- If units overlap in one module, contract, migration, or set of lines, keep them sequential under the parent. Relay discoveries before the next unit starts; never let two workers edit the same surface concurrently.
+- If one unit only consumes another unit's result, they form a sequence, not a parallel wave.
+- If the work is one cohesive unit, keep one owner. Coordination overhead is not evidence of rigor.
+
+When the user explicitly asks for team mode, load the `teammode` skill: on Grok it routes to isolated one-shot subagents rather than pretending a durable shared team exists.
+
 ## Grok Tool Mapping
 
 | Intent | Grok tool |
@@ -92,5 +103,3 @@ There is **no Skill tool**. LazyGrok skills live under `GROK_PLUGIN_ROOT`
   never tell them to use MCP `bash`/`Shell`.
 
 If an example uses a foreign tool name, use the Grok tools table above instead.
-
-

@@ -74,8 +74,9 @@ func TestLazygrokHookComponentsPresent(t *testing.T) {
 	}
 }
 
-// TestLazygrokMcpServersRegistered verifies that .mcp.json registers all 7
-// MCP servers (2 Go-native + 5 lazygrok).
+// TestLazygrokMcpServersRegistered verifies that .mcp.json registers all 6
+// supported local MCP servers (2 Go-native + 4 lazygrok). git_bash is not
+// supported by Grok on Linux and is intentionally not required here.
 func TestLazygrokMcpServersRegistered(t *testing.T) {
 	mcpPath := filepath.Join("..", "..", ".mcp.json")
 	data, err := os.ReadFile(mcpPath)
@@ -93,15 +94,100 @@ func TestLazygrokMcpServersRegistered(t *testing.T) {
 	expected := []string{
 		"hashline", "lsp",
 		"lazygrok-lsp", "lazygrok-lsp-tools", "lazygrok-lsp-daemon",
-		"lazygrok-codegraph", "git_bash",
+		"lazygrok-codegraph",
 	}
 	for _, name := range expected {
 		if _, ok := mcp.McpServers[name]; !ok {
 			t.Errorf("MCP server %q not registered in .mcp.json", name)
 		}
 	}
-	if len(mcp.McpServers) < 7 {
-		t.Errorf("expected >= 7 MCP servers, got %d", len(mcp.McpServers))
+	if _, ok := mcp.McpServers["git_bash"]; ok {
+		t.Error("git_bash must not be registered on Grok/Linux")
+	}
+	if len(mcp.McpServers) < 6 {
+		t.Errorf("expected >= 6 MCP servers, got %d", len(mcp.McpServers))
+	}
+}
+
+func TestUltraworkSkillCopiesMatch(t *testing.T) {
+	root := filepath.Join("..", "..")
+	paths := []string{
+		filepath.Join(root, "skills", "ultrawork", "SKILL.md"),
+		filepath.Join(root, "vendor", "lazygrok-hooks", "ultrawork", "skills", "ultrawork", "SKILL.md"),
+		filepath.Join(root, "vendor", "lazygrok-skills", "ultrawork", "SKILL.md"),
+	}
+	canonical, err := os.ReadFile(paths[0])
+	if err != nil {
+		t.Fatalf("cannot read canonical Ultrawork skill: %v", err)
+	}
+	for _, path := range paths[1:] {
+		copy, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("cannot read Ultrawork skill copy %s: %v", path, err)
+		}
+		if string(copy) != string(canonical) {
+			t.Errorf("Ultrawork skill copy %s differs from %s", path, paths[0])
+		}
+	}
+}
+
+func TestUlwLoopSkillCopiesUseGrokFrontmatter(t *testing.T) {
+	root := filepath.Join("..", "..")
+	paths := []string{
+		filepath.Join(root, "skills", "ulw-loop", "SKILL.md"),
+		filepath.Join(root, "vendor", "lazygrok-hooks", "ulw-loop", "skills", "ulw-loop", "SKILL.md"),
+		filepath.Join(root, "vendor", "lazygrok-skills", "ulw-loop", "SKILL.md"),
+	}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("cannot read ulw-loop skill copy %s: %v", path, err)
+		}
+		frontmatter := string(data)
+		if end := strings.Index(frontmatter[3:], "---"); end >= 0 {
+			frontmatter = frontmatter[:end+3]
+		}
+		if !strings.Contains(frontmatter, "user-invocable: true") {
+			t.Errorf("%s missing user-invocable: true", path)
+		}
+		if strings.Contains(frontmatter, "user_invocable") {
+			t.Errorf("%s uses unsupported user_invocable spelling", path)
+		}
+	}
+}
+
+func TestSkillFrontmatterUsesGrokKebabCase(t *testing.T) {
+	root := filepath.Join("..", "..")
+	patterns := []string{
+		filepath.Join(root, "skills", "*", "SKILL.md"),
+		filepath.Join(root, "vendor", "lazygrok-skills", "*", "SKILL.md"),
+		filepath.Join(root, "vendor", "lazygrok-hooks", "*", "skills", "*", "SKILL.md"),
+	}
+	for _, pattern := range patterns {
+		paths, err := filepath.Glob(pattern)
+		if err != nil {
+			t.Fatalf("invalid skill glob %q: %v", pattern, err)
+		}
+		for _, path := range paths {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("cannot read skill %s: %v", path, err)
+			}
+			if strings.Contains(string(data), "\nuser_invocable:") {
+				t.Errorf("%s uses unsupported user_invocable spelling", path)
+			}
+		}
+	}
+}
+
+func TestUlwWorkflowSkillIsNotUserInvocable(t *testing.T) {
+	path := filepath.Join("..", "..", "skills", "ulw-workflow", "SKILL.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("cannot read %s: %v", path, err)
+	}
+	if !strings.Contains(string(data), "\nuser-invocable: false\n") {
+		t.Error("internal ulw-workflow skill must not be user-invocable")
 	}
 }
 

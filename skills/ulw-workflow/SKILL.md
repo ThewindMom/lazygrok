@@ -6,7 +6,7 @@ description: >
   workflow-tool calls (ulw-discover / ulw-review) used under the ultrawork skill.
 metadata:
   short-description: Internal ULW panel protocol (not user-facing)
-user_invocable: false
+user-invocable: false
 ---
 
 # ulw-workflow (agent-internal)

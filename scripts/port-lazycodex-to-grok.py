@@ -2,7 +2,7 @@
 """Port LazyCodex/OmO skill and agent text to Grok-native LazyGrok tooling.
 
 Transforms are mechanical + a few structural rewrites. Goal of this script:
-bring content from lazycodex-ai@4.19.2 into LazyGrok while mapping Codex-only
+bring content from lazycodex-ai@4.19.3 into LazyGrok while mapping Codex-only
 APIs to Grok equivalents and preserving Grok goal fallbacks (# Goal, ulw-evidence,
 todo_write, spawn_subagent, .lazygrok/).
 """
@@ -171,7 +171,83 @@ def transform_text(text: str) -> str:
     return out
 
 
-def inject_front_matter_sections(text: str, *, inject_goal: bool, inject_tools: bool) -> str:
+def normalize_skill_user_invocable(path: Path, *, add_if_missing: bool = False) -> bool:
+    if not path.exists():
+        return False
+
+    text = path.read_text(encoding="utf-8")
+    updated = re.sub(
+        r"(?m)^user_invocable:\s*(true|false)$",
+        r"user-invocable: \1",
+        text,
+        count=1,
+    )
+    if add_if_missing and "user-invocable:" not in updated[:800]:
+        updated = updated.replace(
+            "metadata:\n  short-description:",
+            "user-invocable: true\nmetadata:\n  short-description:",
+            1,
+        )
+    path.write_text(updated, encoding="utf-8")
+    return updated != text
+
+
+def safe_top_level_skill_files(skill_root: Path, allowed_root: Path) -> list[Path]:
+    if skill_root.is_symlink() or not skill_root.is_dir():
+        return []
+
+    try:
+        resolved_allowed_root = allowed_root.resolve(strict=True)
+        resolved_skill_root = skill_root.resolve(strict=True)
+        resolved_skill_root.relative_to(resolved_allowed_root)
+    except (FileNotFoundError, RuntimeError, ValueError):
+        return []
+
+    safe_files = []
+    for skill_dir in sorted(skill_root.iterdir()):
+        if skill_dir.is_symlink() or not skill_dir.is_dir():
+            continue
+        skill_file = skill_dir / "SKILL.md"
+        if skill_file.is_symlink() or not skill_file.is_file():
+            continue
+        try:
+            resolved_skill_file = skill_file.resolve(strict=True)
+            resolved_skill_file.relative_to(resolved_skill_root)
+            resolved_skill_file.relative_to(resolved_allowed_root)
+        except (FileNotFoundError, RuntimeError, ValueError):
+            continue
+        safe_files.append(skill_file)
+    return safe_files
+
+
+def normalize_ultrawork_skill(path: Path) -> bool:
+    if not path.exists():
+        return False
+
+    text = path.read_text(encoding="utf-8")
+    updated = re.sub(
+        r"description: >\n(?:  .*\n)+?metadata:",
+        "description: >\n"
+        "  Binding ultrawork mode directive for LazyGrok (omo) on Grok. When a prompt\n"
+        "  contains ultrawork or ulw, Grok's native skill matching selects this skill;\n"
+        "  Before any tool call or other assistant text, output exactly\n"
+        "  `ULTRAWORK MODE ENABLED!` as the first line; do not announce the skill read.\n"
+        "  Then read this file completely and follow every rule for the rest of the task.\n"
+        "  UserPromptSubmit hooks remain compatibility support only; passive hook stdout\n"
+        "  is not the Grok activation path.\n"
+        "  Upstream: code-yeongyu/lazycodex plugins/omo@4.19.3 (Grok harness renames only).\n"
+        "metadata:",
+        text,
+        count=1,
+    )
+    path.write_text(updated, encoding="utf-8")
+    metadata_changed = normalize_skill_user_invocable(path, add_if_missing=True)
+    return updated != text or metadata_changed
+
+
+def inject_front_matter_sections(
+    text: str, *, inject_goal: bool, inject_tools: bool
+) -> str:
     """After frontmatter, ensure Grok sections exist once."""
     if "---" not in text[:20]:
         body = text
@@ -188,7 +264,11 @@ def inject_front_matter_sections(text: str, *, inject_goal: bool, inject_tools: 
     inserts = []
     if inject_goal and "Grok goal registration" not in body:
         inserts.append("\n\n" + GOAL_PROTOCOL + "\n")
-    if inject_tools and "## Grok Tool Mapping" not in body and "Grok Tool Mapping" not in body[:2000]:
+    if (
+        inject_tools
+        and "## Grok Tool Mapping" not in body
+        and "Grok Tool Mapping" not in body[:2000]
+    ):
         # Replace leftover multi-agent mapping headers
         if re.search(r"##\s+.*Tool Mapping", body):
             body = re.sub(
@@ -209,10 +289,16 @@ def inject_front_matter_sections(text: str, *, inject_goal: bool, inject_tools: 
         else:
             body = "".join(inserts) + body
 
-    if inject_tools and "Resolve ulw-loop CLI" not in body and "ulw-loop" in (prefix + body)[:500].lower():
+    if (
+        inject_tools
+        and "Resolve ulw-loop CLI" not in body
+        and "ulw-loop" in (prefix + body)[:500].lower()
+    ):
         # Prefer injecting CLI bootstrap near Bootstrap if present
         if "## Bootstrap" in body and "Resolve ulw-loop CLI" not in body:
-            body = body.replace("## Bootstrap", "## Bootstrap\n\n" + ULW_CLI_BOOTSTRAP + "\n", 1)
+            body = body.replace(
+                "## Bootstrap", "## Bootstrap\n\n" + ULW_CLI_BOOTSTRAP + "\n", 1
+            )
 
     return prefix + body if prefix else body
 
@@ -230,7 +316,17 @@ def copy_tree_transformed(src: Path, dst: Path, *, inject_goal: bool = False) ->
         rel = path.relative_to(src)
         out = dst / rel
         out.parent.mkdir(parents=True, exist_ok=True)
-        if path.suffix.lower() in {".md", ".mjs", ".ts", ".js", ".json", ".toml", ".txt", ".yaml", ".yml"} or path.name in {
+        if path.suffix.lower() in {
+            ".md",
+            ".mjs",
+            ".ts",
+            ".js",
+            ".json",
+            ".toml",
+            ".txt",
+            ".yaml",
+            ".yml",
+        } or path.name in {
             "SKILL.md",
             "AGENTS.md",
             "README.md",
@@ -244,7 +340,9 @@ def copy_tree_transformed(src: Path, dst: Path, *, inject_goal: bool = False) ->
             text = transform_text(text)
             if path.name == "SKILL.md":
                 text = inject_front_matter_sections(
-                    text, inject_goal=inject_goal or "ulw" in src.name, inject_tools=True
+                    text,
+                    inject_goal=inject_goal or "ulw" in src.name,
+                    inject_tools=True,
                 )
             # frontmatter name for renamed skills
             if src.name == "ulw-research" or (src.name == "ultraresearch"):
@@ -260,7 +358,11 @@ def write_worker_agents(agents_dir: Path, workers_src: Path) -> None:
     """Create Grok .md agents from LCX worker tomls (already transformed text body)."""
     tiers = {
         "low": ("lazygrok-worker-low", "lazycodex-worker-low.toml", "SMALL"),
-        "medium": ("lazygrok-worker-medium", "lazycodex-worker-medium.toml", "MID-SIZED"),
+        "medium": (
+            "lazygrok-worker-medium",
+            "lazycodex-worker-medium.toml",
+            "MID-SIZED",
+        ),
         "high": ("lazygrok-worker-high", "lazycodex-worker-high.toml", "LARGE"),
     }
     for tier, (name, toml_name, size) in tiers.items():
@@ -351,7 +453,11 @@ def main() -> int:
         if args.dry_run:
             report.append(f"WOULD port {name} → {dst}")
             continue
-        n = copy_tree_transformed(src, dst, inject_goal=name.startswith("ulw") or name in {"start-work", "ultrawork"})
+        n = copy_tree_transformed(
+            src,
+            dst,
+            inject_goal=name.startswith("ulw") or name in {"start-work", "ultrawork"},
+        )
         report.append(f"ported {name}: {n} files → {dst.relative_to(lg)}")
 
     # Also publish ulw-research as alias path (catalog may still reference ultraresearch)
@@ -369,7 +475,7 @@ def main() -> int:
             if "Alias of ulw-research" not in t:
                 t = t.replace(
                     "---\n\n",
-                    "---\n\n> **Alias of `ulw-research`** (LazyCodex 4.19.2 name). Prefer `ulw-research`.\n\n",
+                    "---\n\n> **Alias of `ulw-research`** (LazyCodex 4.19.3 name). Prefer `ulw-research`.\n\n",
                     1,
                 )
             sk.write_text(t, encoding="utf-8")
@@ -398,7 +504,6 @@ def main() -> int:
             report.append(f"mirrored skills/{name}: {n} files")
 
     # Preserve Ralph VERIFIED loop as separate skill (was wrongly named ulw-loop)
-    ralph_src_content = (lg / "commands" / "ulw-loop.md").read_text(encoding="utf-8") if (lg / "commands" / "ulw-loop.md").exists() else ""
     if not args.dry_run:
         ralph_dir = top_skills / "ulw-ralph-loop"
         ralph_dir.mkdir(parents=True, exist_ok=True)
@@ -410,7 +515,7 @@ description: >
   <promise>VERIFIED</promise> before exit. Use for /ulw-ralph-loop or when you
   want promise+verifier continuation without the full OmO goal ledger.
   For goal-ledger ultrawork prefer the `ulw-loop` skill (OmO create-goals / evidence).
-user_invocable: true
+user-invocable: true
 ---
 
 # ULW Ralph Loop (promise + verifier)
@@ -453,16 +558,18 @@ goals via `# Goal` + `ulw-evidence` even in Ralph mode so evidence survives comp
 """,
             encoding="utf-8",
         )
-        report.append("wrote skills/ulw-ralph-loop (Ralph VERIFIED split out of ulw-loop)")
+        report.append(
+            "wrote skills/ulw-ralph-loop (Ralph VERIFIED split out of ulw-loop)"
+        )
 
         # Update top-level ulw-loop frontmatter for discoverability
         ulw_skill = top_skills / "ulw-loop" / "SKILL.md"
         if ulw_skill.exists():
             t = ulw_skill.read_text(encoding="utf-8")
-            if "user_invocable" not in t[:400]:
+            if "user-invocable" not in t[:400]:
                 t = t.replace(
                     "metadata:\n  short-description:",
-                    "user_invocable: true\nmetadata:\n  short-description:",
+                    "user-invocable: true\nmetadata:\n  short-description:",
                     1,
                 )
             if "OmO-style goal ledger" not in t:
@@ -547,10 +654,12 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
                 # Keep lazycodex- names in toml for LCX parity AND write lazygrok- copies
                 (v_agents / p.name).write_text(text, encoding="utf-8")
                 lg_name = p.name.replace("lazycodex-", "lazygrok-")
-                text2 = text.replace("name = \"lazycodex-", "name = \"lazygrok-")
+                text2 = text.replace('name = "lazycodex-', 'name = "lazygrok-')
                 text2 = text2.replace("name = 'lazycodex-", "name = 'lazygrok-")
                 (v_agents / lg_name).write_text(text2, encoding="utf-8")
-            report.append("synced worker tomls under vendor/lazygrok-hooks/ultrawork/agents")
+            report.append(
+                "synced worker tomls under vendor/lazygrok-hooks/ultrawork/agents"
+            )
 
         # hooks.json: widen executor-verify matcher for workers
         hooks = lg / "hooks" / "hooks.json"
@@ -587,15 +696,25 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
                         "# Goal` block; also prefer ulw-loop create-goals / ulw-evidence when CLI available",
                     )
                     pointer.write_text(pt, encoding="utf-8")
-                    report.append("patched ultrawork skill-pointer for ulw-evidence mention")
+                    report.append(
+                        "patched ultrawork skill-pointer for ulw-evidence mention"
+                    )
                 else:
                     report.append("ultrawork pointer already Grok-aware")
             else:
                 report.append("ultrawork pointer already Grok-aware")
 
-        # Sync ultrawork directive from LCX with transform into vendor component
+        grok_prompt = lg / "prompts" / "ultrawork" / "grok.md"
+        hook_directive = lg / "vendor" / "lazygrok-hooks" / "ultrawork" / "directive.md"
         lcx_dir = lcx / "components" / "ultrawork" / "directive.md"
-        if lcx_dir.exists():
+        if grok_prompt.exists():
+            hook_directive.write_text(
+                grok_prompt.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            report.append(
+                "synced vendor ultrawork/directive.md from canonical Grok prompt"
+            )
+        elif lcx_dir.exists():
             d = transform_text(lcx_dir.read_text(encoding="utf-8"))
             # Force Grok goal section name
             d = d.replace(
@@ -615,11 +734,64 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
                     + "\n",
                     1,
                 )
-            (lg / "vendor" / "lazygrok-hooks" / "ultrawork" / "directive.md").write_text(
-                d, encoding="utf-8"
-            )
-            # Mirror into skills/ultrawork if body is the skill
-            report.append("synced vendor ultrawork/directive.md from 4.19.2 (Grok-transformed)")
+            hook_directive.write_text(d, encoding="utf-8")
+            report.append("synced vendor ultrawork/directive.md from 4.19.3 fallback")
+
+        hook_ultrawork_skill = (
+            lg
+            / "vendor"
+            / "lazygrok-hooks"
+            / "ultrawork"
+            / "skills"
+            / "ultrawork"
+            / "SKILL.md"
+        )
+        ultrawork_skill_paths = [
+            hook_ultrawork_skill,
+            top_skills / "ultrawork" / "SKILL.md",
+            vendor_skills / "ultrawork" / "SKILL.md",
+        ]
+        normalize_ultrawork_skill(hook_ultrawork_skill)
+        canonical_ultrawork = hook_ultrawork_skill.read_text(encoding="utf-8")
+        normalized = 0
+        for path in ultrawork_skill_paths[1:]:
+            if (
+                not path.exists()
+                or path.read_text(encoding="utf-8") != canonical_ultrawork
+            ):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(canonical_ultrawork, encoding="utf-8")
+                normalized += 1
+        report.append(
+            f"synchronized native Grok ultrawork skill into {normalized} changed copies"
+        )
+
+        ulw_loop_skill_paths = [
+            top_skills / "ulw-loop" / "SKILL.md",
+            vendor_skills / "ulw-loop" / "SKILL.md",
+            lg
+            / "vendor"
+            / "lazygrok-hooks"
+            / "ulw-loop"
+            / "skills"
+            / "ulw-loop"
+            / "SKILL.md",
+        ]
+        normalized = sum(
+            normalize_skill_user_invocable(path, add_if_missing=True)
+            for path in ulw_loop_skill_paths
+        )
+        report.append(
+            f"normalized Grok ulw-loop metadata in {normalized} changed copies"
+        )
+
+        normalized = sum(
+            normalize_skill_user_invocable(path)
+            for path in safe_top_level_skill_files(top_skills, lg)
+        )
+        report.append(
+            f"normalized legacy Grok skill metadata in {normalized} changed files"
+        )
 
         # teammode: ensure n/a banner on Grok
         for tm in [
@@ -646,10 +818,10 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
         # Update plugin.json description version note
         pj = lg / "plugin.json"
         data = pj.read_text(encoding="utf-8")
-        if "4.19.2" not in data:
+        if "4.19.3" not in data:
             data = data.replace(
                 "22 skills",
-                "skills (LazyCodex 4.19.2 port)",
+                "skills (LazyCodex 4.19.3 port)",
             )
             # bump description fragment
             data = re.sub(
@@ -662,9 +834,9 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
             report.append("bumped plugin.json version to 0.4.0")
 
         # Port receipt
-        receipt = lg / "docs" / "lazycodex-4.19.2-port-receipt.md"
+        receipt = lg / "docs" / "lazycodex-4.19.3-port-receipt.md"
         receipt.write_text(
-            "# LazyCodex 4.19.2 → LazyGrok port receipt\n\n"
+            "# LazyCodex 4.19.3 → LazyGrok port receipt\n\n"
             "Generated by `scripts/port-lazycodex-to-grok.py`.\n\n"
             "## Report\n\n"
             + "\n".join(f"- {line}" for line in report)
