@@ -14,6 +14,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ripgrep
       - run: bash scripts/build-hook.sh
       - run: go test ./... -mod=mod -count=1
       - name: Run hook smoke tests
@@ -33,6 +37,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ripgrep
 
       - name: Validate plugin.json syntax
         run: python3 -m json.tool plugin.json > /dev/null
