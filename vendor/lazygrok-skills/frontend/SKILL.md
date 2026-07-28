@@ -132,6 +132,7 @@ Domains: `product` `style` `typography` `color` `landing` `chart` `ux` `react` `
 | "Linear-style landing page" | `design/README.md` + `design/linear.app.md` + `design/taste-skill.md` + `perfection/README.md` |
 | "Premium SaaS hero like Stripe" | `design/README.md` + `design/stripe.md` + `design/soft-skill.md` + `perfection/README.md` |
 | "Improve this existing dashboard" | `design/README.md` + `design/redesign-skill.md` + `perfection/README.md` |
+| "Add micro-interactions" / "animate this" / "make it feel alive" / "polish the interactions" | `design/README.md` + `design/interaction-skill.md` on top of the current style skill + `perfection/README.md` |
 | "Build this screenshot / Imagen mock / Stitch output exactly" | `design/README.md` + `design/image-to-code-skill.md` + `perfection/README.md` + `/visual-qa` reference-fidelity mode |
 | "Audit my site" / "make this page faster" | `perfection/README.md` (+ `perfection/react-perf-tooling.md` if React) |
 | "Mockup image of a fintech app" — no code | `design/imagegen-frontend-mobile.md` (+ a Layer B brand if named) |

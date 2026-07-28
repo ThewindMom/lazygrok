@@ -1,26 +1,28 @@
-# Ultrawork inject: hard path vs soft path
+# Ultrawork activation: native skill path and hook compatibility
 
-LazyGrok ports LazyCodex OmO **ultrawork**. There are two different activation systems. Do not confuse them.
+LazyGrok ports LazyCodex OmO **ultrawork**. On Grok, the authoritative activation path is native skill matching and a full skill read.
 
-## Soft path (skill-driven)
+## Native path (authoritative)
 
 - User types `ulw` / `ultrawork` in the prompt.
-- The model sees the keyword + the **ultrawork** skill in the available-skills list.
-- Model may declare `ULTRAWORK MODE ENABLED!`, read `skills/ultrawork/SKILL.md`, and create a ulw-loop ledger.
-- **Works without any hook inject.** Session `019fa318` proved this: task + ledger complete, no proven hook bootstrap.
+- Grok matches the **ultrawork** skill from the available-skills catalog.
+- The model declares `ULTRAWORK MODE ENABLED!`, reads the complete `skills/ultrawork/SKILL.md`, and follows it for the turn.
+- `/ulw` and `/ultrawork` provide deterministic command entry points to the same behavior.
+- A control prompt without `ulw` does not select the skill.
 
-Soft path is useful UX. It is **not** LazyCodex-faithful hard mode.
+This path works without hook-provided context and is the behavior to test in a real Grok session.
 
-## Hard path (UPS inject)
+## UserPromptSubmit hook (compatibility and diagnostics)
 
-Control plane:
+The vendored UPS hook still mirrors the LazyCodex control plane:
 
 1. Host fires `UserPromptSubmit` hooks.
 2. Plugin ultrawork hook receives stdin envelope (ideally full `HookEventEnvelope` with `prompt`).
 3. Hook matches `ulw` / `ultrawork` and prints JSON with `hookSpecificOutput.additionalContext` (skill pointer / directive).
-4. Host merges that context into the model turn **before** reasoning.
 
-Official Grok Build (`xai-org/grok-build`) constructs:
+On current Grok/Linux, passive UserPromptSubmit stdout is not the model's activation context. A successful hook probe proves the hook ran and produced its compatibility payload; it does not replace native skill-selection evidence.
+
+Grok Build constructs:
 
 ```json
 {
@@ -39,23 +41,25 @@ If the live host ever delivers empty/minimal stdin, LazyGrok recovers the prompt
 
 using `GROK_SESSION_ID` / `GROK_WORKSPACE_ROOT`, with short retries for history-flush races.
 
-## Measurement (authoritative)
+## Hook diagnostics
 
-**Do not use** `~/.grok/logs/hooks.log` — it can be stale for weeks and is not a live inject oracle.
+**Do not use** `~/.grok/logs/hooks.log` because it can be stale.
 
 After any live `ulw` turn, check:
 
 | File | Meaning |
 |------|---------|
-| `~/.grok/state/lazygrok/ups-probe-latest.json` | Live stdin shape, env, stdout bytes, `injectOk` (proves hook **ran**) |
+| `~/.grok/state/lazygrok/ups-probe-latest.json` | Live stdin shape, env, stdout bytes, `injectOk` (proves only that the hook **ran**) |
 | `~/.grok/state/lazygrok/last-ups-result.json` | Shim result: `inject_ok` / `empty_ultrawork_stdout`, `promptSource`, recovery attempts |
-| Session `chat_history.jsonl` | Whether inject text appears as context (host merge) |
+| Session `chat_history.jsonl` | Model response and tool calls; use this to confirm native skill selection and full `read_file` |
 
-Green hard inject:
+Green hook diagnostic:
 
 1. `ups-probe-latest.json` `at` is seconds old for the session you just ran.
 2. `injectOk: true` and `stdoutBytes` ≳ 500.
-3. Prefer `classification.shape: "full_envelope"` with `hasPrompt: true`. Event-only + recovery also counts if `injectOk`.
+3. Prefer `classification.shape: "full_envelope"` with `hasPrompt: true`. Event-only + recovery also counts for hook compatibility.
+
+Green activation requires a real Grok turn whose first visible line is exactly `ULTRAWORK MODE ENABLED!` and whose tool history shows the complete Ultrawork skill was read.
 
 ## Offline proof
 
@@ -63,7 +67,7 @@ Green hard inject:
 node "${GROK_PLUGIN_ROOT}/scripts/verify-ups-inject.mjs"
 ```
 
-Cases: full envelope, event-only + history, race delayed history, non-ulw empty, probe artifact write.
+Cases: full envelope, event-only + history, race delayed history, non-ulw empty, probe artifact write. These verify hook behavior, not model activation.
 
 ## Registration (critical on Grok 0.2.x)
 
@@ -77,7 +81,7 @@ loaded hooks hook_count=3   # settings only — zero LazyGrok UPS
 loaded hooks hook_count=9   # includes global/lazygrok:user_prompt_submit[0..3]
 ```
 
-Live probe after bridge install showed **full official envelope** (not event-only):
+Live probe after bridge install showed a **full envelope** (not event-only):
 
 ```json
 {
@@ -89,7 +93,7 @@ Live probe after bridge install showed **full official envelope** (not event-onl
 }
 ```
 
-Earlier “event-only stdin” dumps were mostly **synthetic self-tests**, not live host behavior.
+Earlier “event-only stdin” dumps were mostly **synthetic self-tests**, not live host behavior. Neither result changes the native activation contract.
 
 ### Install once (not after every update)
 
@@ -107,4 +111,4 @@ v4 bridge is a **full mirror** of plugin `hooks/hooks.json` (all events), via `l
 2. `lazygrok-shim.mjs ulw-loop user-prompt-submit`
 3. `lazygrok-shim.mjs rules user-prompt-submit`
 
-Offline proof: `node scripts/verify-ups-inject.mjs` (full envelope, event-only+history, race retry, non-ulw empty, probe artifact).
+Offline hook proof: `node scripts/verify-ups-inject.mjs` (full envelope, event-only+history, race retry, non-ulw empty, probe artifact). Real activation proof still comes from Grok selecting and reading the Ultrawork skill.

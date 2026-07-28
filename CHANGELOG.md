@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 Releases are normally automated via [release-please](https://github.com/googleapis/release-please) when GitHub Actions billing is active. While Actions is disabled, use [`scripts/manual-release.sh`](scripts/manual-release.sh).
 
+## Unreleased
+
+### LazyCodex 4.19.3 sync
+* Port ULW’s parallelism decision to Grok’s actual transport: independent `spawn_subagent` workers only; overlapping work stays sequential and parent-owned
+* Update CodeGraph bootstrap to 4.19.3 with ancestor project discovery, per-project worker locks, stale-lock recovery, and failure cooldowns
+* Add the frontend interaction-mechanics reference and routing for micro-interaction/motion work
+* Make Grok-native skill selection the documented ULW activation path, add deterministic `/ulw`, and use Grok-supported `user-invocable` skill metadata
+* Keep vendored git-bash compatibility sources while explicitly leaving the unsupported `git_bash` MCP unregistered on Grok/Linux
+* Keep Codex config migration and version-only root hook status changes out of the Grok runtime
+
 ## [0.4.4] (2026-07-27)
 
 ### Docs / first principles

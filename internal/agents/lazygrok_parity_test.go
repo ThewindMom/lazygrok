@@ -74,8 +74,9 @@ func TestLazygrokHookComponentsPresent(t *testing.T) {
 	}
 }
 
-// TestLazygrokMcpServersRegistered verifies that .mcp.json registers all 7
-// MCP servers (2 Go-native + 5 lazygrok).
+// TestLazygrokMcpServersRegistered verifies that .mcp.json registers all 6
+// supported local MCP servers (2 Go-native + 4 lazygrok). git_bash is not
+// supported by Grok on Linux and is intentionally not required here.
 func TestLazygrokMcpServersRegistered(t *testing.T) {
 	mcpPath := filepath.Join("..", "..", ".mcp.json")
 	data, err := os.ReadFile(mcpPath)
@@ -93,15 +94,30 @@ func TestLazygrokMcpServersRegistered(t *testing.T) {
 	expected := []string{
 		"hashline", "lsp",
 		"lazygrok-lsp", "lazygrok-lsp-tools", "lazygrok-lsp-daemon",
-		"lazygrok-codegraph", "git_bash",
+		"lazygrok-codegraph",
 	}
 	for _, name := range expected {
 		if _, ok := mcp.McpServers[name]; !ok {
 			t.Errorf("MCP server %q not registered in .mcp.json", name)
 		}
 	}
-	if len(mcp.McpServers) < 7 {
-		t.Errorf("expected >= 7 MCP servers, got %d", len(mcp.McpServers))
+	if len(mcp.McpServers) < 6 {
+		t.Errorf("expected >= 6 MCP servers, got %d", len(mcp.McpServers))
+	}
+}
+
+func TestUlwCommandMatchesUltraworkCommand(t *testing.T) {
+	commandsDir := filepath.Join("..", "..", "commands")
+	ultrawork, err := os.ReadFile(filepath.Join(commandsDir, "ultrawork.md"))
+	if err != nil {
+		t.Fatalf("cannot read commands/ultrawork.md: %v", err)
+	}
+	ulw, err := os.ReadFile(filepath.Join(commandsDir, "ulw.md"))
+	if err != nil {
+		t.Fatalf("cannot read commands/ulw.md: %v", err)
+	}
+	if string(ulw) != string(ultrawork) {
+		t.Error("commands/ulw.md must remain an exact alias of commands/ultrawork.md")
 	}
 }
 

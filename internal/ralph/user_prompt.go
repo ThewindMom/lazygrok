@@ -71,15 +71,15 @@ ultrawork refactor auth module</RALPH_LOOP>`
 }
 
 type loopArgs struct {
-	Task               string
-	CompletionPromise  string
-	MaxIterations      int
-	Strategy           string
-	Ultrawork          bool
+	Task              string
+	CompletionPromise string
+	MaxIterations     int
+	Strategy          string
+	Ultrawork         bool
 }
 
 func matchedLoopCommand(prompt string) bool {
-	re := regexp.MustCompile(`(?i)^/?(?:ralph-loop|ulw-loop|ultrawork)\b|^ulw\s`)
+	re := regexp.MustCompile(`(?i)^/?(?:ralph-loop|ulw-loop|ultrawork|ulw)\b`)
 	return re.MatchString(prompt)
 }
 
@@ -92,7 +92,7 @@ func parseLoopArgs(text string) *loopArgs {
 	if m != nil {
 		rest = strings.TrimSpace(m[1])
 	} else {
-		m2 := regexp.MustCompile(`(?is)^/?(?:ulw-loop|ultrawork)(?:\s+|$)(.*)$`).FindStringSubmatch(text)
+		m2 := regexp.MustCompile(`(?is)^/?(?:ulw-loop|ultrawork|ulw)(?:\s+|$)(.*)$`).FindStringSubmatch(text)
 		if m2 != nil {
 			ultrawork = true
 			rest = strings.TrimSpace(m2[1])
