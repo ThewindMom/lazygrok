@@ -338,22 +338,68 @@ State root: `.lazygrok/ulw-loop/` (or existing `.omo/ulw-loop/` for mid-run cont
 """.strip()
 
 
+def normalize_spawn_object_fields(text: str) -> str:
+    replacements: list[tuple[int, int, str]] = []
+    cursor = 0
+    marker = "spawn_subagent("
+    key_replacements = {"message": "prompt", "agent_type": "subagent_type"}
+
+    while (call_start := text.find(marker, cursor)) != -1:
+        object_start = call_start + len(marker)
+        while object_start < len(text) and text[object_start].isspace():
+            object_start += 1
+        if object_start >= len(text) or text[object_start] != "{":
+            cursor = object_start
+            continue
+
+        depth = 0
+        index = object_start
+        while index < len(text):
+            char = text[index]
+            if char == '"':
+                quote_end = index + 1
+                while quote_end < len(text):
+                    if text[quote_end] == "\\":
+                        quote_end += 2
+                        continue
+                    if text[quote_end] == '"':
+                        break
+                    quote_end += 1
+                if quote_end >= len(text):
+                    index = len(text)
+                    break
+                key = text[index + 1 : quote_end]
+                colon = quote_end + 1
+                while colon < len(text) and text[colon].isspace():
+                    colon += 1
+                if depth == 1 and colon < len(text) and text[colon] == ":" and key in key_replacements:
+                    replacements.append((index + 1, quote_end, key_replacements[key]))
+                index = quote_end + 1
+                continue
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    cursor = index + 1
+                    break
+            index += 1
+        else:
+            cursor = len(text)
+        if index >= len(text):
+            cursor = len(text)
+
+    out = text
+    for start, end, replacement in reversed(replacements):
+        out = out[:start] + replacement + out[end:]
+    return out
+
+
 def transform_text(text: str) -> str:
     out = text
     for pat, repl in REPLACEMENTS:
         out = re.sub(pat, repl, out)
-    out = re.sub(
-        r'(spawn_subagent\(\{(?:(?!\}\)).)*?)"message"\s*:',
-        r'\1"prompt":',
-        out,
-        flags=re.DOTALL,
-    )
-    out = re.sub(
-        r'(spawn_subagent\(\{(?:(?!\}\)).)*?)"agent_type"\s*:',
-        r'\1"subagent_type":',
-        out,
-        flags=re.DOTALL,
-    )
+    out = normalize_spawn_object_fields(out)
 
     if "\nname: teammode\n" in out:
         return GROK_TEAMMODE_SKILL

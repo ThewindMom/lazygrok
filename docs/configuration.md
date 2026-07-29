@@ -50,10 +50,14 @@ single documented exception.
 
 See [hooks/README.md](../hooks/README.md). First block wins:
 
-1. Ralph loop
-2. Boulder (`.lazygrok/plans/`)
-3. Todo continuation (todo enforcer cooldown / abort window)
-4. LSP error diagnostics stash (`LAZYGROK_LSP_ENFORCE`)
-5. Root `plan.md` fallback
+1. Explicit session stop (allows immediately)
+2. Core continuation loops
+3. Core Boulder work records
+4. ULW goal bridge and Ralph-family promise loops
+5. Legacy Boulder (`.lazygrok/plans/`)
+6. Todo continuation (todo enforcer cooldown / abort window)
+7. LSP error diagnostics stash (`LAZYGROK_LSP_ENFORCE`)
+8. Root `plan.md` fallback
 
-`/stop-continuation` pauses steps 2–5 until `/resume-continuation` or session end.
+`/stop-continuation` activates step 1 and bypasses every later layer until
+`/resume-continuation` or session end.

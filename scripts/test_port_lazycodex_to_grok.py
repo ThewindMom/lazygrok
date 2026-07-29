@@ -151,6 +151,23 @@ background_output(task_id="worker-1")
         self.assertNotIn('"message":', transformed)
         self.assertNotIn('"agent_type":', transformed)
 
+    def test_normalizes_only_top_level_spawn_object_schema(self) -> None:
+        source = """spawn_subagent({
+  "message": "review",
+  "metadata": {
+    "message": "keep",
+    "agent_type": "keep"
+  },
+  "agent_type": "explore"
+})"""
+
+        transformed = PORT.transform_text(source)
+
+        self.assertIn('"prompt": "review"', transformed)
+        self.assertIn('"subagent_type": "explore"', transformed)
+        self.assertIn('"message": "keep"', transformed)
+        self.assertIn('"agent_type": "keep"', transformed)
+
     def test_replaces_upstream_teammode_with_grok_fan_out(self) -> None:
         source = """---
 name: teammode

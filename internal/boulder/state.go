@@ -92,10 +92,15 @@ func StartWork(workspace, sessionID string, next map[string]any) error {
 
 func getActiveWork(state map[string]any) map[string]any {
 	workID := stringField(state, "active_work_id")
-	if works, ok := state["works"].(map[string]any); ok && workID != "" {
+	works, hasWorks := state["works"].(map[string]any)
+	if workID != "" || hasWorks {
+		if !hasWorks || workID == "" {
+			return nil
+		}
 		if work, ok := works[workID].(map[string]any); ok {
 			return work
 		}
+		return nil
 	}
 	return state
 }

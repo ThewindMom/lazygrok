@@ -1,6 +1,7 @@
 package boulder
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -234,5 +235,43 @@ func TestEvaluateBoulderStop_failsClosedOnMalformedState(t *testing.T) {
 
 	if !block || !strings.Contains(message, "unreadable") {
 		t.Fatalf("block = %v, message = %q, want fail-closed unreadable state", block, message)
+	}
+}
+
+func TestStartWork_failsClosedOnUnresolvedActiveWork(t *testing.T) {
+	workspace := t.TempDir()
+	current := map[string]any{
+		"active_work_id": "missing-work",
+		"status":         "active",
+		"session_ids":    []any{"historical-session"},
+		"works": map[string]any{
+			"foreign-work": map[string]any{
+				"status":      "active",
+				"session_ids": []any{"foreign-session"},
+			},
+		},
+	}
+	if !writeBoulder(workspace, current) {
+		t.Fatal("writeBoulder failed")
+	}
+	before, err := os.ReadFile(boulderPath(workspace))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = StartWork(workspace, "historical-session", map[string]any{
+		"status":      "active",
+		"session_ids": []any{"historical-session"},
+	})
+
+	if !errors.Is(err, ErrSessionMismatch) {
+		t.Fatalf("StartWork error = %v, want ErrSessionMismatch", err)
+	}
+	after, err := os.ReadFile(boulderPath(workspace))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("unresolved active work was replaced")
 	}
 }

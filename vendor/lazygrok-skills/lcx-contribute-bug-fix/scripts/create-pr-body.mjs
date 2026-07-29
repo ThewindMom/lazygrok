@@ -85,7 +85,7 @@ ${input.userVisibleBehaviorChanges}
 ${bulletList(input.verification)}
 
 ---
-This PR was debugged, implemented, and created with [LazyGrok](https://github.com/code-yeongyu/lazygrok).
+This PR was debugged, implemented, and created with [LazyGrok](https://github.com/ThewindMom/lazygrok).
 Tag: lazygrok-generated
 `;
 }

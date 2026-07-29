@@ -101,3 +101,21 @@ func TestEvaluateStop_failsClosedOnSchemaInvalidState(t *testing.T) {
 		t.Fatalf("result = %#v, want fail-closed invalid-schema result", result)
 	}
 }
+
+func TestEvaluateStop_failsClosedOnNegativeIteration(t *testing.T) {
+	workspace := t.TempDir()
+	stateDir := filepath.Join(workspace, ".lazygrok")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	raw := `{"schemaVersion":2,"active":true,"type":"ralph","iteration":-1,"maxIterations":1,"sessionId":"owner"}`
+	if err := os.WriteFile(filepath.Join(stateDir, "continuation.json"), []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result := EvaluateStop(workspace, t.TempDir(), "owner", config.Defaults())
+
+	if !result.ShouldContinue || result.Reason != "state_persistence_failed" {
+		t.Fatalf("result = %#v, want fail-closed negative-iteration result", result)
+	}
+}

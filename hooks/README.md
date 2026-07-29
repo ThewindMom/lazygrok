@@ -20,7 +20,7 @@ Optional: **`grok`** CLI for `grok inspect` (skill catalog on SessionStart); **`
 | `PostToolUse` (Read) | `post-tool-read` | Hashline cache + mark SKILL.md loaded |
 | `PostToolUse` (TodoWrite) | `post-tool-todo-write` | Mirror todos → `.lazygrok/todos/<session>.json` |
 | `PostToolUse` (Write\|StrReplace) | `post-tool-lsp` | LSP diagnostics → `~/.grok/state/lsp-diagnostics/<session>.json` |
-| `Stop` | `stop` | Continuation chain (ralph → boulder → todo → lsp → plan.md) |
+| `Stop` | `stop` | Explicit stop → core continuation/Boulder → ULW/Ralph → legacy Boulder/todo → LSP/plan |
 | `SessionEnd` | `session-end` | Reset session state |
 
 ## UserPromptSubmit (merged)

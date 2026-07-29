@@ -345,7 +345,9 @@ func sessionOwnsLoop(ownerSessionID, sessionID string) bool {
 func validLoopState(state LoopState) bool {
 	return state.SchemaVersion == StateVersion &&
 		(state.Type == "ralph" || state.Type == "ultrawork") &&
+		state.Iteration >= 0 &&
 		state.MaxIterations > 0 &&
+		state.FailureCount >= 0 &&
 		state.SessionID != ""
 }
 

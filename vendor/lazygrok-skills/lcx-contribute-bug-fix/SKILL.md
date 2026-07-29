@@ -162,6 +162,9 @@ fi
 ISSUE_BODY="${TMPDIR:-/tmp}/lazygrok-fix-<short-slug>-issue.md"
 gh issue create --repo ThewindMom/lazygrok --title "<short fix title>" "${LABEL_ARGS[@]}" --body-file "$ISSUE_BODY"
 
+PR_INPUT="${TMPDIR:-/tmp}/lazygrok-fix-<short-slug>-pr.json"
+PR_BODY="${TMPDIR:-/tmp}/lazygrok-fix-<short-slug>-pr.md"
+node "<skill-root>/scripts/create-pr-body.mjs" "$PR_INPUT" "$PR_BODY"
 gh repo fork ThewindMom/lazygrok --remote --remote-name fork
 GH_USER="$(gh api user --jq .login)"
 git push -u fork "$BRANCH_NAME"
@@ -219,9 +222,11 @@ This fix was debugged, implemented, and verified with [LazyGrok](https://github.
 Tag: lazygrok-generated
 ````
 
-## PR Body Generator (xai-org/grok-build)
+## PR Body Generator
 
-Use the bundled script to generate the PR body. Create a JSON file with this shape:
+For a PR to either supported repository, use the bundled script to generate
+the PR body. Create a JSON file with this shape, setting `targetRepository` to
+`ThewindMom/lazygrok` or `xai-org/grok-build`:
 
 ```json
 {

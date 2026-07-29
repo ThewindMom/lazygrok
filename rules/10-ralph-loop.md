@@ -27,6 +27,7 @@ Ralph-family promise loop.
 ## Hooks
 
 - `user-prompt` — start/cancel Ralph (merged UserPromptSubmit)
-- `stop` — continuation chain (Ralph first; see `hooks/README.md`)
+- `stop` — shared priority chain; ULW/Ralph runs after core
+  continuation/Boulder and before legacy Boulder/todo (see `hooks/README.md`)
 
 Skills: `ralph-loop`, `ulw-ralph-loop`, `cancel-ralph` (lazygrok plugin; see `grok inspect`).
