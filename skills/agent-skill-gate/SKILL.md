@@ -43,7 +43,7 @@ Every Grok Composer session where you might call `grep`, `read_file` (for implem
 
 ## Hook enforcement
 
-The **lazygrok** plugin (`grok plugin install github:ThewindMom/lazygrok --trust`) registers
+The **lazygrok** plugin (`grok plugin install ThewindMom/lazygrok --trust`) registers
 hooks via `hooks/hooks.json`. They deny mutating tools when the catalog is non-empty and
 no skill was read via `read_file` yet. Satisfy the gate by reading any applicable catalog entry, or this meta-skill file (path from `grok inspect`).
 

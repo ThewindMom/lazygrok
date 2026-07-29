@@ -19,7 +19,7 @@ from pathlib import Path
 PORT_SOURCE_REPLACEMENTS_PRE: list[tuple[str, str]] = [
     (
         r"npx lazycodex-ai install",
-        r"grok plugin install github:ThewindMom/lazygrok --trust",
+        r"grok plugin install ThewindMom/lazygrok --trust",
     ),
     (r"lazycodex-ai install", r"grok plugin update lazygrok"),
     (r"code-yeongyu/lazycodex", r"ThewindMom/lazygrok"),

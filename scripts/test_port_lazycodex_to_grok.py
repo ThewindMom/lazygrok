@@ -362,9 +362,26 @@ apply_patch(path="example")
 
         self.assertEqual(
             transformed,
-            "Install with grok plugin install github:ThewindMom/lazygrok --trust.",
+            "Install with grok plugin install ThewindMom/lazygrok --trust.",
         )
         self.assertNotIn("lazygrok-ai", transformed)
+
+    def test_all_active_ulw_workflow_copies_are_synchronized(self) -> None:
+        paths = [
+            REPO_ROOT / "skills/ulw-loop/references/full-workflow.md",
+            REPO_ROOT
+            / "vendor/lazygrok-skills/ulw-loop/references/full-workflow.md",
+            REPO_ROOT
+            / "vendor/lazygrok-hooks/ulw-loop/skills/ulw-loop/references/full-workflow.md",
+        ]
+        contents = [path.read_text(encoding="utf-8") for path in paths]
+
+        self.assertEqual(contents, [contents[0]] * len(contents))
+        self.assertIn(
+            "grok plugin install ThewindMom/lazygrok --trust", contents[0]
+        )
+        self.assertNotIn("lazygrok-ai install", contents[0])
+        self.assertNotIn("github:ThewindMom", contents[0])
 
     def test_upstream_lazygrok_mention_does_not_bypass_source_rewrites(self) -> None:
         transformed = PORT.transform_upstream_text(

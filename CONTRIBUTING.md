@@ -12,7 +12,7 @@ Thank you for helping improve lazygrok.
 |--|------------|-----------------|
 | Harness | Grok Build CLI | OpenCode, Codex, multi-harness |
 | Workspace state | `.lazygrok/` | `.omo/` |
-| Install | `grok plugin install github:ThewindMom/lazygrok` | npm / bun installers |
+| Install | `grok plugin install ThewindMom/lazygrok --trust` | npm / bun installers |
 
 When porting behavior from omo, adapt paths and hooks for Grok’s plugin model. Do not copy OpenCode-specific assumptions into this repo.
 
