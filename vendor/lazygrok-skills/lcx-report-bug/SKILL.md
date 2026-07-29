@@ -278,7 +278,8 @@ Stop and ask one narrow question only when the missing fact changes the issue ma
 
 Do not file:
 
-- a PR or pushed branch targeting `ThewindMom/lazygrok` — file the issue instead, always
+- a PR or pushed branch without explicit user authorization, or against a
+  repository other than the confirmed owner
 - a vague issue without reproduction steps
 - an issue that claims a root cause not supported by runtime evidence
 - a duplicate when commenting on an existing issue is enough

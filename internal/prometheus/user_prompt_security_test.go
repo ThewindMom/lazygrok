@@ -60,3 +60,37 @@ func TestHandleStartWork_rejectsSymlinkBoulderTarget(t *testing.T) {
 		t.Fatalf("outside sentinel changed to %q", got)
 	}
 }
+
+func TestHandleStartWork_preservesForeignActiveWork(t *testing.T) {
+	root := t.TempDir()
+	workspace := filepath.Join(root, "workspace")
+	plans := filepath.Join(workspace, ".lazygrok", "plans")
+	if err := os.MkdirAll(plans, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"first.md", "second.md"} {
+		if err := os.WriteFile(filepath.Join(plans, name), []byte("# Plan\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if response := handleStartWork(workspace, "session-a", "/start-work .lazygrok/plans/first.md"); !strings.Contains(response, "activated") {
+		t.Fatalf("first response = %q", response)
+	}
+	before, err := os.ReadFile(filepath.Join(workspace, ".lazygrok", "boulder.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response := handleStartWork(workspace, "session-b", "/start-work .lazygrok/plans/second.md")
+
+	if !strings.Contains(response, "another session") {
+		t.Fatalf("second response = %q, want ownership rejection", response)
+	}
+	after, err := os.ReadFile(filepath.Join(workspace, ".lazygrok", "boulder.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("foreign start-work replaced the active Boulder state")
+	}
+}

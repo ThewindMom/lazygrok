@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	corecontinuation "lazygrok/internal/core/continuation"
 	"lazygrok/internal/hookenv"
 	"lazygrok/internal/ralph"
 	"lazygrok/internal/safestate"
@@ -109,12 +110,18 @@ func CollectStopContinuation(ev hookenv.Event) string {
 				return "<STOP_CONTINUATION>Unable to stop safely: Ralph/ultrawork loop state could not be cleared. Repair workspace state storage, then retry.</STOP_CONTINUATION>"
 			}
 		}
+		if err := corecontinuation.StopContinuation(ws, hookenv.GrokHome(), sid); err != nil {
+			return "<STOP_CONTINUATION>Unable to stop safely: continuation state could not be paused. Repair workspace state storage, then retry.</STOP_CONTINUATION>"
+		}
 		if err := SetContinuationStopped(ws, sid); err != nil {
 			return "<STOP_CONTINUATION>Unable to persist the stop marker. Repair continuation state storage, then retry.</STOP_CONTINUATION>"
 		}
 		return "<STOP_CONTINUATION>Stopped auto-continuation for this session and cleared its Ralph/ultrawork loop. Shared boulder state remains intact. Auto-continue resumes on SessionEnd or /resume-continuation.</STOP_CONTINUATION>"
 	}
 	if resumeContRE.MatchString(prompt) {
+		if err := corecontinuation.ResumeContinuation(hookenv.GrokHome(), sid, ws); err != nil {
+			return "<STOP_CONTINUATION>Unable to resume safely: continuation state could not be updated. Repair workspace state storage, then retry.</STOP_CONTINUATION>"
+		}
 		ClearContinuationStopped(ws, sid)
 		return "<STOP_CONTINUATION>Auto-continuation resumed for this session.</STOP_CONTINUATION>"
 	}

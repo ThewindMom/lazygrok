@@ -90,7 +90,7 @@ Full event map and stop priority: **`hooks/README.md`** (read when touching Stop
 | ULW | `skills/ultrawork/SKILL.md`, `skills/ulw-loop/SKILL.md`, `docs/ulw-workflow.md` |
 | Boulder + todos | `rules/12-todo-boulder.md`, `internal/boulder/` |
 | Handoff format | `skills/handoff/SKILL.md`, `rules/11-handoff.md` |
-| IntentGate / Prometheus / hashline / LSP | `hooks/lib/{intent-gate,prometheus,hashline,lsp}.sh`, `docs/configuration.md` |
+| IntentGate / Prometheus / hashline / LSP | `internal/{intentgate,prometheus,hashline,lsp}/`, `internal/cmd/`, `docs/configuration.md` |
 | ast-grep MCP build | `scripts/build-mcp-runtimes.sh`, `vendor/ast-grep-mcp/` |
 | Remove stale global install | `scripts/remove-global-overlays.sh` |
 
@@ -132,19 +132,19 @@ Optional E2E: `bash hooks/test-inline-skill-gate.sh` (needs `grok` CLI + trusted
 
 | You need to… | Edit | Avoid |
 |--------------|------|--------|
-| New slash command or prompt injection | `hooks/lib/*.sh`, wire in `user-prompt.sh` | Extra `UserPromptSubmit` JSON in `hooks.json` (overwrites context) |
+| New slash command or prompt injection | `internal/cmd/user_prompt.go` plus the owning `internal/<feature>/` package | Extra `UserPromptSubmit` JSON in `hooks.json` (overwrites context) |
 | New lifecycle hook event | `hooks/hooks.json` + new script under `hooks/` | Duplicate manifest under `~/.grok/hooks/` |
 | Agent-facing workflow / phases | `skills/<name>/SKILL.md` | Long prose only in `rules/` without a skill |
 | Always-on Composer rules | `rules/*.md` (keep short) | 30+ “don’t” lines without “do” alternatives |
 | Workspace file paths (boulder, todos) | `internal/boulder/` constants + docs | Hardcoded `/home/...` paths anywhere in repo |
-| Stop continuation order | `hooks/lib/stop-chain.sh` only | Second Stop hook registration |
-| IntentGate keyword modes | `hooks/lib/intent-gate.sh`, `rules/13-intent-gate.md` | Duplicate mode logic in `user-prompt.sh` |
-| Prometheus plan mode | `hooks/lib/prometheus.sh`, `skills/prometheus-plan/` | Allow non-`.lazygrok` writes while plan mode active |
-| Hashline LINE#ID guard | `hooks/lib/hashline.sh`, `hashline.py`, `post-tool-read.sh` | Second PreToolUse hook in `hooks.json` |
-| LSP stash + Stop block | `hooks/lib/lsp.sh`, `post-tool-lsp.sh` | Inline LSP calls in `stop-hook.sh` |
+| Stop continuation order | `internal/cmd/stop.go` only | Second Stop hook registration |
+| IntentGate keyword modes | `internal/intentgate/`, `rules/13-intent-gate.md` | Duplicate mode logic in `internal/cmd/user_prompt.go` |
+| Prometheus plan mode | `internal/prometheus/`, `skills/prometheus-plan/` | Allow non-`.lazygrok` writes while plan mode active |
+| Hashline LINE#ID guard | `internal/hashline/`, `internal/core/hashline/`, `internal/cmd/post_tool_read.go` | Second PreToolUse hook in `hooks.json` |
+| LSP stash + Stop block | `internal/lsp/`, `internal/cmd/post_tool_lsp.go` | Inline LSP calls in `internal/cmd/stop.go` |
 | ast-grep / lsp MCP dist | `scripts/build-mcp-runtimes.sh`, `vendor/*` | Commit `node_modules` (run build script) |
 | Todo enforcer cooldown | `internal/boulder/todos.go`, `internal/cmd/stop.go` | Ad-hoc sleep in stop handler |
-| Feature smoke test | `hooks/test-<feature>.sh` | Skipping tests when adding `hooks/lib/*.sh` |
+| Feature smoke test | `hooks/test-<feature>.sh` | Skipping tests when changing hook packages |
 
 Pair every **don’t** with a **do** in rules (e.g. don’t add global `~/.grok/hooks/*.json` → do install via `grok plugin install`).
 
@@ -152,10 +152,10 @@ Pair every **don’t** with a **do** in rules (e.g. don’t add global `~/.grok/
 
 ## How skill gate works
 
-1. **SessionStart** (`session-start.sh`) — runs `grok inspect`, caches catalog at `~/.grok/state/skill-gate/<session>/all-skills.json`, injects skill list + rules path.
-2. **UserPromptSubmit** (`user-prompt.sh`) — `build_prompt_reminder()` nudges unloaded skills each prompt.
-3. **PreToolUse** (`pre-tool-mutate.sh`) — on `Write` / `StrReplace` / `EditNotebook` / `Delete`, **deny** if catalog is non-empty and no `SKILL.md` was Read this session (`skills.loaded` empty).
-4. **PostToolUse** (`post-tool-read.sh`) — when agent Reads a catalog `SKILL.md`, append skill id to `skills.loaded`.
+1. **SessionStart** (`internal/cmd/session_start.go`) — runs `grok inspect`, caches catalog at `~/.grok/state/skill-gate/<session>/all-skills.json`, injects skill list + rules path.
+2. **UserPromptSubmit** (`internal/cmd/user_prompt.go`) — `build_prompt_reminder()` nudges unloaded skills each prompt.
+3. **PreToolUse** (`internal/cmd/pre_tool_use.go`) — on `Write` / `StrReplace` / `EditNotebook` / `Delete`, **deny** if catalog is non-empty and no `SKILL.md` was Read this session (`skills.loaded` empty).
+4. **PostToolUse** (`internal/cmd/post_tool_read.go`) — when agent Reads a catalog `SKILL.md`, append skill id to `skills.loaded`.
 5. **Fail-open** — empty catalog: allow edits after Reading meta-skill `agent-skill-gate`.
 
 Agent workflow: `grok inspect` → Read matching skills → announce `Using <name> to <purpose>` → mutating tools.
@@ -166,9 +166,9 @@ Human detail: [docs/skills.md](docs/skills.md#skill-gate-flow). Full meta-skill:
 
 ## Plugin editing rules
 
-1. **One JSON context per event** — `user-prompt.sh` merges all `UserPromptSubmit` parts; never add a second manifest entry for the same event.
-2. **Stop order** — only change in `hooks/lib/stop-chain.sh`; update `hooks/README.md` + tests.
-3. **New slash command** — add `hooks/lib/<feature>.sh`, source from `user-prompt.sh`, add `skills/<name>/SKILL.md` with `user_invocable: true`, add `hooks/test-<feature>.sh`.
+1. **One JSON context per event** — `internal/cmd/user_prompt.go` merges all `UserPromptSubmit` parts; never add a second manifest entry for the same event.
+2. **Stop order** — only change in `internal/cmd/stop.go`; update `hooks/README.md` + tests.
+3. **New slash command** — add an `internal/<feature>/` collector and call it from `internal/cmd/user_prompt.go`, add `skills/<name>/SKILL.md` with `user_invocable: true`, add `hooks/test-<feature>.sh`.
 4. **Workspace paths** — constants in `internal/boulder/`; never hardcode user home directories in tracked files.
 5. **Docs** — human guides in `docs/` and `README.md`; this file stays hook/skill oriented.
 
@@ -176,15 +176,15 @@ Human docs: `docs/installation.md`, `docs/skills.md`, `docs/configuration.md`. R
 
 ### Example: add a prompt hook fragment
 
-1. Create `hooks/lib/my-feature.sh` with `collect_user_prompt_my_feature()` returning context text.
-2. In `user-prompt.sh`: `source` the lib, call collector, pass into `emit_user_prompt_context`.
+1. Create `internal/myfeature/` with a collector returning context text.
+2. Call the collector from `internal/cmd/user_prompt.go` and merge its result into the single emitted context.
 3. Add `hooks/test-my-feature.sh` with `GROK_PLUGIN_ROOT` set and stdin JSON fixture.
 4. Document in `hooks/README.md` UserPromptSubmit list.
 
 ### Example: add a user-invocable skill
 
 1. Add `skills/my-skill/SKILL.md` with frontmatter `name`, `description`, `user_invocable: true`.
-2. If the skill needs prompt injection, wire a collector in `user-prompt.sh` (pattern: `handoff.sh`, `ralph-loop.sh`).
+2. If the skill needs prompt injection, wire a collector in `internal/cmd/user_prompt.go` (patterns: `internal/boulder`, `internal/ralph`).
 3. Run `grok plugin validate .` and hook smoke tests.
 
 ---
@@ -194,7 +194,7 @@ Human docs: `docs/installation.md`, `docs/skills.md`, `docs/configuration.md`. R
 - **Shell**: `bash`, `set -euo pipefail`; hook entry via `hooks/run-hook.sh`.
 - **Search**: use `rg`, not `grep`, in docs and agent instructions for this repo.
 - **Paths in repo**: machine-agnostic (`$(pwd)`, `lazygrok/`); author metadata in `plugin.json` / LICENSE is fine; no contributor home directories in source.
-- **Hook JSON output**: one `additionalContext` per event per manifest path; `user-prompt.sh` merges parts.
+- **Hook JSON output**: one `additionalContext` per event per manifest path; `internal/cmd/user_prompt.go` merges parts.
 - **Tests**: temp dirs use `.lazygrok/` subdirs; do not depend on a specific user workspace path.
 - **Go** hooks (`internal/boulder/`, etc.) stay compatible with omo boulder schema where possible.
 

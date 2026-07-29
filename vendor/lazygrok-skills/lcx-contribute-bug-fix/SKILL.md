@@ -283,7 +283,8 @@ Stop and ask one narrow question only when:
 
 Do not open:
 
-- a PR or pushed branch targeting `ThewindMom/lazygrok` — deliver the verified-fix issue instead, always
+- a PR or pushed branch without explicit user authorization, or against a
+  repository other than the confirmed owner
 - a PR or verified-fix issue without a failing-before and passing-after test
 - a PR or verified-fix issue without a real-surface QA command
 - a PR or issue without the `Tag: lazygrok-generated` footer

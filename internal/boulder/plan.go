@@ -146,35 +146,40 @@ func getPlanProgress(planPath string) planProgress {
 	return planProgress{total, c, total > 0 && c == total}
 }
 
-func completeBoulder(workspace, workID string) {
-	state := readBoulder(workspace)
-	if state == nil {
-		return
-	}
-	// Simplified completion — mark work and top-level completed
-	end := nowISO()
-	var work map[string]any
-	if works, ok := state["works"].(map[string]any); ok && workID != "" {
-		if w, ok := works[workID].(map[string]any); ok {
-			work = w
+func completeBoulder(workspace, workID, sessionID string) error {
+	return withBoulderLock(workspace, func() error {
+		state, exists, err := readBoulderForMutation(workspace)
+		if err != nil || !exists {
+			return err
 		}
-	}
-	if work == nil {
-		work = state
-	}
-	if s, _ := work["status"].(string); s == "completed" {
-		return
-	}
-	work["ended_at"] = end
-	work["status"] = "completed"
-	work["updated_at"] = end
-	if works, ok := state["works"].(map[string]any); ok && workID != "" {
-		works[workID] = work
-	}
-	state["status"] = "completed"
-	state["ended_at"] = end
-	state["updated_at"] = end
-	writeBoulder(workspace, state)
+		ownedWork := getWorkForSession(state, sessionID)
+		if ownedWork == nil || stringField(ownedWork, "work_id") != workID {
+			return ErrSessionMismatch
+		}
+		end := nowISO()
+		var work map[string]any
+		if works, ok := state["works"].(map[string]any); ok && workID != "" {
+			if w, ok := works[workID].(map[string]any); ok {
+				work = w
+			}
+		}
+		if work == nil {
+			work = state
+		}
+		if s, _ := work["status"].(string); s == "completed" {
+			return nil
+		}
+		work["ended_at"] = end
+		work["status"] = "completed"
+		work["updated_at"] = end
+		if works, ok := state["works"].(map[string]any); ok && workID != "" {
+			works[workID] = work
+		}
+		state["status"] = "completed"
+		state["ended_at"] = end
+		state["updated_at"] = end
+		return writeBoulderState(workspace, state)
+	})
 }
 
 func taskBreakdown(work map[string]any) string {

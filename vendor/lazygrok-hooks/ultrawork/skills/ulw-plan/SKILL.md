@@ -124,18 +124,18 @@ When exploration is exhausted and the unknowns are answered, record the gate in 
 Fan out read-only research before deciding. Every spawn names DELIVERABLE / SCOPE / VERIFY inside `message`, states the role inside `message` (and passes `agent_type` as a routing hint - do not assume it alone selected a TOML role), and uses `background: true` unless full parent history is truly required:
 
 ```
-spawn_subagent.spawn_subagent({"message":"TASK: act as an explorer. DELIVERABLE: ... SCOPE: ... VERIFY: ...","agent_type":"explorer","background":false})
+spawn_subagent({"prompt":"TASK: act as an explorer. DELIVERABLE: ... SCOPE: ... VERIFY: ...","subagent_type":"explorer","background":false})
 ```
 
 If your tool list has a flat `spawn_subagent` with a required `task_name` instead of `spawn_subagent` (`spawn_subagent`), rewrite: add `"task_name":"<lowercase_digits_underscores>"`, replace `"background":false` with `"fork_turns":"none"`, and `get_command_or_subagent_output` takes only `timeout_ms`, returning on any child mailbox activity (finished agents end on their own).
 
 Spawn every independent child for the current wave first. After the wave
-is launched, use `spawn_subagent.get_command_or_subagent_output` for each child until each
+is launched, use `get_command_or_subagent_output` for each child until each
 reaches terminal status. A timeout is not terminal status. Do not start dependent planning, drafting, approval-gate work, or final handoff until each child result is integrated or recorded as inconclusive.
 
 For work likely to exceed one wait cycle, require the child to send
 `WORKING: <task> - <current phase>` before long passes and
-`BLOCKED: <reason>` only when progress stops. A `spawn_subagent.get_command_or_subagent_output`
+`BLOCKED: <reason>` only when progress stops. A `get_command_or_subagent_output`
 timeout only means no new mailbox update arrived. Treat a running child as
 alive. Fallback only when the child is completed without the deliverable,
 ack-only after followup, explicitly `BLOCKED:`, or no longer running.

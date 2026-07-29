@@ -210,7 +210,13 @@ func EvaluateStop(workspace, grokHome, sessionID string, cfg *config.Config) Sto
 
 	path := statePath(workspace)
 	var ls LoopState
-	if err := state.ReadJSON(path, &ls); err != nil || !ls.Active || ls.Paused {
+	if err := state.ReadJSON(path, &ls); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return statePersistenceFailure()
+		}
+		return StopResult{ShouldContinue: false, Reason: "no_active_loop"}
+	}
+	if !ls.Active || ls.Paused {
 		return StopResult{ShouldContinue: false, Reason: "no_active_loop"}
 	}
 
@@ -227,7 +233,13 @@ func EvaluateStop(workspace, grokHome, sessionID string, cfg *config.Config) Sto
 
 func evaluateActiveLoop(path, sessionID string, cfg *config.Config) StopResult {
 	var ls LoopState
-	if err := state.ReadJSON(path, &ls); err != nil || !ls.Active || ls.Paused {
+	if err := state.ReadJSON(path, &ls); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return statePersistenceFailure()
+		}
+		return StopResult{ShouldContinue: false, Reason: "no_active_loop"}
+	}
+	if !ls.Active || ls.Paused {
 		return StopResult{ShouldContinue: false, Reason: "no_active_loop"}
 	}
 

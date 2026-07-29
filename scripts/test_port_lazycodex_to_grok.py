@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -117,6 +118,25 @@ Fan out async explore/deep subagents instead.
 
 
 class GrokTeamRoutingTest(unittest.TestCase):
+    def test_normalizes_executable_subagent_examples(self) -> None:
+        source = """
+call_omo_agent(subagent_type="explore", run_in_background=True)
+Task(subagent_type="librarian")
+task(category="deep", load_skills=["debugging"])
+spawn_subagent({"message":"review", "agent_type":"explore"})
+background_output(task_id="worker-1")
+"""
+
+        transformed = PORT.transform_text(source)
+
+        self.assertEqual(transformed.count("spawn_subagent("), 4)
+        self.assertIn("get_command_or_subagent_output(", transformed)
+        self.assertIn("background=True", transformed)
+        for unsupported in ("call_omo_agent(", "Task(", "task(", "background_output("):
+            self.assertNotIn(unsupported, transformed)
+        for unsupported_field in ("load_skills=", "category=", '"agent_type":'):
+            self.assertNotIn(unsupported_field, transformed)
+
     def test_replaces_upstream_teammode_with_grok_fan_out(self) -> None:
         source = """---
 name: teammode
@@ -387,6 +407,27 @@ class GeneratedCopyParityTest(unittest.TestCase):
 
 
 class ActiveDocumentationTest(unittest.TestCase):
+    def test_active_skills_use_only_grok_subagent_callables(self) -> None:
+        unsupported = re.compile(
+            r"(?:\bcall_omo_agent|\bbackground_output)\s*\("
+            r"|\b(?:Task|task)\s*\("
+            r"(?=\s*(?:subagent_type|category|description|prompt|load_skills)\s*=)"
+        )
+        skills = REPO_ROOT / "vendor/lazygrok-skills"
+
+        for path in skills.rglob("*.md"):
+            with self.subTest(path=path.relative_to(REPO_ROOT)):
+                text = path.read_text(encoding="utf-8")
+                self.assertIsNone(unsupported.search(text))
+                for unsupported_field in (
+                    "load_skills=",
+                    'category="',
+                    '"agent_type":',
+                    "spawn_subagent.send_input",
+                    "spawn_subagent.kill_command_or_subagent",
+                ):
+                    self.assertNotIn(unsupported_field, text)
+
     def test_active_ralph_rule_does_not_claim_ulw_triggers(self) -> None:
         rule = (REPO_ROOT / "rules/10-ralph-loop.md").read_text(encoding="utf-8")
 

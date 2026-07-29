@@ -66,12 +66,14 @@ printf '%s\n' '{"hookEventName":"stop","sessionId":"'"$GROK_SESSION_ID"'","works
 rg -q '"decision":"block"' "${tmpdir}/boulder-block.json" || { cat "${tmpdir}/boulder-block.json"; exit 1; }
 rg -q 'BOULDER CONTINUATION' "${tmpdir}/boulder-block.json" || { cat "${tmpdir}/boulder-block.json"; exit 1; }
 
-# Stop continuation pauses boulder
+# Stop continuation suppresses but preserves shared boulder state
 printf '%s\n' '{"hookEventName":"UserPromptSubmit","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","prompt":"/stop-continuation"}' \
   | GROK_HOOK_EVENT=user_prompt_submit bash "${HOOKS_DIR}/run-hook.sh" user-prompt >/dev/null
-test ! -f "${tmpdir}/.lazygrok/boulder.json" || { echo "boulder should be cleared"; exit 1; }
+test -f "${tmpdir}/.lazygrok/boulder.json" || { echo "shared boulder state should be preserved"; exit 1; }
 
-# Resume continuation for todo-only test (paused boulder does not block)
+rm -f "${tmpdir}/.lazygrok/boulder.json"
+
+# Resume continuation for todo-only test
 printf '%s\n' '{"hookEventName":"UserPromptSubmit","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","prompt":"/resume-continuation"}' \
   | GROK_HOOK_EVENT=user_prompt_submit bash "${HOOKS_DIR}/run-hook.sh" user-prompt >/dev/null
 

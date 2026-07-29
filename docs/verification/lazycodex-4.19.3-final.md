@@ -49,98 +49,15 @@ moved back out of the plugin afterward and are not part of the payload.
 | Active Grok skill tools | generated manifest-root and hook invariant | 0 | no `codex_app`, `team_mode`, `multi_agent_v*`, durable `team_*`, thread-title, telemetry, or Git Bash hook routes remained |
 | Patch hygiene | `git diff --check` | 0 | no whitespace errors |
 
-The final review bundle includes the raw diagnostic transcript
-`lazygrok-4.19.3-final-validation-r53.log` (SHA-256
-`c141224f0ca13eb14568016703734f5913fb9d32c7acca835985701db361102f`).
-It is a single complete terminal-green pass ending in
-`R53 VALIDATION PASS`.
+## Exact-SHA evidence policy
 
-The exact-snapshot review fixes have a delta transcript
-`lazygrok-4.19.3-final-validation-r56.log` (SHA-256
-`f16ecc32569583081594874b1d968b993a4ce62b66cc91ef28827111d847b53f`).
-It reruns every changed ULW, runtime-parity, documentation, Go-hook, Ralph,
-installed-hook, checksum, manifest, and patch-hygiene surface and ends in
-`R56 VALIDATION PASS`.
-
-The config-resolution follow-up has transcript
-`lazygrok-4.19.3-final-validation-r58.log` (SHA-256
-`e53b1f7c8238fa97eeb987da7dfbb33b115e6ec2c4299e4d5fdc45ccb24dab2b`).
-It proves that JSONC `false` values override default-enabled policies, the
-deployed hook honors `lspStopEnforcement: false`, the environment override
-still takes precedence, default LSP Stop enforcement remains enabled, all Go
-tests and vet pass, and rebuilt platform checksums, runtime parity, hook audit,
-manifest validation, and documentation checks are green.
-
-The Grok tool-routing and workspace-privacy follow-up has transcript
-`lazygrok-4.19.3-final-validation-r60.log` (SHA-256
-`de92442a5a89d2f8443179f5dc3c6afe2d98e3fea69c8c95d330fcc13791f12c`).
-It proves that Prometheus and Ralph verification emit only Grok
-`spawn_subagent`/`get_command_or_subagent_output` instructions, JSONC comment
-markers inside strings are preserved while explicit false/zero values still
-apply, and Hashline rejects external, symlinked, hard-linked, and legacy
-external-cache paths while retaining regular workspace-file caching.
-
-The Hashline configuration and clean-package follow-up is split across three
-terminal-green transcripts:
-
-- `lazygrok-4.19.3-final-validation-r62b.log` (SHA-256
-  `b25b106afeafefe0af68ce54b5366909cc8e7d671a16c72733dca75e64a20231`)
-  covers the remaining TypeScript packages, full runtime parity, port
-  generator, complete Go suite, race tests, vet, Python analysis, hook audit,
-  rebuilt platform binaries, checksums, manifest, patch hygiene, and release
-  document privacy scan.
-- `lazygrok-4.19.3-final-validation-r62c.log` (SHA-256
-  `ba2e18e95ed561891eb3a1ccd969a54aa027436b7b4f8f061f9599e73c207daf`)
-  runs every executable hook test, including the live headless Grok write.
-- `lazygrok-4.19.3-final-validation-r62d.log` (SHA-256
-  `6bd5174175123c6e4e6f910c5d778e08cf4530061e8bc0157dc15303078018f4`)
-  proves that a clean `npm ci --ignore-scripts` extraction can run LSP-tools
-  tests and typechecking without a prior build, then reruns the changed
-  configuration, Hashline, safe-state, and command packages with race checks.
-
-The deployed Hashline-mode probe
-`lazygrok-r62-hashline-mode-surfaces.json` (SHA-256
-`70b4cb1155dd9a06b467435382024a23c3adc15a22d6d659c7021edc3dee33a7`)
-observes `off` and environment-off producing no cache, default `prefer`
-producing one cache without changing nested workspace directory modes,
-`strict` denying a native Grok `write`, and the doctor reporting an invalid
-mode as `configError`.
-
-The final configuration/build reproducibility follow-up has transcript
-`lazygrok-4.19.3-final-validation-r64.log` (SHA-256
-`6771fb8ee6132c82773265c7b539d846d8f03c72559c8b4f3ef02c0158dd78b6`).
-It proves a fresh LSP-tools `npm ci` supplies its pinned Bun 1.3.14 build tool
-without a global Bun on `PATH`, followed by build, 95 tests, and typechecking.
-It also reruns the complete Go suite, changed-package race tests, vet, runtime
-and generator parity, rebuilt checksums, manifest validation, and deployed
-intent-gate hooks. The deployed intent-gate probe
-`lazygrok-r64-intent-gate-surfaces.json` (SHA-256
-`20cf435dea0256b99aec82d6e3f38bedc677abcaab5475e1f2a6d1cdc0957061`)
-observes workspace JSONC `intentGateEnabled: false` suppressing classified
-intent while `LAZYGROK_INTENT_GATE=true` overrides it.
-
-The final hardening follow-up is split across:
-
-- `lazygrok-4.19.3-final-validation-r66.log` (SHA-256
-  `300240b2b016d7f0ee99eab83df8ff3688e284015f1a806eb6e85f5cef702839`)
-  for the complete Go/race/vet, hook, runtime/generator parity, and TypeScript
-  package gate;
-- `lazygrok-4.19.3-final-validation-r66c.log` (SHA-256
-  `66187356c7224c1ca12bd7638c10bacc5fe826338cee5de88d9bc00919d81b5c`)
-  for corrected release-directory checksum verification, manifest validation,
-  and the deployed invalid-config surface; and
-- `lazygrok-r66-concurrent-stop-summary.json` (SHA-256
-  `47b286ea531d6c4b129403171ccb1c242a29f180ea786c0fc746b0f4db1d945e`)
-  for the ten-process packaged Stop reservation proof.
-
-This follow-up also verifies strict environment parsing, descriptor-anchored
-prompt-free session bindings under `GROK_HOME`, a non-persistent bounded prompt
-forwarder, disabled network comment-checker bootstrap, and a 35/35 installed
-hook dry-run after the LSP package `check` script was made runtime-preserving.
-The final affected-surface rerun is
-`lazygrok-4.19.3-final-validation-r68.log` (SHA-256
-`614ba482eb1c4aa574f9d725586d37989a116b4b32dbc4e91825f63c0d474214`);
-it ends in `R68 VALIDATION PASS`.
+Historical validation rounds established the port baseline, but their transient
+terminal logs are not part of the distributed plugin. Each release handoff must
+create a fresh evidence bundle for the exact reviewed commit. That bundle records
+the source archive, a clean rebuild and checksum comparison, full validation,
+publication and installed-plugin binding, a real Grok invocation, parent and child
+transcripts, and exact-SHA reviewer verdicts. Review claims apply only to the SHA
+and artifact digest named in that bundle.
 
 ## Real Grok results
 

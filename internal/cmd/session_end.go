@@ -1,13 +1,14 @@
 package cmd
 
 import (
+	"github.com/spf13/cobra"
 	"lazygrok/internal/boulder"
+	"lazygrok/internal/core/continuation"
 	"lazygrok/internal/hookenv"
 	"lazygrok/internal/lsp"
 	"lazygrok/internal/skillgate"
 	"lazygrok/internal/spawnguard"
 	"lazygrok/internal/usingpowers"
-	"github.com/spf13/cobra"
 )
 
 func sessionEndCmd() *cobra.Command {
@@ -25,6 +26,9 @@ func sessionEndCmd() *cobra.Command {
 			skillgate.CleanupSession(sid)
 			skillgate.CleanupStopVerify(sid)
 			usingpowers.CleanupSession(sid)
+			if continuation.IsExplicitlyStopped(hookenv.GrokHome(), sid) {
+				_ = continuation.ResumeContinuation(hookenv.GrokHome(), sid, ws)
+			}
 			boulder.CleanupOMOSession(ws, sid)
 			lsp.CleanupSession(sid)
 			spawnguard.CleanupSession(sid)

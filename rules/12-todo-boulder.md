@@ -15,7 +15,8 @@ Active work tracked at `.lazygrok/boulder.json` (schema v2, omo-compatible field
 - Plans: `.lazygrok/plans/*.md` (structured `## TODOs` / `## Final Verification Wave` checkboxes)
 - Stop hook: `[BOULDER CONTINUATION]` while plan incomplete; `BOULDER COMPLETE` nudge when all checked
 - Context injected each prompt when a session is registered in boulder state
-- `/stop-continuation` also clears boulder + Ralph loop
+- `/stop-continuation` clears the session's Ralph loop, pauses its core
+  continuation, and suppresses Boulder without deleting shared Boulder state
 
 ## Stop hook order
 

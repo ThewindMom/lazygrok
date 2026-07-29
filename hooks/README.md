@@ -43,15 +43,19 @@ Optional: **`grok`** CLI for `grok inspect` (skill catalog on SessionStart); **`
 
 **First block wins** (see `internal/cmd/stop.go`):
 
-1. **Ralph-family promise loops** — `/ralph-loop` and explicit `/ulw-ralph-loop`; not ULW goal-ledger triggers
-2. **Boulder** — `.lazygrok/plans/*.md` progress
-3. **Todo continuation** — incomplete `TodoWrite` items (**todo enforcer**: 5s cooldown, 3s abort window on non-`end_turn` stops; state in `~/.grok/state/todo-enforcer/<session>/state.json`)
-4. **LSP** — error diagnostics in stash (skip when `LAZYGROK_LSP_ENFORCE=0`)
-5. **plan.md** — root/session unchecked boxes (fallback)
+1. **Explicit session stop** — allow immediately; no later continuation layer runs
+2. **Core continuation** — session-owned bounded loops and cooldowns
+3. **Core Boulder** — session-owned work records
+4. **ULW goal bridge and Ralph-family promise loops**
+5. **Legacy Boulder** — `.lazygrok/plans/*.md` progress
+6. **Todo continuation** — incomplete `TodoWrite` items
+7. **LSP** — error diagnostics in the session stash
+8. **Pending plan** — root/session unchecked boxes (fallback)
 
 Grok fires **`Stop`** (not Claude Code’s `session.idle`).
 
-After `/stop-continuation`, steps 2–5 are skipped until `/resume-continuation` or `SessionEnd`.
+After `/stop-continuation`, the explicit-stop gate skips every continuation
+layer until `/resume-continuation` or `SessionEnd`.
 
 **PreToolUse** (`pre-tool-use`): prometheus plan-mode deny → hashline stale `LINE#ID` deny → skill gate.
 

@@ -7,25 +7,7 @@ description: "Maximum-saturation research orchestration: parallel explore+librar
 
 ## Grok Harness Tool Compatibility
 
-This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools:
-
-| OpenCode example | Grok tool to use |
-| --- | --- |
-| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as an explorer. ...","agent_type":"explorer","background":false})` |
-| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as a librarian. ...","agent_type":"librarian","background":false})` |
-| `task(subagent_type="plan", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as a planning agent. ...","agent_type":"plan","background":false})` |
-| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent.spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazygrok-gate-reviewer","background":false})` |
-| `task(category="...", ...)` for implementation or QA | `spawn_subagent.spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":false})` |
-| `background_output(task_id="...")` | `spawn_subagent.get_command_or_subagent_output(...)` for mailbox signals |
-| `team_*(...)` | Use Grok native subagents via `spawn_subagent.spawn_subagent` and `spawn_subagent.get_command_or_subagent_output`; use `spawn_subagent.send_input` and `spawn_subagent.kill_command_or_subagent` only when exposed in the active tools list |
-
-Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into `~/.grok/agents/`: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `agent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `agent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
-
-Grok exposes ONE of two subagent tool surfaces per session; check your own tool list and route accordingly. If `spawn_subagent` tools exist, use the table above as written. If instead a flat `spawn_subagent` with a required `task_name` exists (`spawn_subagent`), rewrite every `spawn_subagent` example: `spawn_subagent.spawn_subagent({...,"background":false})` becomes `spawn_subagent({"task_name":"<lowercase_digits_underscores>","message":...,"agent_type":...,"fork_turns":"none"})` (`"all"` only when full parent history is truly required); `send_input` becomes `spawn_subagent (message-only follow-up)`; do not call `kill_command_or_subagent`/`resume_agent` (finished agents end on their own; `spawn_subagent (re-task: new prompt to same role)` re-tasks one, `kill_command_or_subagent` stops one); `get_command_or_subagent_output` takes only `timeout_ms` and returns on any child mailbox activity. On the v2 surface `agent_type` may be ABSENT from the spawn schema (verified 2026-07-11: only `fork_turns`/`message`/`task_name`) — when absent, omit it and describe the role inside `message`; installed role TOMLs cannot be selected on that surface. If a code block below conflicts with this section, this section wins.
-
-When translating `load_skills=[...]`, include the requested skill names in the spawned agent's `message`. If a code block below conflicts with this section, this section wins.
-
-For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `spawn_subagent.get_command_or_subagent_output` timeout only means no new mailbox update arrived; back off between waits (double the timeout up to ~5 minutes) instead of spinning short cycles. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
+Use the exact subagent tools exposed by the active Grok session. Spawn independent work with `spawn_subagent`, collect background results with `get_command_or_subagent_output`, and stop a runaway only when `kill_command_or_subagent` is available. Describe the role, task, context, constraints, and expected evidence in a self-contained prompt. Match the active tool schema exactly; omit unsupported fields.
 
 ---
 
@@ -207,7 +189,7 @@ Role protocols — embed the relevant one in each spawn message; every worker ge
 Example spawn (codebase axis; librarian, browsing, and repo-dive follow the same contract with their own protocol):
 
 ```
-task(subagent_type="explore", run_in_background=true, prompt="TASK: act as a codebase researcher. AXIS: <specific angle>.
+spawn_subagent(subagent_type="explore", background=true, prompt="TASK: act as a codebase researcher. AXIS: <specific angle>.
 This is an explicit exhaustive-research assignment. Your default retrieval budget and stop-when-answered rules do not apply — run the full protocol below and report every lead.
 SCOPE: find everything in this codebase related to <angle>: <what complete looks like>.
 PROTOCOL: grep 3+ keyword variations; structural search; LSP references; globs; git history (-S and --grep). Cross-validate across tools. Report absolute paths and file:line patterns.
@@ -223,7 +205,7 @@ This loop is what makes the mode research rather than search. Collect returns as
 3. Spawn an expansion worker immediately for each new unchecked lead:
 
 ```
-task(subagent_type="librarian", run_in_background=true, prompt="TASK: expansion wave <N> — investigate: <lead>.
+spawn_subagent(subagent_type="librarian", background=true, prompt="TASK: expansion wave <N> — investigate: <lead>.
 PARENT: <which return surfaced it>. This is an explicit exhaustive-research assignment; budgets do not apply.
 <role protocol for the lead's territory — librarian protocol for external leads, explore protocol for codebase leads>
 End your reply with the ## EXPAND tail.")
@@ -242,7 +224,7 @@ End your reply with the ## EXPAND tail.")
 Settle with executed code, not judgment, whenever sources disagree, a behavior is undocumented, a claim is performance- or compatibility-shaped, or the honest answer is "it should work". Spawn one verification worker per claim:
 
 ```
-task(category="deep", run_in_background=true, prompt="TASK: verify by execution: <claim>.
+spawn_subagent(subagent_type="general-purpose", background=true, prompt="TASK: verify by execution: <claim>.
 SOURCE: <where it came from>; CONTRADICTION: <opposing source, if any>.
 Write a minimal self-contained script that tests the claim; run it (uv run --with <deps> python / bun / direct compile); capture full stdout+stderr; pin versions.
 Reply with: the exact code, the full output, environment (OS, runtime, dependency versions), and a verdict — CONFIRMED / REFUTED / PARTIAL — grounded in the output.")
@@ -298,7 +280,7 @@ Default final materials to HTML/PDF unless the user explicitly asks for a differ
 
 Asset workers (background, parallel): actively use charts for quantitative findings (`uv run --with matplotlib --with plotly python`) saved by you to `$SESSION_DIR/assets/`; Mermaid graphs for process, architecture, argument, and evidence-flow structure; full-page screenshots of the top 5-10 sources (browsing skill); generated diagrams or editorial visuals with the imagegen skill when architecture, flows, or narrative framing benefit from bitmap assets.
 
-Assembly worker — `task(category="deep", load_skills=["frontend", "visual-qa", "open-design", "data-scientist", "imagegen", "ulw-loop"], run_in_background=true, ...)`: before writing, read every available design and visualization skill and apply it — the report is a designed artifact, not a text dump. Run HTML/PDF output through the ULW loop with frontend and visual-qa, then repair until the reviewer says no broken parts and gives approval. Structure: executive summary → key findings by theme → detailed analysis (quotes under 20 words with attribution, charts, Mermaid graphs, generated visuals, SHA-pinned permalinks, verification results) → comparative analysis when options compete → numbered sources with access dates → methodology appendix (workers, waves, searches, verifications). Every claim cites `[Source N]`.
+Assembly worker — `spawn_subagent(subagent_type="general-purpose", background=true, ...)`: before writing, read every available design and visualization skill and apply it — the report is a designed artifact, not a text dump. Run HTML/PDF output through the ULW loop with frontend and visual-qa, then repair until the reviewer says no broken parts and gives approval. Structure: executive summary → key findings by theme → detailed analysis (quotes under 20 words with attribution, charts, Mermaid graphs, generated visuals, SHA-pinned permalinks, verification results) → comparative analysis when options compete → numbered sources with access dates → methodology appendix (workers, waves, searches, verifications). Every claim cites `[Source N]`.
 
 ## Search craft
 

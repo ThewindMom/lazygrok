@@ -4,8 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
+	"lazygrok/internal/core/config"
+	corecontinuation "lazygrok/internal/core/continuation"
 	"lazygrok/internal/hookenv"
 )
 
@@ -107,5 +110,108 @@ func TestStopContinuationPreservesSharedBoulderState(t *testing.T) {
 	}
 	if state := readBoulder(workspace); state == nil {
 		t.Fatal("session-local stop removed shared boulder state")
+	}
+}
+
+func TestStopAndResumeContinuationUpdateCoreLoop(t *testing.T) {
+	root := t.TempDir()
+	grokHome := filepath.Join(root, "grok-home")
+	t.Setenv("GROK_HOME", grokHome)
+	workspace := filepath.Join(root, "workspace")
+	sessionID := "owner-session"
+	if err := os.MkdirAll(grokHome, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(workspace, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := corecontinuation.StartLoop(
+		workspace,
+		"ralph",
+		"finish",
+		"verified",
+		sessionID,
+		config.Defaults(),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	stopMessage := CollectStopContinuation(hookenv.Event{
+		WorkspaceRoot: workspace,
+		SessionID:     sessionID,
+		Prompt:        "/stop-continuation",
+	})
+	if !strings.Contains(stopMessage, "Stopped auto-continuation") {
+		t.Fatalf("stop message = %q", stopMessage)
+	}
+	stateBytes, err := os.ReadFile(filepath.Join(workspace, ".lazygrok", "continuation.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(stateBytes), `"paused": true`) {
+		t.Fatalf("core loop was not paused: %s", stateBytes)
+	}
+
+	resumeMessage := CollectStopContinuation(hookenv.Event{
+		WorkspaceRoot: workspace,
+		SessionID:     sessionID,
+		Prompt:        "/resume-continuation",
+	})
+	if !strings.Contains(resumeMessage, "resumed") {
+		t.Fatalf("resume message = %q", resumeMessage)
+	}
+	stateBytes, err = os.ReadFile(filepath.Join(workspace, ".lazygrok", "continuation.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(stateBytes), `"paused": true`) {
+		t.Fatalf("core loop remained paused: %s", stateBytes)
+	}
+}
+
+func TestAppendSessionToBoulderSerializesConcurrentUpdates(t *testing.T) {
+	workspace := t.TempDir()
+	sessionIDs := []string{"session-a", "session-b", "session-c", "session-d"}
+	workSessions := make([]any, len(sessionIDs))
+	for i, sessionID := range sessionIDs {
+		workSessions[i] = sessionID
+	}
+	if !writeBoulder(workspace, map[string]any{
+		"active_work_id": "work-1",
+		"status":         "active",
+		"session_ids":    []any{"session-a"},
+		"works": map[string]any{
+			"work-1": map[string]any{
+				"work_id":     "work-1",
+				"status":      "active",
+				"session_ids": workSessions,
+			},
+		},
+	}) {
+		t.Fatal("writeBoulder failed")
+	}
+
+	var wait sync.WaitGroup
+	errs := make(chan error, len(sessionIDs))
+	for _, sessionID := range sessionIDs {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			errs <- appendSessionToBoulder(workspace, sessionID)
+		}()
+	}
+	wait.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	state := readBoulder(workspace)
+	for _, sessionID := range sessionIDs {
+		if !containsStr(stringSlice(state["session_ids"]), sessionID) {
+			t.Fatalf("concurrent update lost %q: %#v", sessionID, state["session_ids"])
+		}
 	}
 }

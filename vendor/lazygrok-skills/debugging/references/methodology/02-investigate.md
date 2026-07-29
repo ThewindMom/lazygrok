@@ -46,12 +46,12 @@ Branch depending on what's available.
 Grok has no durable `team_*` transport. Fan out async explore/deep subagents with `spawn_subagent`. Same rule: one hypothesis per subagent.
 
 ```
-task(subagent_type="explore", load_skills=[], run_in_background=true,
+spawn_subagent(subagent_type="explore", background=true,
      prompt="[CONTEXT: bug summary + which hypothesis you own + what state to look at]
      Runtime state investigation for hypothesis 1: ...")
-task(subagent_type="explore", load_skills=[], run_in_background=true,
+spawn_subagent(subagent_type="explore", background=true,
      prompt="Log/timing investigation for hypothesis 2: ...")
-task(category="deep", load_skills=[], run_in_background=true,
+spawn_subagent(subagent_type="general-purpose", background=true,
      prompt="Reproduction minimizer for hypothesis 3: ...")
 ```
 

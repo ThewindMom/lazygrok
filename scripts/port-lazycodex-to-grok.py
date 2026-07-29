@@ -48,6 +48,18 @@ REPLACEMENTS: list[tuple[str, str]] = [
     (r"~/\.codex", r"~/.grok"),
     (r"sisyphuslabs/omo", r"lazygrok"),
     # Tools
+    (r"\bcall_omo_agent\s*\(", r"spawn_subagent("),
+    (
+        r"\b(?:Task|task)\s*\((?=\s*(?:subagent_type|category|description|prompt|load_skills)\s*=)",
+        r"spawn_subagent(",
+    ),
+    (r"\bbackground_output\s*\(", r"get_command_or_subagent_output("),
+    (r"\brun_in_background\s*=", r"background="),
+    (
+        r"(?:\bload_skills=\[[^\]]*\]\s*,\s*|,\s*\bload_skills=\[[^\]]*\])",
+        r"",
+    ),
+    (r'\bcategory="[^"]+"', r'subagent_type="general-purpose"'),
     (r"\bupdate_plan\b", r"todo_write"),
     (r"\bTodoWrite\b", r"todo_write"),
     (r"\bspawn_agent\b", r"spawn_subagent"),
@@ -330,6 +342,16 @@ def transform_text(text: str) -> str:
     out = text
     for pat, repl in REPLACEMENTS:
         out = re.sub(pat, repl, out)
+    out = re.sub(
+        r'(spawn_subagent\(\{[^\n)]*?)"message"\s*:',
+        r'\1"prompt":',
+        out,
+    )
+    out = re.sub(
+        r'(spawn_subagent\(\{[^\n)]*?)"agent_type"\s*:',
+        r'\1"subagent_type":',
+        out,
+    )
 
     if "\nname: teammode\n" in out:
         return GROK_TEAMMODE_SKILL

@@ -1347,6 +1347,13 @@ class GeneratedRuntimeParityTest(unittest.TestCase):
             r"\bcodex_app\."
             r"|\bteam_mode\b"
             r"|\bmulti_agent_v[12]\b"
+            r"|(?:\bcall_omo_agent|\bbackground_output)\s*\("
+            r"|\b(?:Task|task)\s*\("
+            r"(?=\s*(?:subagent_type|category|description|prompt|load_skills)\s*=)"
+            r"|\bload_skills="
+            r'|\bcategory="'
+            r'|"agent_type"\s*:'
+            r"|spawn_subagent\.(?:send_input|kill_command_or_subagent)"
             r"|\bteam_(?:create|task_create|status|list|delete|shutdown_request|"
             r"approve_shutdown|send_message)\b"
         )
@@ -1354,7 +1361,7 @@ class GeneratedRuntimeParityTest(unittest.TestCase):
         seen: set[Path] = set()
         for configured_root in manifest["skills"]:
             active_root = ROOT / configured_root
-            paths = set(active_root.rglob("SKILL.md"))
+            paths = set(active_root.rglob("*.md"))
             paths.update(active_root.rglob("hooks.json"))
             teammode_root = active_root / "teammode"
             if teammode_root.exists():

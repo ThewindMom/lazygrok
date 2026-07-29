@@ -33,6 +33,11 @@ func stopCmd() *cobra.Command {
 			gh := hookenv.GrokHome()
 			lspStopEnabled := lsp.EnforceEnabled()
 
+			if continuation.IsExplicitlyStopped(gh, sid) {
+				hookio.EmitStopAllow(w)
+				os.Exit(0)
+			}
+
 			// --- NEW core pipeline (tried first) ---
 
 			// 1. core/continuation: bounded loops, cooldowns, repeated-state detection
@@ -48,7 +53,7 @@ func stopCmd() *cobra.Command {
 
 			// 2. core/boulder: active work record with incomplete tasks
 			if bs, err := coreboulder.LoadCurrent(ws); err == nil {
-				if wr := bs.GetActiveWork(); wr != nil && wr.Status == coreboulder.WorkActive && !wr.IsComplete() {
+				if wr := bs.GetWorkForSession(sid); wr != nil && wr.Status == coreboulder.WorkActive && !wr.IsComplete() {
 					completed, total := wr.TaskProgress()
 					msg := fmt.Sprintf(
 						"[BOULDER] Active work record %q has incomplete tasks (%d/%d complete).\nObjective: %s\nContinue working until all tasks are complete.",

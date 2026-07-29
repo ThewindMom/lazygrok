@@ -2,6 +2,9 @@ package boulder
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -11,6 +14,11 @@ import (
 )
 
 const boulderFile = ".lazygrok/boulder.json"
+
+var (
+	ErrSessionMismatch = errors.New("boulder work belongs to another session")
+	ErrStateUnreadable = errors.New("boulder state is unreadable")
+)
 
 func boulderPath(workspace string) string {
 	return filepath.Join(workspace, boulderFile)
@@ -29,12 +37,56 @@ func readBoulder(workspace string) map[string]any {
 }
 
 func writeBoulder(workspace string, state map[string]any) bool {
+	return writeBoulderState(workspace, state) == nil
+}
+
+func writeBoulderState(workspace string, state map[string]any) error {
 	path := boulderPath(workspace)
 	b, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		return false
+		return err
 	}
-	return safestate.WriteFile(path, append(b, '\n'), 0o600) == nil
+	return safestate.WriteFile(path, append(b, '\n'), 0o600)
+}
+
+func readBoulderForMutation(workspace string) (map[string]any, bool, error) {
+	b, err := safestate.ReadFile(boulderPath(workspace))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, true, err
+	}
+	var state map[string]any
+	if err := json.Unmarshal(b, &state); err != nil {
+		return nil, true, fmt.Errorf("%w: %v", ErrStateUnreadable, err)
+	}
+	return state, true, nil
+}
+
+func withBoulderLock(workspace string, action func() error) error {
+	lockPath := filepath.Join(workspace, ".lazygrok", ".boulder.lock")
+	return safestate.WithFileLockBelow(workspace, lockPath, action)
+}
+
+// StartWork replaces Boulder state only when no foreign active work exists.
+func StartWork(workspace, sessionID string, next map[string]any) error {
+	if workspace == "" || sessionID == "" {
+		return hookenv.ErrInvalidSessionID
+	}
+	return withBoulderLock(workspace, func() error {
+		current, exists, err := readBoulderForMutation(workspace)
+		if err != nil {
+			return err
+		}
+		if exists {
+			status := strings.ToLower(strings.TrimSpace(stringField(current, "status")))
+			if status != "completed" && status != "abandoned" && getWorkForSession(current, sessionID) == nil {
+				return ErrSessionMismatch
+			}
+		}
+		return writeBoulderState(workspace, next)
+	})
 }
 
 func getWorks(state map[string]any) []map[string]any {
@@ -80,30 +132,36 @@ func getWorkForSession(state map[string]any, sessionID string) map[string]any {
 	return nil
 }
 
-func appendSessionToBoulder(workspace, sessionID string) {
-	state := readBoulder(workspace)
-	if state == nil {
-		return
-	}
-	ids := stringSlice(state["session_ids"])
-	if !containsStr(ids, sessionID) {
-		ids = append(ids, sessionID)
-		state["session_ids"] = toAnySlice(ids)
-		state["updated_at"] = nowISO()
-		wid, _ := state["active_work_id"].(string)
-		if works, ok := state["works"].(map[string]any); ok && wid != "" {
-			if w, ok := works[wid].(map[string]any); ok {
-				wids := stringSlice(w["session_ids"])
-				if !containsStr(wids, sessionID) {
-					wids = append(wids, sessionID)
-					w["session_ids"] = toAnySlice(wids)
-					w["updated_at"] = nowISO()
-					works[wid] = w
+func appendSessionToBoulder(workspace, sessionID string) error {
+	return withBoulderLock(workspace, func() error {
+		state, exists, err := readBoulderForMutation(workspace)
+		if err != nil || !exists {
+			return err
+		}
+		if getWorkForSession(state, sessionID) == nil {
+			return ErrSessionMismatch
+		}
+		ids := stringSlice(state["session_ids"])
+		if !containsStr(ids, sessionID) {
+			ids = append(ids, sessionID)
+			state["session_ids"] = toAnySlice(ids)
+			state["updated_at"] = nowISO()
+			wid, _ := state["active_work_id"].(string)
+			if works, ok := state["works"].(map[string]any); ok && wid != "" {
+				if w, ok := works[wid].(map[string]any); ok {
+					wids := stringSlice(w["session_ids"])
+					if !containsStr(wids, sessionID) {
+						wids = append(wids, sessionID)
+						w["session_ids"] = toAnySlice(wids)
+						w["updated_at"] = nowISO()
+						works[wid] = w
+					}
 				}
 			}
+			return writeBoulderState(workspace, state)
 		}
-		writeBoulder(workspace, state)
-	}
+		return nil
+	})
 }
 
 func stringSlice(v any) []string {

@@ -67,3 +67,20 @@ func TestStartLoop_usesPrivatePermissions(t *testing.T) {
 		t.Fatalf("continuation state mode = %o, want 600", got)
 	}
 }
+
+func TestEvaluateStop_failsClosedOnMalformedState(t *testing.T) {
+	workspace := t.TempDir()
+	stateDir := filepath.Join(workspace, ".lazygrok")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "continuation.json"), []byte("{malformed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result := EvaluateStop(workspace, t.TempDir(), "session-safe", config.Defaults())
+
+	if !result.ShouldContinue || result.Reason != "state_persistence_failed" {
+		t.Fatalf("result = %#v, want fail-closed persistence result", result)
+	}
+}

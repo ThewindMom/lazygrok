@@ -1,12 +1,13 @@
 package prometheus
 
 import (
-	"encoding/json"
+	"errors"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"lazygrok/internal/boulder"
 	"lazygrok/internal/hookenv"
 	"lazygrok/internal/safestate"
 )
@@ -138,9 +139,9 @@ func handleStartWork(workspace, sessionID, prompt string) string {
 			},
 		},
 	}
-	boulderFile := filepath.Join(base, ".lazygrok", "boulder.json")
-	b, _ := json.MarshalIndent(state, "", "  ")
-	if err := safestate.WriteFile(boulderFile, append(b, '\n'), 0o600); err != nil {
+	if err := boulder.StartWork(base, sessionID, state); errors.Is(err, boulder.ErrSessionMismatch) {
+		return "<PROMETHEUS_PLAN_MODE>Start-work failed: active work belongs to another session.</PROMETHEUS_PLAN_MODE>"
+	} else if err != nil {
 		return "<PROMETHEUS_PLAN_MODE>Start-work failed: unsafe workspace state path.</PROMETHEUS_PLAN_MODE>"
 	}
 

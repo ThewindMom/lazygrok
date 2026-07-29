@@ -122,7 +122,9 @@ func EvaluateBoulderStop(ev hookenv.Event) (bool, string) {
 	if work == nil && !inSession {
 		return false, ""
 	}
-	appendSessionToBoulder(ws, sid)
+	if err := appendSessionToBoulder(ws, sid); err != nil {
+		return true, "Boulder state could not be reserved safely. Inspect .lazygrok/boulder.json before retrying."
+	}
 	target := work
 	if target == nil {
 		target = state
@@ -146,7 +148,9 @@ func EvaluateBoulderStop(ev hookenv.Event) (bool, string) {
 	}
 
 	if progress.IsComplete {
-		completeBoulder(ws, workID)
+		if err := completeBoulder(ws, workID, sid); err != nil {
+			return true, "Boulder completion could not be persisted safely. Inspect .lazygrok/boulder.json before retrying."
+		}
 		if wasBoulderNudged(workID, sid) {
 			return false, ""
 		}
