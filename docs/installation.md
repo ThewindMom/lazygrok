@@ -58,9 +58,10 @@ cp -f "$PLUGIN/docs/examples/ulw-discover.rhai" "$HOME/.grok/workflows/"
 cp -f "$PLUGIN/docs/examples/ulw-review.rhai" "$HOME/.grok/workflows/"
 ```
 
-The bridge resolves the current installed snapshot dynamically, so routine
-`grok plugin update lazygrok` does not require reinstalling it. Re-copy the
-workflow files after an update when their shipped contents change.
+The bridge resolves the current installed snapshot dynamically. On
+SessionStart, LazyGrok compares the persisted mirror with the current plugin
+manifest and heals command drift caused by `grok plugin update lazygrok`.
+Re-copy the workflow files after an update when their shipped contents change.
 
 After hook or skill changes:
 

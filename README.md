@@ -188,7 +188,7 @@ Rebuild ULW dists: `scripts/rebuild-ulw-components.sh`. Runtime parity checks: `
 
 ### Hooks
 
-**35 entries** across 14 lifecycle events (`hooks/hooks.json`), including:
+**34 entries** across 14 lifecycle events (`hooks/hooks.json`), including:
 
 - **UserPromptSubmit** — ultrawork / ulw-loop / rules  
 - **Stop** — Ralph / ulw-loop resume / start-work continuation  

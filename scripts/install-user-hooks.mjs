@@ -7,7 +7,8 @@
  *   ~/.grok/hooks/lazygrok-run.sh  — resolves installed-plugins/lazygrok-* each run
  *   ~/.grok/hooks/lazygrok.json    — full mirror of plugin hooks/hooks.json commands
  *
- * First install only; survives `grok plugin update` (dynamic plugin root).
+ * The bridge resolves the current plugin root dynamically and self-heals when
+ * the plugin hook manifest changes after `grok plugin update`.
  */
 import {
 	writeFileSync,
@@ -152,18 +153,25 @@ export function writeUserHooksBridge() {
 export function bridgeNeedsHeal() {
 	if (!existsSync(OUT) || !existsSync(RUNNER)) return true;
 	try {
-		const raw = JSON.parse(readFileSync(OUT, "utf8"));
-		const meta = raw._lazygrokUserHooks;
-		return !meta?.fullMirror || (meta.version ?? 0) < 4;
+		if (readFileSync(RUNNER, "utf8") !== runnerScript()) return true;
+		const { payload } = buildBridgeFromPlugin(PLUGIN_HOOKS, RUNNER);
+		const expected = JSON.stringify(payload, null, 2) + "\n";
+		return readFileSync(OUT, "utf8") !== expected;
 	} catch {
 		return true;
 	}
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+	const healOnly = process.argv.includes("--heal");
+	if (healOnly && !bridgeNeedsHeal()) process.exit(0);
 	const r = writeUserHooksBridge();
 	console.log(`Wrote ${r.hooks}`);
 	console.log(`Wrote ${r.runner}`);
 	console.log(`Mirrored ${r.count} hook commands across ${r.events} events (full plugin mirror)`);
-	console.log("First install only — survives grok plugin update (dynamic root).");
+	console.log(
+		healOnly
+			? "Healed user-hook bridge after plugin manifest drift."
+			: "Installed update-safe user-hook bridge (dynamic root).",
+	);
 }
