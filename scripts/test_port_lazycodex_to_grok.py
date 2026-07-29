@@ -23,7 +23,7 @@ name: review-work
 # Review Work - 5-Agent Parallel Review Orchestrator
 """
 
-        transformed = PORT.transform_text(source)
+        transformed = PORT.transform_upstream_text(source)
 
         self.assertEqual(
             transformed.count("## Phase -1: Mandatory branch-review isolation gate"),
@@ -39,7 +39,7 @@ name: review-work
 """
 
         with self.assertRaisesRegex(ValueError, "insertion heading is missing"):
-            PORT.transform_text(source)
+            PORT.transform_upstream_text(source)
 
     def test_rewrites_legacy_worktree_command(self) -> None:
         source = """---
@@ -49,7 +49,7 @@ Review PRs and branches from a dedicated review worktree only: create or attach 
 # Review Work - 5-Agent Parallel Review Orchestrator
 """
 
-        transformed = PORT.transform_text(source)
+        transformed = PORT.transform_upstream_text(source)
 
         self.assertNotIn("git worktree add <path> <branch>", transformed)
         self.assertIn("mandatory Phase -1 isolation gate", transformed)
@@ -82,7 +82,7 @@ Call `team_create`, `team_task_create`, and `team_status`.
 `
 """
 
-        transformed = PORT.transform_text(source)
+        transformed = PORT.transform_upstream_text(source)
 
         self.assertIn("# Intelligent Refactor Command", transformed)
         self.assertIn("Use the ordinary worker flow.", transformed)
@@ -107,7 +107,7 @@ Call `team_task_create`, `team_send_message`, and `team_delete`.
 Fan out async explore/deep subagents instead.
 """
 
-        transformed = PORT.transform_text(source)
+        transformed = PORT.transform_upstream_text(source)
 
         self.assertIn("### Grok parallel investigation", transformed)
         self.assertIn("spawn_subagent", transformed)
@@ -127,7 +127,7 @@ spawn_subagent({"message":"review", "agent_type":"explore"})
 background_output(task_id="worker-1")
 """
 
-        transformed = PORT.transform_text(source)
+        transformed = PORT.transform_upstream_text(source)
 
         self.assertEqual(transformed.count("spawn_subagent("), 4)
         self.assertIn("get_command_or_subagent_output(", transformed)
@@ -144,7 +144,7 @@ background_output(task_id="worker-1")
   "background": true
 })"""
 
-        transformed = PORT.transform_text(source)
+        transformed = PORT.transform_upstream_text(source)
 
         self.assertIn('"prompt": "review"', transformed)
         self.assertIn('"subagent_type": "explore"', transformed)
@@ -161,7 +161,7 @@ background_output(task_id="worker-1")
   "agent_type": "explore"
 })"""
 
-        transformed = PORT.transform_text(source)
+        transformed = PORT.transform_upstream_text(source)
 
         self.assertIn('"prompt": "review"', transformed)
         self.assertIn('"subagent_type": "explore"', transformed)
@@ -178,7 +178,7 @@ TASK: Review a function call such as f(x).
 """
 )'''
 
-        transformed = PORT.transform_text(source)
+        transformed = PORT.transform_upstream_text(source)
 
         self.assertIn("spawn_subagent({", transformed)
         self.assertIn('"subagent_type":"lazygrok-code-reviewer"', transformed)
@@ -194,7 +194,7 @@ name: teammode
 Call `codex_app.create_thread`, `team_mode`, and `multi_agent_v2`.
 """
 
-        transformed = PORT.transform_text(source)
+        transformed = PORT.transform_upstream_text(source)
 
         self.assertEqual(transformed, PORT.GROK_TEAMMODE_SKILL)
         self.assertIn("spawn_subagent", transformed)
@@ -214,7 +214,7 @@ Use `codex_app.create_thread` with `team_mode`.
 Keep this section.
 """
 
-        transformed = PORT.transform_text(source)
+        transformed = PORT.transform_upstream_text(source)
 
         self.assertIn("## Run the swarm with parallel Grok subagents", transformed)
         self.assertIn("spawn_subagent", transformed)
@@ -356,13 +356,26 @@ apply_patch(path="example")
             self.assertNotIn(legacy_tool, transformed)
 
     def test_pristine_install_command_becomes_valid_grok_command(self) -> None:
-        transformed = PORT.transform_text("Install with npx lazycodex-ai install.")
+        transformed = PORT.transform_upstream_text(
+            "Install with npx lazycodex-ai install."
+        )
 
         self.assertEqual(
             transformed,
             "Install with grok plugin install github:ThewindMom/lazygrok --trust.",
         )
         self.assertNotIn("lazygrok-ai", transformed)
+
+    def test_upstream_lazygrok_mention_does_not_bypass_source_rewrites(self) -> None:
+        transformed = PORT.transform_upstream_text(
+            "Compare LazyGrok with Codex using LAZYCODEX_SOURCE_ROOT and "
+            "write `.omo/evidence/result.md`."
+        )
+
+        self.assertIn("LAZYGROK_SOURCE_ROOT", transformed)
+        self.assertIn("`.lazygrok/evidence/result.md`", transformed)
+        self.assertNotIn("LAZYCODEX_SOURCE_ROOT", transformed)
+        self.assertNotIn("`.omo/evidence", transformed)
 
 
 class StartWorkRoutingTest(unittest.TestCase):
@@ -380,7 +393,7 @@ class StartWorkRoutingTest(unittest.TestCase):
         )
 
     def test_rewrites_start_work_state_to_grok_canonical_paths(self) -> None:
-        transformed = PORT.transform_text(
+        transformed = PORT.transform_upstream_text(
             "Read `.omo/boulder.json`, append `.omo/start-work/ledger.jsonl`, "
             "and write `codex:<session_id>`."
         )
@@ -394,7 +407,7 @@ class StartWorkRoutingTest(unittest.TestCase):
 
     def test_rewrites_unquoted_start_work_session_prefix(self) -> None:
         self.assertEqual(
-            PORT.transform_text("Continue with codex:<session_id>."),
+            PORT.transform_upstream_text("Continue with codex:<session_id>."),
             "Continue with grok:<session_id>.",
         )
 
@@ -472,7 +485,7 @@ class GeneratedCopyParityTest(unittest.TestCase):
             )
 
     def test_rewrites_visual_and_planner_paths_without_fake_grok_tools(self) -> None:
-        transformed = PORT.transform_text(
+        transformed = PORT.transform_upstream_text(
             "Directly open the screenshots with the available image-viewing tool "
             "(`view_image`, `look_at`, or browser inspection) before judging. "
             "Write `.omo/drafts/example.md`."
@@ -484,7 +497,7 @@ class GeneratedCopyParityTest(unittest.TestCase):
         self.assertIn("`.lazygrok/drafts/example.md`", transformed)
 
     def test_maps_upstream_product_repositories_to_grok_owners(self) -> None:
-        transformed = PORT.transform_text(
+        transformed = PORT.transform_upstream_text(
             "code-yeongyu/lazycodex openai/codex "
             "LAZYCODEX_SOURCE_ROOT openai-codex-source"
         )

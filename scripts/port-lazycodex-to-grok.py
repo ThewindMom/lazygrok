@@ -114,13 +114,6 @@ REPLACEMENTS = (
     + PORT_SOURCE_REPLACEMENTS_POST
 )
 
-PORTED_TEXT_MARKERS = (
-    "ThewindMom/lazygrok",
-    "LazyGrok",
-    "lazygrok-",
-    ".lazygrok/",
-)
-
 # Blocks that need smarter rewrites after naive replace
 GOAL_PROTOCOL = """
 ## Grok goal registration (host tools optional)
@@ -501,14 +494,19 @@ def normalize_spawn_keyword_calls(text: str) -> str:
 
 def transform_text(text: str) -> str:
     out = text
-    already_ported = any(marker in text for marker in PORTED_TEXT_MARKERS)
-    replacements = EXECUTABLE_REPLACEMENTS if already_ported else REPLACEMENTS
-    for pat, repl in replacements:
+    for pat, repl in EXECUTABLE_REPLACEMENTS:
         out = re.sub(pat, repl, out)
     out = normalize_spawn_keyword_calls(out)
     out = normalize_spawn_object_fields(out)
-    if already_ported:
-        return out
+    return out
+
+
+def transform_upstream_text(text: str) -> str:
+    out = text
+    for pat, repl in REPLACEMENTS:
+        out = re.sub(pat, repl, out)
+    out = normalize_spawn_keyword_calls(out)
+    out = normalize_spawn_object_fields(out)
 
     if "\nname: teammode\n" in out:
         return GROK_TEAMMODE_SKILL
@@ -929,7 +927,7 @@ def copy_tree_transformed(src: Path, dst: Path, *, inject_goal: bool = False) ->
                 shutil.copy2(path, out)
                 count += 1
                 continue
-            text = transform_text(text)
+            text = transform_upstream_text(text)
             if path.name == "SKILL.md":
                 text = inject_front_matter_sections(
                     text,
@@ -975,7 +973,7 @@ def write_worker_agents(agents_dir: Path, workers_src: Path) -> None:
         src = workers_src / toml_name
         body = ""
         if src.exists():
-            raw = transform_text(src.read_text(encoding="utf-8"))
+            raw = transform_upstream_text(src.read_text(encoding="utf-8"))
             # extract developer_instructions triple-quoted block if present
             m = re.search(r'developer_instructions\s*=\s*"""(.*?)"""', raw, re.S)
             body = m.group(1).strip() if m else raw
@@ -1266,7 +1264,7 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
         v_agents = lg / "vendor" / "lazygrok-hooks" / "ultrawork" / "agents"
         if v_agents.exists() and workers_src.exists():
             for p in workers_src.glob("lazycodex-worker-*.toml"):
-                text = transform_text(p.read_text(encoding="utf-8"))
+                text = transform_upstream_text(p.read_text(encoding="utf-8"))
                 # Keep lazycodex- names in toml for LCX parity AND write lazygrok- copies
                 (v_agents / p.name).write_text(text, encoding="utf-8")
                 lg_name = p.name.replace("lazycodex-", "lazygrok-")
@@ -1336,7 +1334,7 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
                 "synced vendor ultrawork/directive.md from canonical Grok prompt"
             )
         elif lcx_dir.exists():
-            d = transform_text(lcx_dir.read_text(encoding="utf-8"))
+            d = transform_upstream_text(lcx_dir.read_text(encoding="utf-8"))
             # Force Grok goal section name
             d = d.replace(
                 "## 1. Create the goal with binding success criteria",
