@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// TestLazygrokSkillsVendored verifies that all 22 lazygrok skills are
+// TestLazygrokSkillsVendored verifies that all 21 lazygrok skills are
 // present under vendor/lazygrok-skills/ with SKILL.md files.
 func TestLazygrokSkillsVendored(t *testing.T) {
 	skillsDir := filepath.Join("..", "..", "vendor", "lazygrok-skills")
@@ -23,7 +23,7 @@ func TestLazygrokSkillsVendored(t *testing.T) {
 		"lcx-contribute-bug-fix": true, "lcx-doctor": true, "lcx-report-bug": true,
 		"lsp": true, "lsp-setup": true, "programming": true,
 		"refactor": true, "remove-ai-slops": true, "review-work": true,
-		"rules": true, "start-work": true, "teammode": true,
+		"rules": true, "teammode": true,
 		"ultraresearch": true, "ulw-loop": true, "ulw-plan": true,
 		"visual-qa": true,
 	}
@@ -45,20 +45,19 @@ func TestLazygrokSkillsVendored(t *testing.T) {
 		found++
 	}
 
-	if found < 22 {
-		t.Errorf("expected 22 lazygrok skills with SKILL.md, got %d", found)
+	if found < 21 {
+		t.Errorf("expected 21 lazygrok skills with SKILL.md, got %d", found)
 	}
 }
 
-// TestLazygrokHookComponentsPresent verifies that all 15 lazygrok hook
+// TestLazygrokHookComponentsPresent verifies that all shipped lazygrok hook
 // components have pre-built dist/cli.js files.
 func TestLazygrokHookComponentsPresent(t *testing.T) {
 	hooksDir := filepath.Join("..", "..", "vendor", "lazygrok-hooks")
 	expected := []string{
 		"bootstrap", "codegraph", "comment-checker", "git-bash",
 		"git-bash-mcp", "lazygrok-executor-verify", "lsp", "lsp-daemon",
-		"lsp-tools-mcp", "rules", "start-work-continuation", "teammode",
-		"telemetry", "ultrawork", "ulw-loop",
+		"lsp-tools-mcp", "rules", "start-work-continuation", "ultrawork", "ulw-loop",
 	}
 
 	for _, comp := range expected {
@@ -74,8 +73,8 @@ func TestLazygrokHookComponentsPresent(t *testing.T) {
 	}
 }
 
-// TestLazygrokMcpServersRegistered verifies that .mcp.json registers all 6
-// supported local MCP servers (2 Go-native + 4 lazygrok). git_bash is not
+// TestLazygrokMcpServersRegistered verifies that .mcp.json registers all 5
+// supported local MCP servers (1 Go-native + 4 lazygrok). git_bash is not
 // supported by Grok on Linux and is intentionally not required here.
 func TestLazygrokMcpServersRegistered(t *testing.T) {
 	mcpPath := filepath.Join("..", "..", ".mcp.json")
@@ -92,8 +91,7 @@ func TestLazygrokMcpServersRegistered(t *testing.T) {
 	}
 
 	expected := []string{
-		"hashline", "lsp",
-		"lazygrok-lsp", "lazygrok-lsp-tools", "lazygrok-lsp-daemon",
+		"hashline", "lazygrok-lsp", "lazygrok-lsp-tools", "lazygrok-lsp-daemon",
 		"lazygrok-codegraph",
 	}
 	for _, name := range expected {
@@ -104,8 +102,8 @@ func TestLazygrokMcpServersRegistered(t *testing.T) {
 	if _, ok := mcp.McpServers["git_bash"]; ok {
 		t.Error("git_bash must not be registered on Grok/Linux")
 	}
-	if len(mcp.McpServers) < 6 {
-		t.Errorf("expected >= 6 MCP servers, got %d", len(mcp.McpServers))
+	if len(mcp.McpServers) < 5 {
+		t.Errorf("expected >= 5 MCP servers, got %d", len(mcp.McpServers))
 	}
 }
 

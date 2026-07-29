@@ -1,5 +1,5 @@
 import { handleLspMcpRequest } from "@oh-my-opencode/lsp-core/mcp";
-import { parseLspRequestContext, runWithRequestContext } from "@oh-my-opencode/lsp-core/request-context";
+import { parseLspRequestContext, runWithRequestContext, } from "@oh-my-opencode/lsp-core/request-context";
 import { isPlainRecord } from "@oh-my-opencode/mcp-stdio-core/record";
 import { authenticateMessage, OMO_DAEMON_PROTOCOL_VERSION } from "./ipc-protocol.js";
 export const CONTEXT_KEY = "_context";

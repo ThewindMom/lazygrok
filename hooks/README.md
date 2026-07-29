@@ -1,6 +1,8 @@
 # Grok hooks layout
 
-Plugin manifest: **`hooks/hooks.json`** (loaded via `GROK_PLUGIN_ROOT`). **Do not** add parallel `~/.grok/hooks/*.json` for this stack — use `grok plugin install github:ThewindMom/lazygrok --trust` (or `$(pwd)` from a local clone).
+Plugin manifest: **`hooks/hooks.json`** (loaded via `GROK_PLUGIN_ROOT`). Install
+with `grok plugin install ThewindMom/lazygrok@v0.4.4 --trust` (or `$(pwd)` from
+a local clone), then create the documented first-install user-hook bridge.
 
 ## Runtime
 
@@ -25,10 +27,10 @@ Optional: **`grok`** CLI for `grok inspect` (skill catalog on SessionStart); **`
 
 **`user-prompt`** collects and emits a single JSON payload:
 
-1. `using-superpowers` (first prompt only; includes Grok Read-tool note)
+1. **LazyGrok first-prompt skill gate** (agent-skill-gate content and Grok Read-tool note)
 2. **Skill gate proactive** — `<AGENT_SKILL_GATE_PROACTIVE>` with matched `SKILL.md` paths (catalog refresh if SessionStart missed)
 3. Workspace `AGENTS.md` + plugin `rules/*.md` (every prompt; size-capped)
-4. Ralph / ultrawork
+4. Ralph start/cancel only (`/ralph-loop`, `/cancel-ralph`); ULW activation remains on its separate skill/ledger hooks
 5. **IntentGate** — search / analyze / team / hyperplan banners (`LAZYGROK_INTENT_GATE`)
 6. **Prometheus** — `/plan`, `/start-work`, plan-mode state
 7. `/handoff`, `/stop-continuation`, `/resume-continuation`
@@ -41,7 +43,7 @@ Optional: **`grok`** CLI for `grok inspect` (skill catalog on SessionStart); **`
 
 **First block wins** (see `internal/cmd/stop.go`):
 
-1. **Ralph / ultrawork** — not affected by `/stop-continuation` (but `/stop-continuation` clears loop state)
+1. **Ralph-family promise loops** — `/ralph-loop` and explicit `/ulw-ralph-loop`; not ULW goal-ledger triggers
 2. **Boulder** — `.lazygrok/plans/*.md` progress
 3. **Todo continuation** — incomplete `TodoWrite` items (**todo enforcer**: 5s cooldown, 3s abort window on non-`end_turn` stops; state in `~/.grok/state/todo-enforcer/<session>/state.json`)
 4. **LSP** — error diagnostics in stash (skip when `LAZYGROK_LSP_ENFORCE=0`)
@@ -61,16 +63,21 @@ After `/stop-continuation`, steps 2–5 are skipped until `/resume-continuation`
 | `.lazygrok/plans/*.md` | Prometheus-style plans |
 | `.lazygrok/todos/<session>.json` | Todo mirror |
 | `.lazygrok/run-continuation/<session>.json` | Pause marker (with `~/.grok/state/stop-continuation/`) |
-| `.lazygrok/ralph-loop.local.md` | Ralph / ultrawork loop |
+| `.lazygrok/ralph-loop.local.md` | Explicit Ralph-family promise loop |
 | `.lazygrok/handoffs/*.md` | Saved handoff summaries |
 
 Session hook state under **`~/.grok/state/`**: skill-gate, stop-continuation, **hashline** (`state/hashline/<session>/`), **lsp-diagnostics** (`state/lsp-diagnostics/<session>.json`), **todo-enforcer**.
 
-Bundled MCP (optional): `.mcp.json` — `ast_grep`, `lsp` under `vendor/` (see `skills/ast-grep`, `skills/lsp`).
+Configured MCP servers are listed in `.mcp.json`: local stdio `hashline`,
+`lazygrok-lsp`, `lazygrok-lsp-tools`, `lazygrok-lsp-daemon`, and
+`lazygrok-codegraph`; remote, user-invoked `grep_app` and `context7`.
+Network/privacy details: [docs/PRIVACY.md](../docs/PRIVACY.md).
 
-## Plugin overlap
+## Inactive upstream source
 
-**superpowers** also registers `SessionStart`. Both may run; expect skill-gate + superpowers bootstrap on startup.
+Retained upstream source outside the skill roots in `plugin.json` does not
+register skills or hooks. The LazyGrok first-prompt injection loads
+`agent-skill-gate`.
 
 ## Tests
 

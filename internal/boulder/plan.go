@@ -1,10 +1,11 @@
 package boulder
 
 import (
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"lazygrok/internal/safestate"
 )
 
 type planProgress struct {
@@ -43,12 +44,12 @@ func resolvePlanPath(workspace string, state, work map[string]any) string {
 		rel, err := filepath.Rel(absBase, absPlan)
 		if err == nil {
 			candidate := filepath.Join(wtPath, rel)
-			if _, err := os.Stat(candidate); err == nil {
+			if _, err := safestate.ReadFile(candidate); err == nil {
 				return candidate
 			}
 		}
 	}
-	if _, err := os.Stat(planPath); err == nil {
+	if _, err := safestate.ReadFile(planPath); err == nil {
 		return planPath
 	}
 	return ""
@@ -72,7 +73,7 @@ func getPlanProgress(planPath string) planProgress {
 	if planPath == "" {
 		return planProgress{}
 	}
-	b, err := os.ReadFile(planPath)
+	b, err := safestate.ReadFile(planPath)
 	if err != nil {
 		return planProgress{}
 	}

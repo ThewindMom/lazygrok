@@ -2,18 +2,18 @@ import type { UlwLoopCodexGoalMode, UlwLoopItem, UlwLoopPlan } from "./types.js"
 import { UlwLoopError } from "./types.js";
 
 export const ULW_LOOP_HELP = `Usage:
-  omo ulw-loop create-goals --brief "..." [--brief-file <path>] [--from-stdin] [--codex-goal-mode aggregate|per_story] [--validation-batch-json <json-or-path>] [--force] [--json]
-  omo ulw-loop status [--json]
-  omo ulw-loop complete-goals [--retry-failed] [--json]
-  omo ulw-loop criteria --goal-id <id> [--json]
-  omo ulw-loop record-evidence --goal-id <id> --criterion-id <id> --status pass|fail|blocked --evidence "..." [--notes "..."] [--json]
-  omo ulw-loop checkpoint --goal-id <id> --status complete|failed|blocked --evidence "..." --codex-goal-json <...> [--quality-gate-json <...>] [--no-advance] [--json]
-  omo ulw-loop steer --kind <kind> ... --evidence "..." --rationale "..." [--proposals-json <json-or-path>] [--json]
-  omo ulw-loop add-goal --title "..." --objective "..." [--json]
-  omo ulw-loop record-review-blockers
-  omo ulw-loop light-quality-gate --goal-id <id> [--session-id <id>] [--json]
+  ulw-loop create-goals --brief "..." [--brief-file <path>] [--from-stdin] [--codex-goal-mode aggregate|per_story] [--validation-batch-json <json-or-path>] [--force] [--json]
+  ulw-loop status [--json]
+  ulw-loop complete-goals [--retry-failed] [--json]
+  ulw-loop criteria --goal-id <id> [--json]
+  ulw-loop record-evidence --goal-id <id> --criterion-id <id> --status pass|fail|blocked --evidence "..." [--notes "..."] [--json]
+  ulw-loop checkpoint --goal-id <id> --status complete|failed|blocked --evidence "..." --codex-goal-json <...> [--quality-gate-json <...>] [--no-advance] [--json]
+  ulw-loop steer --kind <kind> ... --evidence "..." --rationale "..." [--proposals-json <json-or-path>] [--json]
+  ulw-loop add-goal --title "..." --objective "..." [--json]
+  ulw-loop record-review-blockers
+  ulw-loop light-quality-gate --goal-id <id> [--session-id <id>] [--json]
 
-All subcommands accept [--session-id <id>] to isolate state under .omo/ulw-loop/<id>/; without it, Codex session env is used when present.`;
+All subcommands accept [--session-id <id>] to isolate state under .lazygrok/ulw-loop/<id>/; without it, Grok session env is used when present. Legacy .omo runs remain readable.`;
 
 type CriteriaCounts = { readonly pass: number; readonly total: number };
 

@@ -1,8 +1,10 @@
 # Lazygrok × Grok compatibility audit
 
+> Historical audit snapshot. Its actionable findings were addressed by the subsequent Grok-compat fix and the 2026-07-29 LazyCodex 4.19.3 runtime parity pass. See `docs/lazycodex-4.19.3-port-receipt.md` and run `python3 scripts/test_runtime_parity.py -v` for the current contract.
+
 ## Executive summary (counts + top 5 actions)
 
-**Plugin:** `lazygrok-85b8f856` at `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856`  
+**Plugin:** `lazygrok-85b8f856` at `<plugin-root>`
 **Scope:** 83 audited surface items (skills, commands, agents) from parallel audits  
 **Confirmed blockers preferred** where adversarial verification ran.
 

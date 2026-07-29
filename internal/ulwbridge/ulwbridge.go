@@ -2,18 +2,20 @@ package ulwbridge
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 // Goal represents a single ulw-loop goal.
 type Goal struct {
-	ID             string         `json:"id"`
-	Objective      string         `json:"objective"`
-	Status         string         `json:"status"`
-	SuccessCriteria []Criterion   `json:"successCriteria"`
+	ID              string      `json:"id"`
+	Objective       string      `json:"objective"`
+	Status          string      `json:"status"`
+	SuccessCriteria []Criterion `json:"successCriteria"`
 }
 
 // Criterion represents a success criterion within a goal.
@@ -73,16 +75,19 @@ func EvaluateStop(workspace, sessionID string) string {
 }
 
 func readPlan(workspace, sessionID string) *Plan {
-	// Try .omo/ulw-loop/<session>/goals.json first (omo-compatible)
+	if workspace == "" || sessionID == "" {
+		return nil
+	}
+	if _, err := hookenv.ParseSessionID(sessionID); err != nil {
+		return nil
+	}
 	candidates := []string{
 		filepath.Join(workspace, ".omo", "ulw-loop", sessionID, "goals.json"),
 		filepath.Join(workspace, ".lazygrok", "ulw-loop", sessionID, "goals.json"),
-		filepath.Join(workspace, ".omo", "ulw-loop", "goals.json"),
-		filepath.Join(workspace, ".lazygrok", "ulw-loop", "goals.json"),
 	}
 
 	for _, p := range candidates {
-		b, err := os.ReadFile(p)
+		b, err := safestate.ReadFileBelow(workspace, p)
 		if err != nil {
 			continue
 		}

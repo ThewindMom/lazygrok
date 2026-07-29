@@ -26,8 +26,8 @@
   },
   "scripts": {
     "build": "node scripts/sync-directive.mjs && node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && bun build src/cli.ts --target node --format esm --outfile dist/cli.js",
-    "test": "vitest --run",
-    "test:watch": "vitest",
+    "test": "node --test scripts/sync-directive.test.mjs skills/ulw-plan/scripts/scaffold-plan.test.mjs",
+    "test:watch": "node --test --watch scripts/sync-directive.test.mjs skills/ulw-plan/scripts/scaffold-plan.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
@@ -45,10 +45,8 @@
   ],
   "devDependencies": {
     "@biomejs/biome": "2.4.16",
-    "@oh-my-opencode/prompts-core": "file:../../../../prompts-core",
     "@types/node": "^25.9.3",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=20.0.0"

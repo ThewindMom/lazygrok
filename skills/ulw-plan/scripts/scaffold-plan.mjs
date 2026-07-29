@@ -16,9 +16,8 @@
 //
 // WRITE BOUNDARY: the prometheus-md-only hook gates Write/Edit but NOT Bash, so
 // this node:fs script writes out of band of that hook. It self-guards THIS script's
-// own writes to resolve under .omo/ (it does not, and cannot, contain other Bash
-// commands; it only guarantees the mandated generator never escapes .omo). Mirrors
-// packages/omo-opencode/src/hooks/prometheus-md-only/path-policy.ts.
+// own writes to resolve under .lazygrok/ for new runs. Existing per-slug legacy
+// .omo runs stay in their original root; no other Bash commands are covered.
 
 import { lstat, mkdir, writeFile, readFile, realpath } from "node:fs/promises";
 import { dirname, join, relative, resolve, isAbsolute } from "node:path";
@@ -72,16 +71,16 @@ export function parseArgs(argv) {
 	return { slug, intent, reset, force, draftOnly, reviewRequired };
 }
 
-// Resolve a project-relative path and confine it under .omo/ - the script's own
-// enforcement of the prometheus planner write boundary.
-export function resolveSafeOmoPath(cwd, relPath) {
+// Resolve a project-relative path and confine it under the selected state root.
+export function resolveSafeStatePath(cwd, relPath, stateRoot) {
 	const resolved = resolve(cwd, relPath);
 	const rel = relative(cwd, resolved);
 	if (rel.startsWith("..") || isAbsolute(rel)) {
 		throw new Error(`refused: path escapes the workspace root: ${relPath}`);
 	}
-	if (!/(^|[/\\])\.omo([/\\]|$)/i.test(rel)) {
-		throw new Error(`refused: ulw-plan may only write under .lazygrok/ or .omo/: ${relPath}`);
+	const normalizedRel = rel.replaceAll("\\", "/");
+	if (normalizedRel !== stateRoot && !normalizedRel.startsWith(`${stateRoot}/`)) {
+		throw new Error(`refused: ulw-plan may only write under ${stateRoot}/: ${relPath}`);
 	}
 	if (!resolved.toLowerCase().endsWith(".md")) {
 		throw new Error(`refused: ulw-plan may only write .md files: ${relPath}`);
@@ -119,18 +118,18 @@ async function mkdirWithoutSymlinks(dir, stopAt) {
 	await mkdir(dir);
 }
 
-async function assertSafeWriteParent(cwd, target) {
+async function assertSafeWriteParent(cwd, target, stateRoot) {
 	const workspaceReal = await realpath(cwd);
 	const workspaceRoot = resolve(cwd);
-	const omoRoot = resolve(cwd, ".omo");
+	const statePath = resolve(cwd, stateRoot);
 	const parent = dirname(target);
 	assertContainedPath(workspaceRoot, parent, `refused: path escapes the workspace root: ${target}`);
-	assertContainedPath(omoRoot, parent, `refused: ulw-plan may only write under .lazygrok/ or .omo/: ${target}`);
+	assertContainedPath(statePath, parent, `refused: ulw-plan may only write under ${stateRoot}/: ${target}`);
 	await mkdirWithoutSymlinks(parent, workspaceRoot);
-	const omoReal = await realpath(omoRoot);
+	const stateReal = await realpath(statePath);
 	const parentReal = await realpath(parent);
 	assertContainedPath(workspaceReal, parentReal, `refused: path escapes the workspace root through symlinks: ${target}`);
-	assertContainedPath(omoReal, parentReal, `refused: ulw-plan may only write under .lazygrok/ or .omo/ through real paths: ${target}`);
+	assertContainedPath(stateReal, parentReal, `refused: ulw-plan may only write under ${stateRoot}/ through real paths: ${target}`);
 }
 
 async function assertSafeWriteTarget(target) {
@@ -288,9 +287,9 @@ ${FINAL_VERIFICATION_ITEMS.map((item) => `- [ ] ${item}`).join("\n")}
 // Resume-safe write: plain re-run on an existing ulw-plan artifact is a no-op
 // success; --reset overwrites but refuses to discard a hand-edited file unless
 // --force is also passed.
-export async function writeGuarded(cwd, relPath, content, { reset = false, force = false } = {}) {
-	const target = resolveSafeOmoPath(cwd, relPath);
-	await assertSafeWriteParent(cwd, target);
+export async function writeGuarded(cwd, relPath, content, { reset = false, force = false, stateRoot = ".lazygrok" } = {}) {
+	const target = resolveSafeStatePath(cwd, relPath, stateRoot);
+	await assertSafeWriteParent(cwd, target, stateRoot);
 	await assertSafeWriteTarget(target);
 	const existing = await readFile(target, "utf8").catch(() => null);
 	if (existing && existing.trim() !== "") {
@@ -306,12 +305,24 @@ export async function writeGuarded(cwd, relPath, content, { reset = false, force
 	return { relPath, status: existing ? "reset" : "created" };
 }
 
+async function legacyRunExists(cwd, slug) {
+	for (const relPath of [join(".omo", "drafts", `${slug}.md`), join(".omo", "plans", `${slug}.md`)]) {
+		const stat = await lstat(resolve(cwd, relPath)).catch((err) => {
+			if (err && err.code === "ENOENT") return null;
+			throw err;
+		});
+		if (stat) return true;
+	}
+	return false;
+}
+
 export async function scaffold(cwd, { slug, intent, reset = false, force = false, draftOnly = false, reviewRequired = false }) {
-	const draftRel = join(".omo", "drafts", `${slug}.md`);
-	const draft = await writeGuarded(cwd, draftRel, buildDraft(slug, intent, { reviewRequired }), { reset, force });
+	const stateRoot = (await legacyRunExists(cwd, slug)) ? ".omo" : ".lazygrok";
+	const draftRel = join(stateRoot, "drafts", `${slug}.md`);
+	const draft = await writeGuarded(cwd, draftRel, buildDraft(slug, intent, { reviewRequired }), { reset, force, stateRoot });
 	if (draftOnly) return [draft];
-	const planRel = join(".omo", "plans", `${slug}.md`);
-	const plan = await writeGuarded(cwd, planRel, buildPlanSkeleton(slug, intent), { reset, force });
+	const planRel = join(stateRoot, "plans", `${slug}.md`);
+	const plan = await writeGuarded(cwd, planRel, buildPlanSkeleton(slug, intent), { reset, force, stateRoot });
 	return [draft, plan];
 }
 

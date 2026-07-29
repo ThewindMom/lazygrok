@@ -19,14 +19,14 @@ async function makeFixture() {
 	await mkdir(fakeBin, { recursive: true });
 	const npmLog = join(root, "npm.log");
 	await writeFile(
-		join(fakeBin, "npm.js"),
+		join(fakeBin, "npm.cjs"),
 		`const { appendFileSync } = require("node:fs");\nappendFileSync(${JSON.stringify(npmLog)}, process.argv.slice(2).join(" ") + "\\n");\n`,
 	);
 	await writeFile(
 		join(fakeBin, "npm"),
-		`#!/usr/bin/env node\nrequire("./npm.js");\n`,
+		'#!/bin/sh\nexec node "$(dirname "$0")/npm.cjs" "$@"\n',
 	);
-	await writeFile(join(fakeBin, "npm.cmd"), `@echo off\r\nnode "%~dp0\\npm.js" %*\r\n`);
+	await writeFile(join(fakeBin, "npm.cmd"), `@echo off\r\nnode "%~dp0\\npm.cjs" %*\r\n`);
 	await chmod(join(fakeBin, "npm"), 0o755);
 	return { root, npmLog, script: join(root, "packages", "omo-codex", "plugin", "components", "lsp", "scripts", "build-lsp-tools.mjs"), fakeBin };
 }

@@ -89,7 +89,7 @@ ULW_LOOP_CLI=
 if command -v omo >/dev/null 2>&1 && omo ulw-loop help >/dev/null 2>&1; then
   ULW_LOOP_CLI=omo
 elif [ -n "$ULW_LOOP_NODE" ]; then
-  for candidate in "$HOME/.local/bin/omo" "$GROK_HOME/bin/omo" "$GROK_HOME"/plugins/cache/lazygrok/*/components/ulw-loop/dist/cli.js; do
+  for candidate in "$HOME/.local/bin/omo" "$GROK_HOME/bin/omo" "$GROK_HOME"/installed-plugins/lazygrok-*/vendor/lazygrok-hooks/ulw-loop/dist/cli.js "$GROK_HOME"/plugins/cache/lazygrok/*/components/ulw-loop/dist/cli.js; do
     [ -f "$candidate" ] || [ -x "$candidate" ] || continue
     if "$ULW_LOOP_NODE" "$candidate" ulw-loop help >/dev/null 2>&1; then
       ULW_LOOP_CLI="$candidate"

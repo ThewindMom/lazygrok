@@ -2,7 +2,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { basename, delimiter, dirname, isAbsolute } from "node:path";
 import { handleLspMcpRequest } from "@oh-my-opencode/lsp-core/mcp";
 import { createStandaloneMcpRequestContext, runWithRequestContext } from "@oh-my-opencode/lsp-core/request-context";
-import { jsonRpcId, runJsonRpcStdioServer, successResponse } from "@oh-my-opencode/mcp-stdio-core";
+import { jsonRpcId, runJsonRpcStdioServer, successResponse, } from "@oh-my-opencode/mcp-stdio-core";
 import { isPlainRecord } from "@oh-my-opencode/mcp-stdio-core/record";
 import { callToolViaDaemon } from "./daemon-client.js";
 import { daemonPaths } from "./paths.js";

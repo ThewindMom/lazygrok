@@ -1,18 +1,35 @@
 #!/usr/bin/env node
 
 // src/checkpoint.ts
-import { existsSync as existsSync3, statSync } from "node:fs";
-import { readFile as readFile5 } from "node:fs/promises";
-import { resolve as resolve3 } from "node:path";
+import { existsSync as existsSync3, lstatSync as lstatSync3, realpathSync as realpathSync3, statSync as statSync2 } from "node:fs";
+import { resolve as resolve6 } from "node:path";
 
-// src/checkpoint-reconciliation.ts
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+// src/file-safety.ts
+import { randomUUID } from "node:crypto";
+import {
+  closeSync,
+  constants as constants2,
+  existsSync,
+  fchmodSync,
+  fstatSync as fstatSync2,
+  fsyncSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  realpathSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync
+} from "node:fs";
+import { open } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
-// src/paths.ts
-import { isAbsolute, join, relative, sep } from "node:path";
+// src/bounded-read.ts
+import { fstatSync, readSync } from "node:fs";
 // src/constants.ts
-var ULW_LOOP_DIR = ".omo/ulw-loop";
+var ULW_LOOP_DIR = ".lazygrok/ulw-loop";
+var ULW_LOOP_LEGACY_DIR = ".omo/ulw-loop";
 var ULW_LOOP_BRIEF = "brief.md";
 var ULW_LOOP_GOALS = "goals.json";
 var ULW_LOOP_LEDGER = "ledger.jsonl";
@@ -47,30 +64,452 @@ class UlwLoopError extends Error {
 function iso() {
   return new Date().toISOString();
 }
+// src/bounded-read.ts
+function readBoundedDescriptorText(fileDescriptor, maxBytes) {
+  const snapshotBytes = fstatSync(fileDescriptor).size;
+  if (!Number.isSafeInteger(snapshotBytes) || snapshotBytes < 0 || snapshotBytes > maxBytes) {
+    throw new UlwLoopError("ULW input is not a bounded regular file.", "ULW_LOOP_UNSAFE_PATH");
+  }
+  const buffer = Buffer.alloc(snapshotBytes);
+  let offset = 0;
+  while (offset < snapshotBytes) {
+    const bytesRead = readSync(fileDescriptor, buffer, offset, snapshotBytes - offset, offset);
+    if (bytesRead === 0)
+      break;
+    offset += bytesRead;
+  }
+  return buffer.subarray(0, offset).toString("utf8");
+}
+
+// src/file-safety.ts
+function isInside(root, candidate) {
+  const pathFromRoot = relative(root, candidate);
+  return pathFromRoot === "" || pathFromRoot !== ".." && !pathFromRoot.startsWith(`..${sep}`) && !isAbsolute(pathFromRoot);
+}
+function safeWorkspacePath(repoRoot, candidate) {
+  const lexicalRoot = resolve(repoRoot);
+  const lexicalCandidate = resolve(candidate);
+  if (!isInside(lexicalRoot, lexicalCandidate)) {
+    throw new UlwLoopError("ULW state path escapes the workspace.", "ULW_LOOP_UNSAFE_PATH");
+  }
+  const canonicalRoot = realpathSync(lexicalRoot);
+  const canonicalCandidate = resolve(canonicalRoot, relative(lexicalRoot, lexicalCandidate));
+  let current = canonicalRoot;
+  for (const component of relative(canonicalRoot, canonicalCandidate).split(/[\\/]+/u).filter(Boolean)) {
+    current = join(current, component);
+    if (!existsSync(current))
+      break;
+    if (lstatSync(current).isSymbolicLink()) {
+      throw new UlwLoopError("ULW state paths may not contain symlinks.", "ULW_LOOP_UNSAFE_PATH");
+    }
+    if (!isInside(canonicalRoot, realpathSync(current))) {
+      throw new UlwLoopError("ULW state path escapes the workspace.", "ULW_LOOP_UNSAFE_PATH");
+    }
+  }
+  return canonicalCandidate;
+}
+function safeReadWorkspaceTextFile(repoRoot, candidate, maxBytes = 10 * 1024 * 1024) {
+  const fileDescriptor = safeOpenWorkspaceReadFile(repoRoot, candidate, maxBytes);
+  try {
+    return readBoundedDescriptorText(fileDescriptor, maxBytes);
+  } finally {
+    closeSync(fileDescriptor);
+  }
+}
+function readBoundedRegularTextFile(candidate, maxBytes) {
+  requireDescriptorAnchoring();
+  const parentDescriptor = openSync(dirname(candidate), constants2.O_RDONLY | constants2.O_DIRECTORY | constants2.O_NOFOLLOW);
+  const procParent = `/proc/self/fd/${parentDescriptor}`;
+  let fileDescriptor;
+  try {
+    fileDescriptor = openSync(existsSync(procParent) ? join(procParent, basename(candidate)) : candidate, constants2.O_RDONLY | constants2.O_NOFOLLOW);
+  } finally {
+    closeSync(parentDescriptor);
+  }
+  try {
+    const file = fstatSync2(fileDescriptor);
+    if (!file.isFile() || file.nlink !== 1 || file.size > maxBytes) {
+      throw new UlwLoopError("ULW input is not a bounded regular file.", "ULW_LOOP_UNSAFE_PATH");
+    }
+    return readBoundedDescriptorText(fileDescriptor, maxBytes);
+  } finally {
+    closeSync(fileDescriptor);
+  }
+}
+function assertOpenDescriptorInsideWorkspace(repoRoot, fileDescriptor, expectedKind = "file") {
+  const canonicalRoot = realpathSync(repoRoot);
+  const procPath = `/proc/self/fd/${fileDescriptor}`;
+  if (existsSync(procPath)) {
+    const openedPath = realpathSync(procPath);
+    if (!isInside(canonicalRoot, openedPath)) {
+      throw new UlwLoopError("ULW state file changed identity during write.", "ULW_LOOP_UNSAFE_PATH");
+    }
+  }
+  const opened = fstatSync2(fileDescriptor);
+  if (expectedKind === "file" && !opened.isFile() || expectedKind === "directory" && !opened.isDirectory()) {
+    throw new UlwLoopError("ULW state output is not a regular file.", "ULW_LOOP_UNSAFE_PATH");
+  }
+  if (expectedKind === "file" && opened.nlink !== 1) {
+    throw new UlwLoopError("ULW state files may not be hard linked.", "ULW_LOOP_UNSAFE_PATH");
+  }
+}
+function ensureWorkspaceDirectory(repoRoot, directory) {
+  requireDescriptorAnchoring();
+  const canonicalRoot = realpathSync(resolve(repoRoot));
+  const safeDirectory = safeWorkspacePath(repoRoot, directory);
+  const components = relative(canonicalRoot, safeDirectory).split(/[\\/]+/u).filter(Boolean);
+  let currentDescriptor = openSync(canonicalRoot, constants2.O_RDONLY | constants2.O_DIRECTORY | constants2.O_NOFOLLOW);
+  try {
+    assertOpenDescriptorInsideWorkspace(repoRoot, currentDescriptor, "directory");
+    let fallbackPath = canonicalRoot;
+    for (const component of components) {
+      const procParent = `/proc/self/fd/${currentDescriptor}`;
+      const entryPath = existsSync(procParent) ? join(procParent, component) : join(fallbackPath, component);
+      try {
+        mkdirSync(entryPath, { mode: 448 });
+      } catch (error) {
+        if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST")
+          throw error;
+      }
+      const childDescriptor = openSync(entryPath, constants2.O_RDONLY | constants2.O_DIRECTORY | constants2.O_NOFOLLOW);
+      try {
+        assertOpenDescriptorInsideWorkspace(repoRoot, childDescriptor, "directory");
+        fchmodSync(childDescriptor, 448);
+      } catch (error) {
+        closeSync(childDescriptor);
+        throw error;
+      }
+      closeSync(currentDescriptor);
+      currentDescriptor = childDescriptor;
+      fallbackPath = join(fallbackPath, component);
+    }
+  } finally {
+    closeSync(currentDescriptor);
+  }
+}
+function openAnchoredParent(repoRoot, safePath) {
+  requireDescriptorAnchoring();
+  const safeParent = safeWorkspacePath(repoRoot, dirname(safePath));
+  const fileDescriptor = openSync(safeParent, constants2.O_RDONLY | constants2.O_DIRECTORY | constants2.O_NOFOLLOW);
+  try {
+    assertOpenDescriptorInsideWorkspace(repoRoot, fileDescriptor, "directory");
+    const procPath = `/proc/self/fd/${fileDescriptor}`;
+    return {
+      fileDescriptor,
+      path: existsSync(procPath) ? join(procPath, basename(safePath)) : safePath
+    };
+  } catch (error) {
+    closeSync(fileDescriptor);
+    throw error;
+  }
+}
+function requireDescriptorAnchoring() {
+  if (process.platform !== "linux") {
+    throw new UlwLoopError("ULW state and evidence operations require Linux descriptor anchoring.", "ULW_LOOP_UNSAFE_PATH");
+  }
+}
+function safeOpenWorkspaceReadFile(repoRoot, candidate, maxBytes) {
+  const safePath = safeWorkspacePath(repoRoot, candidate);
+  const parent = openAnchoredParent(repoRoot, safePath);
+  let fileDescriptor;
+  try {
+    fileDescriptor = openSync(parent.path, constants2.O_RDONLY | constants2.O_NOFOLLOW);
+  } finally {
+    closeSync(parent.fileDescriptor);
+  }
+  try {
+    assertOpenDescriptorInsideWorkspace(repoRoot, fileDescriptor);
+    const file = fstatSync2(fileDescriptor);
+    if (file.size > maxBytes) {
+      throw new UlwLoopError("ULW state input is not a bounded regular file.", "ULW_LOOP_UNSAFE_PATH");
+    }
+    return fileDescriptor;
+  } catch (error) {
+    closeSync(fileDescriptor);
+    throw error;
+  }
+}
+function assertSafeEvidenceArtifact(repoRoot, candidate, attemptRoot, maxBytes) {
+  const safePath = safeWorkspacePath(repoRoot, candidate);
+  const safeAttemptRoot = attemptRoot === undefined ? undefined : safeWorkspacePath(repoRoot, attemptRoot);
+  if (safeAttemptRoot !== undefined && (!isInside(safeAttemptRoot, safePath) || safeAttemptRoot === safePath)) {
+    throw new UlwLoopError("ULW evidence artifact is outside the current attempt.", "ULW_LOOP_UNSAFE_PATH");
+  }
+  const fileDescriptor = safeOpenWorkspaceReadFile(repoRoot, safePath, maxBytes);
+  try {
+    const file = fstatSync2(fileDescriptor);
+    if (file.size <= 0) {
+      throw new UlwLoopError("ULW evidence artifact is empty.", "ULW_LOOP_UNSAFE_PATH");
+    }
+    if (safeAttemptRoot !== undefined) {
+      const procPath = `/proc/self/fd/${fileDescriptor}`;
+      if (existsSync(procPath) && !isInside(realpathSync(safeAttemptRoot), realpathSync(procPath))) {
+        throw new UlwLoopError("ULW evidence artifact changed identity.", "ULW_LOOP_UNSAFE_PATH");
+      }
+    }
+  } finally {
+    closeSync(fileDescriptor);
+  }
+}
+function safeWriteWorkspaceTextFileSync(repoRoot, candidate, data) {
+  const safePath = safeWorkspacePath(repoRoot, candidate);
+  const safeParent = safeWorkspacePath(repoRoot, dirname(safePath));
+  if (!existsSync(safeParent)) {
+    throw new UlwLoopError("ULW state output directory is missing.", "ULW_LOOP_UNSAFE_PATH");
+  }
+  const parent = openAnchoredParent(repoRoot, safePath);
+  const temporaryName = `.${basename(safePath)}.${randomUUID()}.tmp`;
+  const temporaryPath = join(`/proc/self/fd/${parent.fileDescriptor}`, temporaryName);
+  let fileDescriptor;
+  try {
+    fileDescriptor = openSync(temporaryPath, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL | constants2.O_NOFOLLOW, 384);
+    assertOpenDescriptorInsideWorkspace(repoRoot, fileDescriptor);
+    fchmodSync(fileDescriptor, 384);
+    writeFileSync(fileDescriptor, data, "utf8");
+    fsyncSync(fileDescriptor);
+    closeSync(fileDescriptor);
+    fileDescriptor = undefined;
+    renameSync(temporaryPath, parent.path);
+    fsyncSync(parent.fileDescriptor);
+  } catch (error) {
+    if (fileDescriptor !== undefined)
+      closeSync(fileDescriptor);
+    try {
+      unlinkSync(temporaryPath);
+    } catch (cleanupError) {
+      if (!(cleanupError instanceof Error) || !("code" in cleanupError) || cleanupError.code !== "ENOENT") {
+        throw cleanupError;
+      }
+    }
+    throw error;
+  } finally {
+    closeSync(parent.fileDescriptor);
+  }
+}
+function safeOpenWorkspaceLockFile(repoRoot, candidate) {
+  const initialPath = safeWorkspacePath(repoRoot, candidate);
+  ensureWorkspaceDirectory(repoRoot, dirname(initialPath));
+  const safePath = safeWorkspacePath(repoRoot, initialPath);
+  const parent = openAnchoredParent(repoRoot, safePath);
+  let fileDescriptor;
+  try {
+    fileDescriptor = openSync(parent.path, constants2.O_RDWR | constants2.O_CREAT | constants2.O_NOFOLLOW, 384);
+    const opened = fstatSync2(fileDescriptor);
+    const current = statSync(parent.path);
+    assertOpenDescriptorInsideWorkspace(repoRoot, fileDescriptor);
+    if (opened.dev !== current.dev || opened.ino !== current.ino) {
+      throw new UlwLoopError("ULW lock file changed identity during open.", "ULW_LOOP_UNSAFE_PATH");
+    }
+    fchmodSync(fileDescriptor, 384);
+    return fileDescriptor;
+  } catch (error) {
+    if (fileDescriptor !== undefined)
+      closeSync(fileDescriptor);
+    throw error;
+  } finally {
+    closeSync(parent.fileDescriptor);
+  }
+}
+function safeUnlinkWorkspaceFile(repoRoot, candidate) {
+  const safePath = safeWorkspacePath(repoRoot, candidate);
+  const fileDescriptor = safeOpenWorkspaceReadFile(repoRoot, safePath, 10 * 1024 * 1024);
+  const parent = openAnchoredParent(repoRoot, safePath);
+  try {
+    const opened = fstatSync2(fileDescriptor);
+    const current = statSync(parent.path);
+    if (opened.dev !== current.dev || opened.ino !== current.ino) {
+      throw new UlwLoopError("ULW state file changed identity before removal.", "ULW_LOOP_UNSAFE_PATH");
+    }
+    unlinkSync(parent.path);
+    fsyncSync(parent.fileDescriptor);
+  } finally {
+    closeSync(fileDescriptor);
+    closeSync(parent.fileDescriptor);
+  }
+}
+async function openForWrite(path, append) {
+  const mode = constants2.O_WRONLY | constants2.O_NOFOLLOW | (append ? constants2.O_APPEND : 0);
+  try {
+    return await open(path, mode);
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT")
+      throw error;
+    return open(path, mode | constants2.O_CREAT | constants2.O_EXCL, 384);
+  }
+}
+async function writeWorkspaceTextFile(repoRoot, candidate, data, append) {
+  const initialPath = safeWorkspacePath(repoRoot, candidate);
+  ensureWorkspaceDirectory(repoRoot, dirname(initialPath));
+  const safePath = safeWorkspacePath(repoRoot, initialPath);
+  const parent = openAnchoredParent(repoRoot, safePath);
+  let handle;
+  try {
+    handle = await openForWrite(parent.path, append);
+  } finally {
+    closeSync(parent.fileDescriptor);
+  }
+  try {
+    assertOpenDescriptorInsideWorkspace(repoRoot, handle.fd);
+    await handle.chmod(384);
+    if (!append)
+      await handle.truncate(0);
+    await handle.writeFile(data, "utf8");
+  } finally {
+    await handle.close();
+  }
+}
+async function safeWriteWorkspaceTextFile(repoRoot, candidate, data) {
+  await writeWorkspaceTextFile(repoRoot, candidate, data, false);
+}
+async function safeAppendWorkspaceTextFile(repoRoot, candidate, data) {
+  await writeWorkspaceTextFile(repoRoot, candidate, data, true);
+}
+async function safeAtomicWriteWorkspaceTextFile(repoRoot, candidate, data) {
+  const initialPath = safeWorkspacePath(repoRoot, candidate);
+  ensureWorkspaceDirectory(repoRoot, dirname(initialPath));
+  const safePath = safeWorkspacePath(repoRoot, initialPath);
+  const parent = openAnchoredParent(repoRoot, safePath);
+  const temporaryPath = join(dirname(parent.path), `.${basename(safePath)}.${randomUUID()}.tmp`);
+  let temporaryHandle;
+  let failure = null;
+  try {
+    try {
+      const existing = openSync(parent.path, constants2.O_RDONLY | constants2.O_NOFOLLOW);
+      try {
+        assertOpenDescriptorInsideWorkspace(repoRoot, existing);
+      } finally {
+        closeSync(existing);
+      }
+    } catch (error) {
+      if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT")
+        throw error;
+    }
+    temporaryHandle = await open(temporaryPath, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL | constants2.O_NOFOLLOW, 384);
+    assertOpenDescriptorInsideWorkspace(repoRoot, temporaryHandle.fd);
+    await temporaryHandle.writeFile(data, "utf8");
+    await temporaryHandle.sync();
+    await temporaryHandle.close();
+    temporaryHandle = undefined;
+    renameSync(temporaryPath, parent.path);
+    fsyncSync(parent.fileDescriptor);
+  } catch (error) {
+    failure = error;
+  }
+  if (temporaryHandle !== undefined) {
+    try {
+      await temporaryHandle.close();
+    } catch (error) {
+      if (failure === null)
+        failure = error;
+    }
+  }
+  try {
+    unlinkSync(temporaryPath);
+  } catch (error) {
+    if ((!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") && failure === null) {
+      failure = error;
+    }
+  }
+  try {
+    closeSync(parent.fileDescriptor);
+  } catch (error) {
+    if (failure === null)
+      failure = error;
+  }
+  if (failure !== null)
+    throw failure;
+}
+
 // src/paths.ts
-var SESSION_ENV_KEYS = ["OMO_ULW_LOOP_SESSION_ID", "CODEX_SESSION_ID", "CODEX_THREAD_ID"];
+import { createHash } from "node:crypto";
+import { existsSync as existsSync2, lstatSync as lstatSync2, readdirSync, readFileSync, realpathSync as realpathSync2 } from "node:fs";
+import { homedir } from "node:os";
+import { isAbsolute as isAbsolute2, join as join2, relative as relative2, sep as sep2 } from "node:path";
+var SESSION_ENV_KEYS = ["OMO_ULW_LOOP_SESSION_ID", "GROK_SESSION_ID", "GROK_THREAD_ID"];
+var SESSION_BINDING_MAX_AGE_MS = 10 * 60 * 1000;
 function normalizeUlwLoopSessionId(sessionId) {
-  const trimmed = sessionId?.trim();
-  if (!trimmed)
+  if (sessionId === null || sessionId === undefined || sessionId.length === 0 || sessionId.length > 160 || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(sessionId)) {
     return null;
-  const pathSegments = trimmed.split(/[\\/]+/).filter((segment) => segment.length > 0 && segment !== "." && segment !== "..");
-  const candidate = (pathSegments.length > 0 ? pathSegments.join("-") : trimmed).replace(/[^A-Za-z0-9._-]+/g, "-").replace(/-+/g, "-").replace(/^\.+/, "").replace(/^[.-]+|[.-]+$/g, "");
-  return candidate.length > 0 ? candidate : null;
+  }
+  return sessionId;
 }
 function resolveUlwLoopSessionIdFromEnv(env = process.env) {
   for (const key of SESSION_ENV_KEYS) {
-    const normalized = normalizeUlwLoopSessionId(env[key]);
-    if (normalized !== null)
-      return normalized;
+    const value = env[key];
+    if (value === undefined || value.length === 0)
+      continue;
+    const sessionId = normalizeUlwLoopSessionId(value);
+    if (sessionId === null) {
+      throw new UlwLoopError(`Invalid session ID in ${key}.`, "ULW_LOOP_SESSION_ID_INVALID");
+    }
+    return sessionId;
   }
   return null;
 }
-function ulwLoopRelativeDir(scope) {
-  const sessionId = normalizeUlwLoopSessionId(scope?.sessionId);
-  return sessionId === null ? ULW_LOOP_DIR : `${ULW_LOOP_DIR}/${sessionId}`;
+function resolveUlwLoopSessionIdFromBinding(repoRoot, options = {}) {
+  const canonicalRoot = realpathSync2(repoRoot);
+  const workspaceHash = createHash("sha256").update(canonicalRoot).digest("hex");
+  const grokHome = options.homeDir === undefined ? process.env["GROK_HOME"] ?? join2(homedir(), ".grok") : join2(options.homeDir, ".grok");
+  const bindingDir = join2(grokHome, "state", "lazygrok", "session-bindings");
+  let entries;
+  try {
+    const directory = lstatSync2(bindingDir);
+    if (!directory.isDirectory() || directory.isSymbolicLink())
+      return null;
+    entries = readdirSync(bindingDir);
+  } catch {
+    return null;
+  }
+  const nowMs = options.nowMs ?? Date.now();
+  const sessionIds = new Set;
+  for (const name of entries) {
+    if (!name.startsWith(`${workspaceHash}-`) || !name.endsWith(".json"))
+      continue;
+    const path = join2(bindingDir, name);
+    try {
+      const info = lstatSync2(path);
+      if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > 4096)
+        continue;
+      const binding = JSON.parse(readFileSync(path, "utf8"));
+      if (binding.workspaceHash !== workspaceHash || typeof binding.sessionId !== "string" || typeof binding.updatedAt !== "string") {
+        continue;
+      }
+      const sessionId = normalizeUlwLoopSessionId(binding.sessionId);
+      const updatedAt = Date.parse(binding.updatedAt);
+      if (sessionId !== binding.sessionId || !Number.isFinite(updatedAt) || updatedAt > nowMs + 60000 || nowMs - updatedAt > SESSION_BINDING_MAX_AGE_MS) {
+        continue;
+      }
+      sessionIds.add(sessionId);
+    } catch {}
+  }
+  if (sessionIds.size > 1) {
+    throw new UlwLoopError("Multiple recent Grok sessions are active for this workspace; use the exact CURRENT_GROK_SESSION_ID from hook context.", "ULW_LOOP_SESSION_AMBIGUOUS");
+  }
+  return sessionIds.values().next().value ?? null;
+}
+function ulwLoopRelativeDir(scope, root = ULW_LOOP_DIR) {
+  const requestedSessionId = scope?.sessionId;
+  const sessionId = normalizeUlwLoopSessionId(requestedSessionId);
+  if (requestedSessionId !== undefined && requestedSessionId !== null && sessionId === null) {
+    throw new UlwLoopError("Invalid session id: expected one safe path segment.", "ULW_LOOP_SESSION_ID_INVALID");
+  }
+  return sessionId === null ? root : `${root}/${sessionId}`;
 }
 function ulwLoopDir(repoRoot, scope) {
-  return join(repoRoot, ulwLoopRelativeDir(scope));
+  const canonical = join2(repoRoot, ulwLoopRelativeDir(scope));
+  const legacy = join2(repoRoot, ulwLoopRelativeDir(scope, ULW_LOOP_LEGACY_DIR));
+  if (hasSafeGoalsFile(repoRoot, canonical))
+    return canonical;
+  if (hasSafeGoalsFile(repoRoot, legacy))
+    return legacy;
+  return canonical;
+}
+function hasSafeGoalsFile(repoRoot, stateDir) {
+  const goalsPath = join2(stateDir, ULW_LOOP_GOALS);
+  if (!existsSync2(goalsPath))
+    return false;
+  safeWorkspacePath(repoRoot, goalsPath);
+  return true;
 }
 function ulwLoopBriefRelativePath(scope) {
   return `${ulwLoopRelativeDir(scope)}/${ULW_LOOP_BRIEF}`;
@@ -82,13 +521,13 @@ function ulwLoopLedgerRelativePath(scope) {
   return `${ulwLoopRelativeDir(scope)}/${ULW_LOOP_LEDGER}`;
 }
 function ulwLoopBriefPath(repoRoot, scope) {
-  return join(ulwLoopDir(repoRoot, scope), ULW_LOOP_BRIEF);
+  return join2(ulwLoopDir(repoRoot, scope), ULW_LOOP_BRIEF);
 }
 function ulwLoopGoalsPath(repoRoot, scope) {
-  return join(ulwLoopDir(repoRoot, scope), ULW_LOOP_GOALS);
+  return join2(ulwLoopDir(repoRoot, scope), ULW_LOOP_GOALS);
 }
 function ulwLoopLedgerPath(repoRoot, scope) {
-  return join(ulwLoopDir(repoRoot, scope), ULW_LOOP_LEDGER);
+  return join2(ulwLoopDir(repoRoot, scope), ULW_LOOP_LEDGER);
 }
 function repoRelative(absolutePath, repoRoot) {
   const slashPrefix = `${repoRoot}/`;
@@ -99,11 +538,30 @@ function repoRelative(absolutePath, repoRoot) {
     return absolutePath.slice(backslashPrefix.length).split("\\").join("/");
   return absolutePath.split("\\").join("/");
 }
-function ulwLoopAttemptEvidenceDir(goalId, attempt, scope) {
-  const sessionId = normalizeUlwLoopSessionId(scope?.sessionId) ?? resolveUlwLoopSessionIdFromEnv() ?? "session";
-  return `.omo/evidence/ulw/${sessionId}/${goalId}/a${attempt}`;
+function ulwLoopEvidenceRoot(repoRoot, scope) {
+  const stateDir = repoRelative(ulwLoopDir(repoRoot, scope), repoRoot);
+  return stateDir.startsWith(".omo/") ? ".omo/evidence" : ".lazygrok/evidence";
 }
-var PLATFORM_PATH_API = { relative, isAbsolute, sep };
+function ulwLoopAttemptEvidenceDir(repoRoot, goalId, attempt, scope) {
+  assertSafeUlwLoopPathSegment(goalId, "goal id");
+  if (!Number.isSafeInteger(attempt) || attempt < 0) {
+    throw new UlwLoopError("Invalid ULW goal attempt.", "ULW_LOOP_UNSAFE_PATH");
+  }
+  const requestedSessionId = scope?.sessionId;
+  const scopedSessionId = normalizeUlwLoopSessionId(requestedSessionId);
+  if (requestedSessionId !== undefined && requestedSessionId !== null && scopedSessionId === null) {
+    throw new UlwLoopError("Invalid session id: expected one safe path segment.", "ULW_LOOP_SESSION_ID_INVALID");
+  }
+  const sessionId = scopedSessionId ?? resolveUlwLoopSessionIdFromEnv() ?? "session";
+  const evidenceRoot = ulwLoopEvidenceRoot(repoRoot, scope);
+  return `${evidenceRoot}/ulw/${sessionId}/${goalId}/a${attempt}`;
+}
+function assertSafeUlwLoopPathSegment(value, label) {
+  if (value.length === 0 || value.length > 160 || value === "." || value === ".." || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(value)) {
+    throw new UlwLoopError(`Invalid ${label}: expected one safe path segment.`, "ULW_LOOP_UNSAFE_PATH");
+  }
+}
+var PLATFORM_PATH_API = { relative: relative2, isAbsolute: isAbsolute2, sep: sep2 };
 function isWithinAttemptDir(absolutePath, attemptRoot, pathApi = PLATFORM_PATH_API) {
   const relativePath = pathApi.relative(attemptRoot, absolutePath);
   if (relativePath === "")
@@ -196,6 +654,19 @@ function hasEssentialCriteriaPass(goal) {
   return criteria.length > 0 && criteria.every((criterion) => criterion.status === "pass");
 }
 
+// src/runtime-command.ts
+import { basename as basename2, dirname as dirname2, join as join3, resolve as resolve2 } from "node:path";
+import { fileURLToPath } from "node:url";
+function grokUlwCli() {
+  const modulePath = fileURLToPath(import.meta.url);
+  const moduleDir = dirname2(modulePath);
+  const cliPath = basename2(moduleDir) === "src" ? resolve2(moduleDir, "../dist/cli.js") : basename2(modulePath) === "runtime-command.js" ? join3(moduleDir, "cli.js") : modulePath;
+  return `node ${shellQuote(cliPath)}`;
+}
+function shellQuote(value) {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
 // src/checkpoint-reconciliation.ts
 function normalizeObjective(value) {
   return value.replace(/\s+/g, " ").trim();
@@ -217,10 +688,10 @@ async function snapshotObjectiveMapsToUlwLoopPlan(repoRoot, snapshotObjective, s
   const actual = normalizeObjective(snapshotObjective).toLowerCase();
   if (textMentionsUlwLoopPlanArtifact(actual))
     return true;
-  if (actual.length < 24 || !existsSync(ulwLoopBriefPath(repoRoot, scope)))
+  if (actual.length < 24)
     return false;
   try {
-    const brief = normalizeObjective(await readFile(ulwLoopBriefPath(repoRoot, scope), "utf8")).toLowerCase();
+    const brief = normalizeObjective(safeReadWorkspaceTextFile(repoRoot, ulwLoopBriefPath(repoRoot, scope))).toLowerCase();
     return brief.length >= 24 && (brief.includes(actual) || actual.includes(brief));
   } catch (error) {
     if (error instanceof Error)
@@ -256,22 +727,19 @@ async function canReconcileActiveFinalTaskScopedAggregateSnapshot(repoRoot, plan
 function buildCompletedLegacyGoalRemediation(goal) {
   return [
     "If get_goal returns a different completed legacy/thread objective, do not repeat --status complete in this thread.",
-    `Record a non-terminal blocker with: omo ulw-loop checkpoint --goal-id ${goal.id} --status blocked --evidence "<completed legacy Codex goal blocks create_goal in this thread>" --codex-goal-json "<different completed get_goal JSON or path>".`,
+    `Record a non-terminal blocker with: ${grokUlwCli()} checkpoint --goal-id ${goal.id} --status blocked --evidence "<completed legacy Codex goal blocks create_goal in this thread>" --codex-goal-json "<different completed get_goal JSON or path>".`,
     "Then continue only from a Codex goal context with no active/completed conflicting goal, in the same repo/worktree, and create the intended goal there."
   ].join(" ");
 }
 function buildTaskScopedAggregateReconciliationHint(goal, final) {
   if (final) {
-    return ` Final task-scoped aggregate reconciliation requires the checkpoint goal to be the active in-progress final OMO goal and the completed get_goal objective to map to the ulw-loop brief or artifact. ${buildCompletedLegacyGoalRemediation(goal)}`;
+    return ` Final task-scoped aggregate reconciliation requires the checkpoint goal to be the active in-progress final LazyGrok goal and the completed get_goal objective to map to the ulw-loop brief or artifact. ${buildCompletedLegacyGoalRemediation(goal)}`;
   }
-  return ` Completed task-scoped aggregate reconciliation requires the checkpoint goal to be the active in-progress OMO goal, evidence that names that active OMO goal id, names .omo/ulw-loop/goals.json or ledger.jsonl, includes completed implementation plus validation/review evidence, and a get_goal objective that maps to the ulw-loop brief/artifact. ${buildCompletedLegacyGoalRemediation(goal)}`;
+  return ` Completed task-scoped aggregate reconciliation requires the checkpoint goal to be the active in-progress LazyGrok goal, evidence that names that active goal id, names .lazygrok/ulw-loop/goals.json or ledger.jsonl (or the existing .omo path for a legacy run), includes completed implementation plus validation/review evidence, and a get_goal objective that maps to the ulw-loop brief/artifact. ${buildCompletedLegacyGoalRemediation(goal)}`;
 }
 
 // src/codex-goal-snapshot.ts
-import { existsSync as existsSync2 } from "node:fs";
-import { readFile as readFile2 } from "node:fs/promises";
-import { resolve } from "node:path";
-
+import { resolve as resolve3 } from "node:path";
 class CodexGoalSnapshotError extends Error {
 }
 function safeObject(value) {
@@ -318,12 +786,8 @@ async function readCodexGoalSnapshotInput(raw, cwd = process.cwd()) {
   try {
     return parseCodexGoalSnapshot(JSON.parse(trimmed));
   } catch {
-    const path = resolve(cwd, trimmed);
-    if (!existsSync2(path)) {
-      throw new CodexGoalSnapshotError(`Codex goal snapshot is neither valid JSON nor a readable path: ${trimmed}`);
-    }
     try {
-      return parseCodexGoalSnapshot(JSON.parse(await readFile2(path, "utf-8")));
+      return parseCodexGoalSnapshot(JSON.parse(safeReadWorkspaceTextFile(cwd, resolve3(cwd, trimmed))));
     } catch (error) {
       throw new CodexGoalSnapshotError(`Codex goal snapshot path does not contain valid JSON: ${trimmed}${error instanceof Error ? ` (${error.message})` : ""}`);
     }
@@ -365,29 +829,156 @@ function formatCodexGoalReconciliation(reconciliation) {
 }
 
 // src/plan-io.ts
-import { createReadStream } from "node:fs";
-import { appendFile, mkdir, readFile as readFile3, rename, writeFile } from "node:fs/promises";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { closeSync as closeSync3, createReadStream, fstatSync as fstatSync3 } from "node:fs";
+import { join as join5 } from "node:path";
 import { createInterface } from "node:readline";
-var LEGACY_OBJECTIVE_PREFIX = `Complete all ulw-loop stories in ${ULW_LOOP_DIR}/${ULW_LOOP_GOALS}: `;
-var LEGACY_OBJECTIVE = `Complete all ulw-loop stories listed in ${ULW_LOOP_DIR}/${ULW_LOOP_GOALS}. Use ${ULW_LOOP_DIR}/${ULW_LOOP_LEDGER} as the durable audit trail.`;
-var locks = new Map;
+
+// src/interprocess-lock.ts
+import { spawnSync } from "node:child_process";
+import { closeSync as closeSync2 } from "node:fs";
+var LOCK_TIMEOUT_MS = 30000;
+function acquireLock(fileDescriptor) {
+  const result = spawnSync("flock", ["-x", "3"], {
+    stdio: ["ignore", "ignore", "pipe", fileDescriptor],
+    timeout: LOCK_TIMEOUT_MS,
+    encoding: "utf8"
+  });
+  if (result.status === 0)
+    return;
+  throw new UlwLoopError(result.error === undefined ? `Unable to acquire ULW interprocess lock: ${result.stderr.trim()}` : `Unable to acquire ULW interprocess lock: ${result.error.message}`, "ULW_LOOP_LOCK_FAILED");
+}
+function withInterprocessLockSync(repoRoot, lockPath, fn) {
+  const fileDescriptor = safeOpenWorkspaceLockFile(repoRoot, lockPath);
+  try {
+    acquireLock(fileDescriptor);
+    return fn();
+  } finally {
+    closeSync2(fileDescriptor);
+  }
+}
+async function withInterprocessLock(repoRoot, lockPath, fn) {
+  const fileDescriptor = safeOpenWorkspaceLockFile(repoRoot, lockPath);
+  try {
+    acquireLock(fileDescriptor);
+    return await fn();
+  } finally {
+    closeSync2(fileDescriptor);
+  }
+}
+
+// src/mutation-transaction.ts
+import { join as join4 } from "node:path";
+var MAX_LEDGER_BYTES = 64 * 1024 * 1024;
+var MAX_MUTATION_JOURNAL_BYTES = 20 * 1024 * 1024;
 function hasCode(error, code) {
   return error instanceof Error && "code" in error && error.code === code;
 }
+function isObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isMutationJournal(value) {
+  if (!isObject(value) || value["version"] !== 1)
+    return false;
+  if (typeof value["ledgerOffset"] !== "number" || typeof value["ledgerData"] !== "string")
+    return false;
+  const plan = value["plan"];
+  return isObject(plan) && plan["version"] === 1 && Array.isArray(plan["goals"]);
+}
+function journalPath(repoRoot, scope) {
+  return join4(ulwLoopDir(repoRoot, scope), ".mutation-journal.json");
+}
+function readLedger(repoRoot, scope) {
+  try {
+    return safeReadWorkspaceTextFile(repoRoot, ulwLoopLedgerPath(repoRoot, scope), MAX_LEDGER_BYTES);
+  } catch (error) {
+    if (hasCode(error, "ENOENT"))
+      return "";
+    throw error;
+  }
+}
+async function finish(repoRoot, journal, writePlan, scope) {
+  const currentLedger = Buffer.from(readLedger(repoRoot, scope), "utf8");
+  const expected = Buffer.from(journal.ledgerData, "utf8");
+  if (currentLedger.length < journal.ledgerOffset) {
+    throw new UlwLoopError("ULW ledger is shorter than its pending transaction.", "ULW_LOOP_TRANSACTION_CONFLICT");
+  }
+  const tail = currentLedger.subarray(journal.ledgerOffset);
+  if (tail.length === 0) {
+    await safeAppendWorkspaceTextFile(repoRoot, ulwLoopLedgerPath(repoRoot, scope), journal.ledgerData);
+  } else if (tail.length !== expected.length || !tail.equals(expected)) {
+    throw new UlwLoopError("ULW ledger diverged from its pending transaction.", "ULW_LOOP_TRANSACTION_CONFLICT");
+  }
+  await writePlan(repoRoot, journal.plan, scope);
+  safeUnlinkWorkspaceFile(repoRoot, journalPath(repoRoot, scope));
+}
+async function recoverPlanMutation(repoRoot, writePlan, scope) {
+  const path = journalPath(repoRoot, scope);
+  let raw;
+  try {
+    raw = safeReadWorkspaceTextFile(repoRoot, path, MAX_MUTATION_JOURNAL_BYTES);
+  } catch (error) {
+    if (hasCode(error, "ENOENT"))
+      return;
+    throw error;
+  }
+  const parsed = JSON.parse(raw);
+  if (!isMutationJournal(parsed)) {
+    throw new UlwLoopError("Invalid ULW mutation journal.", "ULW_LOOP_TRANSACTION_INVALID");
+  }
+  await finish(repoRoot, parsed, writePlan, scope);
+}
+async function commitPlanMutation(repoRoot, plan, entries, writePlan, scope) {
+  if (entries.length === 0) {
+    throw new UlwLoopError("Plan mutations require an audit entry.", "ULW_LOOP_TRANSACTION_AUDIT_REQUIRED");
+  }
+  const journal = {
+    version: 1,
+    ledgerOffset: Buffer.byteLength(readLedger(repoRoot, scope), "utf8"),
+    ledgerData: `${entries.map((entry) => JSON.stringify(entry)).join(`
+`)}
+`,
+    plan
+  };
+  await safeAtomicWriteWorkspaceTextFile(repoRoot, journalPath(repoRoot, scope), `${JSON.stringify(journal)}
+`);
+  await finish(repoRoot, journal, writePlan, scope);
+}
+
+// src/plan-io.ts
+var LEGACY_OBJECTIVE_PREFIXES = [ULW_LOOP_DIR, ULW_LOOP_LEGACY_DIR].map((dir) => `Complete all ulw-loop stories in ${dir}/${ULW_LOOP_GOALS}: `);
+var LEGACY_OBJECTIVES = [ULW_LOOP_DIR, ULW_LOOP_LEGACY_DIR].map((dir) => `Complete all ulw-loop stories listed in ${dir}/${ULW_LOOP_GOALS}. Use ${dir}/${ULW_LOOP_LEDGER} as the durable audit trail.`);
+var locks = new Map;
+var heldMutationLocks = new AsyncLocalStorage;
+var MAX_LEDGER_BYTES2 = 64 * 1024 * 1024;
+var MAX_LEDGER_LINE_BYTES = 1024 * 1024;
+function hasCode2(error, code) {
+  return error instanceof Error && "code" in error && error.code === code;
+}
 function isLegacyEnumeratedAggregateObjective(objective) {
-  return objective === LEGACY_OBJECTIVE || Boolean(objective?.startsWith(LEGACY_OBJECTIVE_PREFIX));
+  return objective !== undefined && (LEGACY_OBJECTIVES.includes(objective) || LEGACY_OBJECTIVE_PREFIXES.some((prefix) => objective.startsWith(prefix)));
 }
 function isSteeringKind(value) {
   return value === "steering_accepted" || value === "steering_rejected" || value === "criteria_revised" || value === "batch_updated";
+}
+function mutationLockKey(repoRoot, scope) {
+  return `${repoRoot}\x00${repoRelative(ulwLoopDir(repoRoot, scope), repoRoot)}`;
 }
 async function withUlwLoopMutationLock(repoRoot, scopeOrFn, maybeFn) {
   const scope = typeof scopeOrFn === "function" ? undefined : scopeOrFn;
   const fn = typeof scopeOrFn === "function" ? scopeOrFn : maybeFn;
   if (fn === undefined)
     throw new UlwLoopError("Missing ulw-loop mutation body.", "ULW_LOOP_LOCK_BODY_MISSING");
-  const lockKey = `${repoRoot}\x00${ulwLoopRelativeDir(scope)}`;
+  const lockKey = mutationLockKey(repoRoot, scope);
+  const held = heldMutationLocks.getStore();
+  if (held?.has(lockKey) === true)
+    return fn();
   const prior = locks.get(lockKey) ?? Promise.resolve(undefined);
-  const run = prior.then(fn, fn);
+  const runLocked = () => withInterprocessLock(repoRoot, join5(ulwLoopDir(repoRoot, scope), ".mutation.lock"), async () => {
+    await recoverPlanMutation(repoRoot, writePlan, scope);
+    return heldMutationLocks.run(new Set([...held ?? [], lockKey]), fn);
+  });
+  const run = prior.then(runLocked, runLocked);
   const gate = run.then(() => {
     return;
   }, () => {
@@ -404,40 +995,49 @@ async function readUlwLoopPlan(repoRoot, scope) {
   const path = ulwLoopGoalsPath(repoRoot, scope);
   let raw;
   try {
-    raw = await readFile3(path, "utf8");
+    raw = safeReadWorkspaceTextFile(repoRoot, path);
   } catch (error) {
-    if (!hasCode(error, "ENOENT"))
+    if (!hasCode2(error, "ENOENT"))
       throw error;
-    throw new UlwLoopError(`No ulw-loop plan found at ${repoRelative(path, repoRoot)}. Run \`omo ulw-loop create-goals ...\` first.`, "ULW_LOOP_PLAN_MISSING", { cause: error });
+    throw new UlwLoopError(`No ulw-loop plan found at ${repoRelative(path, repoRoot)}. Run \`ulw-loop create-goals ...\` first.`, "ULW_LOOP_PLAN_MISSING", { cause: error });
   }
   const parsed = JSON.parse(raw);
   if (parsed.version !== 1 || !Array.isArray(parsed.goals)) {
     throw new UlwLoopError(`Invalid ulw-loop plan at ${repoRelative(path, repoRoot)}.`, "ULW_LOOP_PLAN_INVALID");
   }
+  for (const goal of parsed.goals)
+    assertSafeUlwLoopPathSegment(goal.id, "goal id");
+  if (parsed.activeGoalId !== undefined)
+    assertSafeUlwLoopPathSegment(parsed.activeGoalId, "active goal id");
   const previousObjective = parsed.codexObjective;
   if ((parsed.codexGoalMode ?? "per_story") === "aggregate" && isLegacyEnumeratedAggregateObjective(previousObjective)) {
+    if (heldMutationLocks.getStore()?.has(mutationLockKey(repoRoot, scope)) !== true) {
+      return withUlwLoopMutationLock(repoRoot, scope, () => readUlwLoopPlan(repoRoot, scope));
+    }
     const now = iso();
     parsed.codexObjective = aggregateCodexObjectiveForScope(scope);
     parsed.codexObjectiveAliases = [...new Set([...parsed.codexObjectiveAliases ?? [], previousObjective])];
     parsed.updatedAt = now;
-    await writePlan(repoRoot, parsed, scope);
-    await appendLedger(repoRoot, {
-      at: now,
-      kind: "aggregate_objective_migrated",
-      message: "Migrated legacy enumerated aggregate Codex objective to the stable pointer objective.",
-      before: { codexObjective: previousObjective },
-      after: { codexObjective: parsed.codexObjective }
-    }, scope);
+    await commitPlanAndLedgerEntries(repoRoot, parsed, [
+      {
+        at: now,
+        kind: "aggregate_objective_migrated",
+        message: "Migrated legacy enumerated aggregate Codex objective to the stable pointer objective.",
+        before: { codexObjective: previousObjective },
+        after: { codexObjective: parsed.codexObjective }
+      }
+    ], scope);
   }
   return parsed;
 }
 async function writePlan(repoRoot, plan, scope) {
-  await mkdir(ulwLoopDir(repoRoot, scope), { recursive: true });
+  for (const goal of plan.goals)
+    assertSafeUlwLoopPathSegment(goal.id, "goal id");
+  if (plan.activeGoalId !== undefined)
+    assertSafeUlwLoopPathSegment(plan.activeGoalId, "active goal id");
   const path = ulwLoopGoalsPath(repoRoot, scope);
-  const tmpPath = `${path}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(tmpPath, `${JSON.stringify(plan, null, 2)}
-`, "utf8");
-  await rename(tmpPath, path);
+  await safeAtomicWriteWorkspaceTextFile(repoRoot, path, `${JSON.stringify(plan, null, 2)}
+`);
 }
 async function appendLedger(repoRoot, entry, scope) {
   await appendLedgerEntries(repoRoot, [entry], scope);
@@ -445,22 +1045,47 @@ async function appendLedger(repoRoot, entry, scope) {
 async function appendLedgerEntries(repoRoot, entries, scope) {
   if (entries.length === 0)
     return;
-  await mkdir(ulwLoopDir(repoRoot, scope), { recursive: true });
-  await appendFile(ulwLoopLedgerPath(repoRoot, scope), `${entries.map((entry) => JSON.stringify(entry)).join(`
+  await safeAppendWorkspaceTextFile(repoRoot, ulwLoopLedgerPath(repoRoot, scope), `${entries.map((entry) => JSON.stringify(entry)).join(`
 `)}
-`, "utf8");
+`);
+}
+async function commitPlanAndLedgerEntries(repoRoot, plan, entries, scope) {
+  if (entries.length === 0) {
+    throw new UlwLoopError("Plan mutations require an audit entry.", "ULW_LOOP_TRANSACTION_AUDIT_REQUIRED");
+  }
+  await commitPlanMutation(repoRoot, plan, entries, writePlan, scope);
 }
 async function* ledgerLines(repoRoot, scope) {
-  const stream = createReadStream(ulwLoopLedgerPath(repoRoot, scope), { encoding: "utf8" });
+  const ledgerPath = ulwLoopLedgerPath(repoRoot, scope);
+  let fileDescriptor;
+  try {
+    fileDescriptor = safeOpenWorkspaceReadFile(repoRoot, ledgerPath, MAX_LEDGER_BYTES2);
+  } catch (error) {
+    if (hasCode2(error, "ENOENT"))
+      return;
+    throw error;
+  }
+  const ledgerBytes = fstatSync3(fileDescriptor).size;
+  if (ledgerBytes === 0) {
+    closeSync3(fileDescriptor);
+    return;
+  }
+  const stream = createReadStream(ledgerPath, {
+    encoding: "utf8",
+    fd: fileDescriptor,
+    autoClose: true,
+    start: 0,
+    end: ledgerBytes - 1
+  });
   const lines = createInterface({ input: stream, crlfDelay: Number.POSITIVE_INFINITY });
   try {
     for await (const line of lines) {
+      if (Buffer.byteLength(line, "utf8") > MAX_LEDGER_LINE_BYTES) {
+        throw new UlwLoopError("ULW ledger line exceeds the bounded input limit.", "ULW_LOOP_LEDGER_TOO_LARGE");
+      }
       if (line.trim().length > 0)
         yield line;
     }
-  } catch (error) {
-    if (!hasCode(error, "ENOENT"))
-      throw error;
   } finally {
     lines.close();
     stream.destroy();
@@ -529,7 +1154,6 @@ async function recordEvidence(repoRoot, args, scope) {
       criterion.notes = args.notes;
     goal.updatedAt = capturedAt;
     plan.updatedAt = capturedAt;
-    await writePlan(repoRoot, plan, scope);
     const ledgerEntry = {
       at: capturedAt,
       kind,
@@ -541,7 +1165,7 @@ async function recordEvidence(repoRoot, args, scope) {
       before: { status: prevStatus },
       after: { goalId: goal.id, criterionId: criterion.id, status: args.status, evidence, capturedAt, prevStatus }
     };
-    await appendLedger(repoRoot, ledgerEntry, scope);
+    await commitPlanAndLedgerEntries(repoRoot, plan, [ledgerEntry], scope);
     return { plan, goal, criterion, ledgerEntry };
   });
 }
@@ -588,8 +1212,8 @@ function requireEssentialCriteriaPass(goal) {
   });
 }
 
-// src/quality-gate.ts
-import { resolve as resolve2 } from "node:path";
+// src/quality-gate-artifacts.ts
+import { resolve as resolve4 } from "node:path";
 
 // src/quality-gate-fields.ts
 var PLACEHOLDER_PATTERN = /^(?:placeholder|todo|tbd|n\/a|stub)$/i;
@@ -627,6 +1251,70 @@ function literal(value, expected, field) {
   if (value === expected)
     return expected;
   invalid(`${field} must be ${String(expected)}.`, field);
+}
+
+// src/quality-gate-artifacts.ts
+function checkArtifactFile(path, field, opts) {
+  if (opts === undefined)
+    return;
+  const absolute = resolve4(opts.repoRoot, path);
+  if (!opts.fs.existsSync(absolute))
+    invalid(`${field} must point to an existing artifact.`, field);
+  if (opts.fs.lstatSync(absolute).isSymbolicLink())
+    invalid(`${field} must not point to a symbolic link.`, field);
+  if (opts.fs.statSync(absolute).size <= 0)
+    invalid(`${field} must point to a non-empty artifact.`, field);
+  if (opts.currentAttemptDir !== undefined) {
+    const attemptRoot = resolve4(opts.repoRoot, opts.currentAttemptDir);
+    const attemptError = `${field} (${path}) must point to an artifact from the current attempt (${opts.currentAttemptDir}).`;
+    if (!opts.fs.existsSync(attemptRoot))
+      invalid(attemptError, field);
+    if (!isWithinAttemptDir(opts.fs.realpathSync(absolute), opts.fs.realpathSync(attemptRoot))) {
+      invalid(attemptError, field);
+    }
+  }
+  try {
+    assertSafeEvidenceArtifact(opts.repoRoot, absolute, opts.currentAttemptDir === undefined ? undefined : resolve4(opts.repoRoot, opts.currentAttemptDir), 10 * 1024 * 1024);
+  } catch (error) {
+    if (error instanceof Error)
+      invalid(`${field} must point to a non-empty single-link regular artifact.`, field);
+    throw error;
+  }
+}
+
+// src/quality-gate-roles.ts
+var ROOT_REVIEWER = "lazygrok-root";
+var REVIEWER_ROLES = {
+  codeReview: "lazycodex-code-reviewer",
+  manualQa: "lazycodex-qa-executor",
+  gateReview: "lazycodex-gate-reviewer"
+};
+var REVIEWER_ALIASES = {
+  codeReview: ["lazycodex-code-reviewer", "lazygrok-code-reviewer"],
+  manualQa: ["lazycodex-qa-executor", "lazygrok-qa-executor"],
+  gateReview: ["lazycodex-gate-reviewer", "lazygrok-gate-reviewer"]
+};
+function reviewerRoleField(value, role, field, rootSelfReview) {
+  const actual = textField(value, field);
+  if (rootSelfReview) {
+    if (actual !== ROOT_REVIEWER)
+      invalid(`${field} must be ${ROOT_REVIEWER} for root self-review.`, field);
+    return ROOT_REVIEWER;
+  }
+  const allowed = REVIEWER_ALIASES[role];
+  if (!allowed.includes(actual))
+    invalid(`${field} must be one of: ${allowed.join(", ")}.`, field);
+  return REVIEWER_ROLES[role];
+}
+function reviewProvenanceField(value) {
+  if (value === undefined)
+    return;
+  const provenance = section(value, "provenance");
+  return {
+    mode: literal(provenance["mode"], "root-self-review", "provenance.mode"),
+    producer: literal(provenance["producer"], ROOT_REVIEWER, "provenance.producer"),
+    sessionId: textField(provenance["sessionId"], "provenance.sessionId")
+  };
 }
 
 // src/quality-gate-verdicts.ts
@@ -693,23 +1381,6 @@ function clearGoalBlockerFields(goal) {
 }
 
 // src/quality-gate.ts
-var REVIEWER_ROLES = {
-  codeReview: "lazycodex-code-reviewer",
-  manualQa: "lazycodex-qa-executor",
-  gateReview: "lazycodex-gate-reviewer"
-};
-var REVIEWER_ALIASES = {
-  codeReview: ["lazycodex-code-reviewer", "lazygrok-code-reviewer"],
-  manualQa: ["lazycodex-qa-executor", "lazygrok-qa-executor"],
-  gateReview: ["lazycodex-gate-reviewer", "lazygrok-gate-reviewer"]
-};
-function reviewerRoleField(value, role, field) {
-  const actual = textField(value, field);
-  const allowed = REVIEWER_ALIASES[role];
-  if (!allowed.includes(actual))
-    invalid(`${field} must be one of: ${allowed.join(", ")}.`, field);
-  return REVIEWER_ROLES[role];
-}
 function surfaceField(value, field) {
   if (value === "cli" || value === "http" || value === "tmux" || value === "browser" || value === "gui" || value === "data")
     return value;
@@ -736,20 +1407,6 @@ function artifactCompatible(surface, kind) {
       invalid("manualQa.surfaceEvidence has an unsupported surface.", "manualQa.surfaceEvidence.surface");
   }
 }
-function checkFile(path, field, opts) {
-  if (opts === undefined)
-    return;
-  const absolute = resolve2(opts.repoRoot, path);
-  if (!opts.fs.existsSync(absolute))
-    invalid(`${field} must point to an existing artifact.`, field);
-  if (opts.fs.statSync(absolute).size <= 0)
-    invalid(`${field} must point to a non-empty artifact.`, field);
-  if (opts.currentAttemptDir !== undefined) {
-    const attemptRoot = resolve2(opts.repoRoot, opts.currentAttemptDir);
-    if (!isWithinAttemptDir(absolute, attemptRoot))
-      invalid(`${field} (${path}) must point to an artifact from the current attempt (${opts.currentAttemptDir}).`, field);
-  }
-}
 function artifactMap(refs) {
   const byId = new Map;
   for (const ref of refs) {
@@ -765,7 +1422,7 @@ function parseArtifactRefs(value, opts) {
   return value.map((item, index) => {
     const ref = section(item, `manualQa.artifactRefs[${index}]`);
     const path = textField(ref["path"], `manualQa.artifactRefs[${index}].path`);
-    checkFile(path, `manualQa.artifactRefs[${index}].path`, opts);
+    checkArtifactFile(path, `manualQa.artifactRefs[${index}].path`, opts);
     return {
       id: textField(ref["id"], `manualQa.artifactRefs[${index}].id`),
       kind: kindField(ref["kind"], `manualQa.artifactRefs[${index}].kind`),
@@ -784,6 +1441,8 @@ function referencedArtifacts(value, field, byId) {
 }
 function validateQualityGate(input, opts) {
   const gate = section(input, "qualityGate");
+  const provenance = reviewProvenanceField(gate["provenance"]);
+  const rootSelfReview = provenance?.mode === "root-self-review";
   const codeReview = section(gate["codeReview"], "codeReview");
   const manualQa = section(gate["manualQa"], "manualQa");
   const gateReview = section(gate["gateReview"], "gateReview");
@@ -799,11 +1458,12 @@ function validateQualityGate(input, opts) {
   const adversarialCases = parseAdversarialCases(manualQa["adversarialCases"], byId);
   const codeReportPath = textField(codeReview["reportPath"], "codeReview.reportPath");
   const gateReportPath = textField(gateReview["reportPath"], "gateReview.reportPath");
-  checkFile(codeReportPath, "codeReview.reportPath", opts);
-  checkFile(gateReportPath, "gateReview.reportPath", opts);
+  checkArtifactFile(codeReportPath, "codeReview.reportPath", opts);
+  checkArtifactFile(gateReportPath, "gateReview.reportPath", opts);
   return {
+    ...provenance === undefined ? {} : { provenance },
     codeReview: {
-      by: reviewerRoleField(codeReview["by"], "codeReview", "codeReview.by"),
+      by: reviewerRoleField(codeReview["by"], "codeReview", "codeReview.by", rootSelfReview),
       recommendation: literal(codeReview["recommendation"], "APPROVE", "codeReview.recommendation"),
       codeQualityStatus: codeQualityStatusField(codeReview["codeQualityStatus"], "codeReview.codeQualityStatus"),
       reportPath: codeReportPath,
@@ -811,7 +1471,7 @@ function validateQualityGate(input, opts) {
       blockers: emptyBlockers(codeReview["blockers"], "codeReview.blockers")
     },
     manualQa: {
-      by: reviewerRoleField(manualQa["by"], "manualQa", "manualQa.by"),
+      by: reviewerRoleField(manualQa["by"], "manualQa", "manualQa.by", rootSelfReview),
       status: literal(manualQa["status"], "passed", "manualQa.status"),
       evidence: textField(manualQa["evidence"], "manualQa.evidence"),
       surfaceEvidence,
@@ -819,7 +1479,7 @@ function validateQualityGate(input, opts) {
       artifactRefs
     },
     gateReview: {
-      by: reviewerRoleField(gateReview["by"], "gateReview", "gateReview.by"),
+      by: reviewerRoleField(gateReview["by"], "gateReview", "gateReview.by", rootSelfReview),
       recommendation: literal(gateReview["recommendation"], "APPROVE", "gateReview.recommendation"),
       reportPath: gateReportPath,
       evidence: textField(gateReview["evidence"], "gateReview.evidence"),
@@ -883,7 +1543,7 @@ function parseAdversarialCases(value, byId) {
 }
 
 // src/cli-arg-parser.ts
-import { readFile as readFile4 } from "node:fs/promises";
+import { resolve as resolve5 } from "node:path";
 var VALUE_FLAGS = new Set("--brief --brief-file --session-id --codex-goal-mode --validation-batch-json --goal --goal-id --criterion-id --status --evidence --notes --codex-goal-json --quality-gate-json --kind --rationale --title --objective --target-goal-id --source --after-json --directive-json --directive-file --idempotency-key --proposals-json".split(" "));
 var SUBCOMMANDS = new Set("create-goals status complete-goals criteria record-evidence checkpoint steer add-goal record-review-blockers".split(" "));
 function hasFlag(argv, flag) {
@@ -903,8 +1563,15 @@ function parseGoalArg(argv) {
 }
 async function readStdin() {
   const chunks = [];
-  for await (const chunk of process.stdin)
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  let totalBytes = 0;
+  for await (const chunk of process.stdin) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalBytes += bytes.length;
+    if (totalBytes > 10 * 1024 * 1024) {
+      throw new UlwLoopError("Standard input exceeds 10 MiB.", "ULW_LOOP_INPUT_TOO_LARGE");
+    }
+    chunks.push(bytes);
+  }
   return Buffer.concat(chunks).toString("utf8");
 }
 function positionalText(argv) {
@@ -927,20 +1594,20 @@ function looksLikeJson(value) {
   const trimmed = value.trim();
   return trimmed.startsWith("{") || trimmed.startsWith("[");
 }
-async function readJsonInput(value) {
+async function readJsonInput(value, repoRoot = process.cwd()) {
   if (value === undefined)
     return;
   try {
-    return JSON.parse(looksLikeJson(value) ? value : await readFile4(value, "utf8"));
+    return JSON.parse(looksLikeJson(value) ? value : safeReadWorkspaceTextFile(repoRoot, resolve5(repoRoot, value)));
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
     throw new UlwLoopError(`Invalid JSON input: ${message}`, "ULW_LOOP_JSON_INPUT_INVALID", { cause: error });
   }
 }
-async function parseCodexGoalJson(value) {
+async function parseCodexGoalJson(value, repoRoot = process.cwd()) {
   if (value === undefined)
     return;
-  const raw = looksLikeJson(value) ? value : await readFile4(value, "utf8");
+  const raw = looksLikeJson(value) ? value : safeReadWorkspaceTextFile(repoRoot, resolve5(repoRoot, value));
   try {
     JSON.parse(raw);
     return raw;
@@ -974,7 +1641,7 @@ function parseRecordEvidenceArgs(argv) {
 }
 
 // src/validation-batch.ts
-function isObject(value) {
+function isObject2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function read(value, key) {
@@ -988,8 +1655,8 @@ function strings(value, key) {
   const candidate = read(value, key);
   return Array.isArray(candidate) && candidate.every((item) => typeof item === "string" && item.trim().length > 0) ? candidate.map((item) => item.trim()) : undefined;
 }
-async function parseValidationBatches(input, goals) {
-  const raw = await readJsonInput(input);
+async function parseValidationBatches(input, goals, repoRoot = process.cwd()) {
+  const raw = await readJsonInput(input, repoRoot);
   if (raw === undefined)
     return;
   if (!Array.isArray(raw))
@@ -999,7 +1666,7 @@ async function parseValidationBatches(input, goals) {
   return batches;
 }
 function batchFromObject(value) {
-  if (!isObject(value))
+  if (!isObject2(value))
     fail("validation batch entries must be objects.");
   const batchId = text(value, "batchId");
   const memberIds = strings(value, "memberIds");
@@ -1061,14 +1728,14 @@ function requireBatchFinalReady(plan, goal) {
   const batch = batchClosedBy(plan, goal.id);
   if (batch === undefined)
     return;
-  const open = batch.memberIds.filter((id) => id !== goal.id && !memberResolved(plan, id));
-  if (open.length > 0)
-    throw new UlwLoopError("Validation batch has unresolved members.", "ULW_LOOP_VALIDATION_BATCH_OPEN", { details: { batchId: batch.batchId, open } });
+  const open2 = batch.memberIds.filter((id) => id !== goal.id && !memberResolved(plan, id));
+  if (open2.length > 0)
+    throw new UlwLoopError("Validation batch has unresolved members.", "ULW_LOOP_VALIDATION_BATCH_OPEN", { details: { batchId: batch.batchId, open: open2 } });
 }
 function requireAllValidationBatchesClosed(plan, closingGoalId) {
-  const open = (plan.validationBatches ?? []).filter((batch) => batch.memberIds.some((id) => id !== closingGoalId && !memberResolved(plan, id)));
-  if (open.length > 0)
-    throw new UlwLoopError("Validation batches remain open.", "ULW_LOOP_VALIDATION_BATCH_OPEN", { details: { batchIds: open.map((batch) => batch.batchId) } });
+  const open2 = (plan.validationBatches ?? []).filter((batch) => batch.memberIds.some((id) => id !== closingGoalId && !memberResolved(plan, id)));
+  if (open2.length > 0)
+    throw new UlwLoopError("Validation batches remain open.", "ULW_LOOP_VALIDATION_BATCH_OPEN", { details: { batchIds: open2.map((batch) => batch.batchId) } });
 }
 function requireBatchGate(plan, goal, gate) {
   const batch = batchClosedBy(plan, goal.id);
@@ -1092,7 +1759,7 @@ function fail(message, code = "ULW_LOOP_VALIDATION_BATCH_INVALID") {
 }
 
 // src/checkpoint.ts
-var QUALITY_GATE_FS = { existsSync: existsSync3, statSync };
+var QUALITY_GATE_FS = { existsSync: existsSync3, lstatSync: lstatSync3, realpathSync: realpathSync3, statSync: statSync2 };
 function ulwLoopFail2(message, code) {
   throw new UlwLoopError(message, code);
 }
@@ -1117,11 +1784,8 @@ async function readJsonInput2(raw, repoRoot) {
     if (!(error instanceof SyntaxError))
       throw error;
   }
-  const path = resolve3(repoRoot, trimmed);
-  if (!existsSync3(path))
-    return ulwLoopFail2("Quality gate JSON is neither valid JSON nor a readable path.", "ulw_loop_json_input_invalid");
   try {
-    return JSON.parse(await readFile5(path, "utf8"));
+    return JSON.parse(safeReadWorkspaceTextFile(repoRoot, resolve6(repoRoot, trimmed)));
   } catch (error) {
     return ulwLoopFail2(`Quality gate path does not contain valid JSON${error instanceof Error ? `: ${error.message}` : "."}`, "ulw_loop_json_input_invalid");
   }
@@ -1230,7 +1894,7 @@ async function checkpointUlwLoop(repoRoot, args, scope) {
         qualityGate = validateQualityGate(await readJsonInput2(args.qualityGateJson, repoRoot), {
           repoRoot,
           fs: QUALITY_GATE_FS,
-          ...plan.evidenceLayoutVersion === 2 ? { currentAttemptDir: ulwLoopAttemptEvidenceDir(goal.id, goal.attempt, scope) } : {}
+          ...plan.evidenceLayoutVersion === 2 ? { currentAttemptDir: ulwLoopAttemptEvidenceDir(repoRoot, goal.id, goal.attempt, scope) } : {}
         });
         requireBatchGate(plan, goal, qualityGate);
       }
@@ -1248,30 +1912,27 @@ async function checkpointUlwLoop(repoRoot, args, scope) {
     if (aggregateCompletion !== undefined)
       plan.aggregateCompletion = aggregateCompletion;
     plan.updatedAt = now;
-    await writePlan(repoRoot, plan, scope);
     const ledgerEntry = buildLedger(now, args, goal, qualityGate, codexGoal, aggregateCompletion);
-    await appendLedger(repoRoot, ledgerEntry, scope);
     const closedBatch = args.status === "complete" ? batchClosedBy(plan, goal.id) : undefined;
-    if (closedBatch !== undefined)
-      await appendLedger(repoRoot, { at: now, kind: "batch_closed", goalId: goal.id, message: closedBatch.batchId }, scope);
+    await commitPlanAndLedgerEntries(repoRoot, plan, closedBatch === undefined ? [ledgerEntry] : [ledgerEntry, { at: now, kind: "batch_closed", goalId: goal.id, message: closedBatch.batchId }], scope);
     return aggregateCompletion === undefined ? { plan, goal, ledgerEntry } : { plan, goal, ledgerEntry, aggregateCompletion };
   });
 }
 
 // src/cli-output.ts
 var ULW_LOOP_HELP = `Usage:
-  omo ulw-loop create-goals --brief "..." [--brief-file <path>] [--from-stdin] [--codex-goal-mode aggregate|per_story] [--validation-batch-json <json-or-path>] [--force] [--json]
-  omo ulw-loop status [--json]
-  omo ulw-loop complete-goals [--retry-failed] [--json]
-  omo ulw-loop criteria --goal-id <id> [--json]
-  omo ulw-loop record-evidence --goal-id <id> --criterion-id <id> --status pass|fail|blocked --evidence "..." [--notes "..."] [--json]
-  omo ulw-loop checkpoint --goal-id <id> --status complete|failed|blocked --evidence "..." --codex-goal-json <...> [--quality-gate-json <...>] [--no-advance] [--json]
-  omo ulw-loop steer --kind <kind> ... --evidence "..." --rationale "..." [--proposals-json <json-or-path>] [--json]
-  omo ulw-loop add-goal --title "..." --objective "..." [--json]
-  omo ulw-loop record-review-blockers
-  omo ulw-loop light-quality-gate --goal-id <id> [--session-id <id>] [--json]
+  ulw-loop create-goals --brief "..." [--brief-file <path>] [--from-stdin] [--codex-goal-mode aggregate|per_story] [--validation-batch-json <json-or-path>] [--force] [--json]
+  ulw-loop status [--json]
+  ulw-loop complete-goals [--retry-failed] [--json]
+  ulw-loop criteria --goal-id <id> [--json]
+  ulw-loop record-evidence --goal-id <id> --criterion-id <id> --status pass|fail|blocked --evidence "..." [--notes "..."] [--json]
+  ulw-loop checkpoint --goal-id <id> --status complete|failed|blocked --evidence "..." --codex-goal-json <...> [--quality-gate-json <...>] [--no-advance] [--json]
+  ulw-loop steer --kind <kind> ... --evidence "..." --rationale "..." [--proposals-json <json-or-path>] [--json]
+  ulw-loop add-goal --title "..." --objective "..." [--json]
+  ulw-loop record-review-blockers
+  ulw-loop light-quality-gate --goal-id <id> [--session-id <id>] [--json]
 
-All subcommands accept [--session-id <id>] to isolate state under .omo/ulw-loop/<id>/; without it, Codex session env is used when present.`;
+All subcommands accept [--session-id <id>] to isolate state under .lazygrok/ulw-loop/<id>/; without it, Grok session env is used when present. Legacy .omo runs remain readable.`;
 function printJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}
 `);
@@ -1413,15 +2074,15 @@ function evidenceLayoutLines(plan) {
   if (plan.evidenceLayoutVersion !== 2)
     return [];
   return [
-    "- Evidence layout v2: write every artifact for the active goal (QA matrix, review reports, receipts) under the current attempt directory — read currentAttemptDir from `omo ulw-loop status --json` (.omo/evidence/ulw/<session>/<goalId>/a<attempt>). The final checkpoint rejects quality-gate artifacts outside that directory."
+    "- Evidence layout v2: write every artifact for the active goal (QA matrix, review reports, receipts) under the current attempt directory — read currentAttemptDir from `ulw-loop status --json` (.lazygrok/evidence/ulw/<session>/<goalId>/a<attempt>, or .omo/evidence for a legacy run). The final checkpoint rejects quality-gate artifacts outside that directory."
   ];
 }
 function finalSection(plan, goal, isFinal, aggregate) {
   if (!isFinal)
     return "- This is not the final ulw-loop story; do not run the final reviewer/manual-QA/gate-review quality gate yet.";
   const option = sessionOption(plan);
-  const blockerCommand = `omo ulw-loop record-review-blockers${option} --goal-id ${goal.id} --title "Resolve final code-review blockers" --objective "<blocker-resolution objective>" --evidence "<review findings>" --codex-goal-json "<active get_goal JSON or path>"`;
-  const checkpointCommand = `omo ulw-loop checkpoint${option} --goal-id ${goal.id} --status complete --evidence "<targeted verification/manualQa/gateReview evidence>" --codex-goal-json "<fresh complete get_goal JSON or path>" --quality-gate-json "<quality gate JSON or path>"`;
+  const blockerCommand = `${grokUlwCli()} record-review-blockers${option} --goal-id ${goal.id} --title "Resolve final code-review blockers" --objective "<blocker-resolution objective>" --evidence "<review findings>" --codex-goal-json "<active get_goal JSON or path>"`;
+  const checkpointCommand = `${grokUlwCli()} checkpoint${option} --goal-id ${goal.id} --status complete --evidence "<targeted verification/manualQa/gateReview evidence>" --codex-goal-json "<fresh complete get_goal JSON or path>" --quality-gate-json "<quality gate JSON or path>"`;
   return joinLines([
     "Final story — run mandatory quality gate before update_goal:",
     "- Run targeted verification for changed behavior.",
@@ -1438,12 +2099,16 @@ function finalSection(plan, goal, isFinal, aggregate) {
   ]);
 }
 function sessionOption(plan) {
-  const prefix = ".omo/ulw-loop/";
   const suffix = "/goals.json";
-  if (!plan.goalsPath.startsWith(prefix) || !plan.goalsPath.endsWith(suffix))
+  if (!plan.goalsPath.endsWith(suffix))
     return "";
-  const sessionId = plan.goalsPath.slice(prefix.length, -suffix.length);
-  return sessionId.length === 0 ? "" : ` --session-id ${sessionId}`;
+  for (const prefix of [".lazygrok/ulw-loop/", ".omo/ulw-loop/"]) {
+    if (!plan.goalsPath.startsWith(prefix))
+      continue;
+    const sessionId = plan.goalsPath.slice(prefix.length, -suffix.length);
+    return sessionId.length === 0 ? "" : ` --session-id ${sessionId}`;
+  }
+  return "";
 }
 function joinLines(lines) {
   return lines.join(`
@@ -1452,7 +2117,6 @@ function joinLines(lines) {
 
 // src/plan-crud.ts
 import { existsSync as existsSync4 } from "node:fs";
-import { mkdir as mkdir2, writeFile as writeFile2 } from "node:fs/promises";
 
 // src/plan-goal-factory.ts
 function cleanLine(line) {
@@ -1580,25 +2244,23 @@ async function createUlwLoopPlan(repoRoot, args, scope) {
       codexGoalMode: args.codexGoalMode ?? "aggregate",
       goals
     };
-    const validationBatches = await parseValidationBatches(args.validationBatchesJson, goals);
+    const validationBatches = await parseValidationBatches(args.validationBatchesJson, goals, repoRoot);
     if (validationBatches !== undefined)
       plan.validationBatches = validationBatches;
     if (plan.codexGoalMode === "aggregate")
       plan.codexObjective = aggregateCodexObjectiveForScope(scope);
-    await mkdir2(ulwLoopDir(repoRoot, scope), { recursive: true });
-    await writeFile2(ulwLoopBriefPath(repoRoot, scope), args.brief.endsWith(`
+    await safeWriteWorkspaceTextFile(repoRoot, ulwLoopBriefPath(repoRoot, scope), args.brief.endsWith(`
 `) ? args.brief : `${args.brief}
-`, "utf8");
-    await writePlan(repoRoot, plan, scope);
-    await writeFile2(ulwLoopLedgerPath(repoRoot, scope), "", "utf8");
-    await appendLedger(repoRoot, { at: now, kind: "plan_created", message: `${goals.length} goal(s) created` }, scope);
+`);
+    await safeWriteWorkspaceTextFile(repoRoot, ulwLoopLedgerPath(repoRoot, scope), "");
+    await commitPlanAndLedgerEntries(repoRoot, plan, [{ at: now, kind: "plan_created", message: `${goals.length} goal(s) created` }], scope);
     return plan;
   });
 }
 function completedPlanExistsError(scope) {
   return new UlwLoopError([
     `Existing ulw-loop aggregate is already complete at ${ulwLoopGoalsRelativePath(scope)}.`,
-    "Start a new run with `omo ulw-loop create-goals --session-id <new-id> ...` to isolate fresh state.",
+    `Start a new run with \`${grokUlwCli()} create-goals --session-id <new-id> ...\` to isolate fresh state.`,
     "Use --force only when you intentionally want to overwrite the completed evidence."
   ].join(" "), "ULW_LOOP_PLAN_EXISTS_COMPLETE");
 }
@@ -1607,8 +2269,7 @@ async function addUlwLoopGoal(repoRoot, args, scope) {
     const plan = await readUlwLoopPlan(repoRoot, scope);
     const now = iso();
     const goal = appendGoalToPlan(plan, args.title, args.objective, now);
-    await writePlan(repoRoot, plan, scope);
-    await appendLedger(repoRoot, { at: now, kind: "goal_added", goalId: goal.id, status: goal.status, message: goal.title }, scope);
+    await commitPlanAndLedgerEntries(repoRoot, plan, [{ at: now, kind: "goal_added", goalId: goal.id, status: goal.status, message: goal.title }], scope);
     return { plan, goal };
   });
 }
@@ -1621,17 +2282,18 @@ async function startNextUlwLoop(repoRoot, args = {}, scope) {
     const existing = plan.goals.find((goal) => goal.status === "in_progress" && isScheduleEligible(goal));
     if (existing)
       return { plan, goal: existing, resumed: true };
+    const ledgerEntries = [];
     let next = plan.goals.find((goal) => goal.status === "pending" && isScheduleEligible(goal));
     if (!next && args.retryFailed) {
       next = plan.goals.find((goal) => goal.status === "failed" && !goal.nonRetriable && isScheduleEligible(goal));
       if (next)
-        await appendLedger(repoRoot, {
+        ledgerEntries.push({
           at: now,
           kind: "goal_retried",
           goalId: next.id,
           status: "pending",
           ...next.failureReason ? { message: next.failureReason } : {}
-        }, scope);
+        });
     }
     if (!next)
       return { done: true, plan };
@@ -1642,8 +2304,14 @@ async function startNextUlwLoop(repoRoot, args = {}, scope) {
     next.updatedAt = now;
     plan.activeGoalId = next.id;
     plan.updatedAt = now;
-    await writePlan(repoRoot, plan, scope);
-    await appendLedger(repoRoot, { at: now, kind: "goal_started", goalId: next.id, status: next.status, message: `Attempt ${next.attempt}` }, scope);
+    ledgerEntries.push({
+      at: now,
+      kind: "goal_started",
+      goalId: next.id,
+      status: next.status,
+      message: `Attempt ${next.attempt}`
+    });
+    await commitPlanAndLedgerEntries(repoRoot, plan, ledgerEntries, scope);
     return { plan, goal: next, resumed: false };
   });
 }
@@ -1685,7 +2353,7 @@ async function checkpoint(repoRoot, argv, json, scope) {
   const goalId = required2(argv, "--goal-id");
   const statusValue = checkpointStatus(required2(argv, "--status"));
   const evidence = required2(argv, "--evidence");
-  const codexGoalJson = await parseCodexGoalJson(statusValue === "complete" ? required2(argv, "--codex-goal-json") : readValue(argv, "--codex-goal-json"));
+  const codexGoalJson = await parseCodexGoalJson(statusValue === "complete" ? required2(argv, "--codex-goal-json") : readValue(argv, "--codex-goal-json"), repoRoot);
   if (statusValue === "complete" && codexGoalJson === undefined) {
     throw new UlwLoopError("Missing --codex-goal-json.", "ULW_LOOP_CODEX_GOAL_JSON_REQUIRED");
   }
@@ -1733,9 +2401,6 @@ function checkpointStatus(value) {
   throw new UlwLoopError("Missing or invalid --status; expected complete, failed, or blocked.", "ULW_LOOP_STATUS_INVALID", { details: { status: value } });
 }
 
-// src/cli-subcommands.ts
-import { readFile as readFile6 } from "node:fs/promises";
-
 // src/cli-steering.ts
 var SOURCES = ["user_prompt_submit", "finding", "cli"];
 var STEERING_KIND_HELP = [
@@ -1748,7 +2413,7 @@ var STEERING_KIND_HELP = [
   "  revise_criterion: --goal-id, --criterion-id, one of --scenario/--expected-evidence/--user-model, --evidence, --rationale",
   "  annotate_ledger: --evidence, --rationale",
   "  mark_blocked_superseded: --goal-id, optional --replacements, --evidence, --rationale",
-  'Example: omo ulw-loop steer --kind annotate_ledger --evidence "observed behavior" --rationale "why this changes the plan" --json'
+  'Example: ulw-loop steer --kind annotate_ledger --evidence "observed behavior" --rationale "why this changes the plan" --json'
 ].join(`
 `);
 function isKind(value) {
@@ -1838,11 +2503,11 @@ function child(value) {
     return null;
   return { title, objective };
 }
-async function children(argv, flag, needed) {
+async function children(argv, flag, needed, repoRoot) {
   const input = needed ? required3(argv, flag) : text2(readValue(argv, flag), flag);
   if (input === undefined)
     return [];
-  const raw = await readJsonInput(input);
+  const raw = await readJsonInput(input, repoRoot);
   if (!Array.isArray(raw))
     return fail2(`${flag} must be a JSON array.`, "ULW_LOOP_STEERING_JSON_ARRAY_REQUIRED", { flag });
   const parsed = [];
@@ -1854,8 +2519,8 @@ async function children(argv, flag, needed) {
   }
   return parsed;
 }
-async function stringArray2(argv, flag) {
-  const raw = await readJsonInput(required3(argv, flag));
+async function stringArray2(argv, flag, repoRoot) {
+  const raw = await readJsonInput(required3(argv, flag), repoRoot);
   if (!Array.isArray(raw))
     return fail2(`${flag} must be a JSON array.`, "ULW_LOOP_STEERING_JSON_ARRAY_REQUIRED", { flag });
   const values = [];
@@ -1875,7 +2540,7 @@ function model(value) {
 function neverKind(kind) {
   return fail2(`Unsupported steering kind: ${String(kind)}.`, "ULW_LOOP_STEERING_KIND_UNSUPPORTED", { kind });
 }
-async function parseSteeringProposal(argv) {
+async function parseSteeringProposal(argv, repoRoot = process.cwd()) {
   const kind = parseSteeringKind(argv);
   const source = parseSteeringSource(argv);
   const idempotencyKey = text2(readValue(argv, "--idempotency-key"), "--idempotency-key");
@@ -1885,10 +2550,10 @@ async function parseSteeringProposal(argv) {
       return normalizeSteeringProposal({ ...base, title: required3(argv, "--title"), objective: required3(argv, "--objective") });
     case "split_subgoal": {
       const goalId = requiredGoal(argv);
-      return normalizeSteeringProposal({ ...base, goalId, targetGoalId: goalId, childGoals: await children(argv, "--children", true) });
+      return normalizeSteeringProposal({ ...base, goalId, targetGoalId: goalId, childGoals: await children(argv, "--children", true, repoRoot) });
     }
     case "reorder_pending":
-      return normalizeSteeringProposal({ ...base, pendingOrder: await stringArray2(argv, "--order") });
+      return normalizeSteeringProposal({ ...base, pendingOrder: await stringArray2(argv, "--order", repoRoot) });
     case "revise_pending_wording": {
       const goalId = requiredGoal(argv);
       const revisedTitle = readValue(argv, "--title");
@@ -1911,7 +2576,7 @@ async function parseSteeringProposal(argv) {
       return normalizeSteeringProposal(base);
     case "mark_blocked_superseded": {
       const goalId = requiredGoal(argv);
-      const childGoals = await children(argv, "--replacements", false);
+      const childGoals = await children(argv, "--replacements", false, repoRoot);
       return normalizeSteeringProposal({ ...base, goalId, targetGoalId: goalId, ...childGoals.length === 0 ? {} : { childGoals } });
     }
     default:
@@ -1949,13 +2614,13 @@ function normalizeSteeringProposal(proposal) {
   const pendingOrder = normalizedStrings(proposal.pendingOrder, "pendingOrder");
   return { kind: proposal.kind, source: proposal.source, evidence, rationale, ...goalId === undefined ? {} : { goalId }, ...targetGoalId === undefined ? {} : { targetGoalId }, ...targetGoalIds === undefined ? {} : { targetGoalIds }, ...criterionId === undefined ? {} : { criterionId }, ...title === undefined ? {} : { title }, ...objective === undefined ? {} : { objective }, ...childGoals === undefined ? {} : { childGoals }, ...revisedTitle === undefined ? {} : { revisedTitle }, ...revisedObjective === undefined ? {} : { revisedObjective }, ...pendingOrder === undefined ? {} : { pendingOrder }, ...blockedReason === undefined ? {} : { blockedReason }, ...proposal.after === undefined ? {} : { after: proposal.after }, ...directiveText === undefined ? {} : { directiveText }, ...promptSignature === undefined ? {} : { promptSignature }, ...idempotencyKey === undefined ? {} : { idempotencyKey }, ...proposal.now === undefined ? {} : { now: proposal.now }, ...scenario === undefined ? {} : { scenario }, ...expectedEvidence === undefined ? {} : { expectedEvidence }, ...proposal.userModel === undefined ? {} : { userModel: proposal.userModel } };
 }
-async function parseSteeringProposals(argv) {
+async function parseSteeringProposals(argv, repoRoot = process.cwd()) {
   const input = text2(readValue(argv, "--proposals-json"), "--proposals-json");
   if (input === undefined)
-    return [await parseSteeringProposal(argv)];
+    return [await parseSteeringProposal(argv, repoRoot)];
   if (readValue(argv, "--kind") !== undefined)
     return fail2("--kind and --proposals-json are mutually exclusive.", "ULW_LOOP_STEERING_BATCH_CONFLICT", { flags: ["--kind", "--proposals-json"] });
-  const raw = await readJsonInput(input);
+  const raw = await readJsonInput(input, repoRoot);
   if (!Array.isArray(raw) || raw.length === 0)
     return fail2("--proposals-json must be a non-empty JSON array.", "ULW_LOOP_STEERING_BATCH_ARRAY_REQUIRED", { flag: "--proposals-json" });
   const proposals = [];
@@ -2102,9 +2767,7 @@ async function recordFinalReviewBlockers(repoRoot, args, scope) {
     const summaryEntry = { at: now, kind: "goal_review_blocked", goalId: goal.id, status: goal.status, evidence: args.evidence, codexGoal, message: `Review blockers recorded; appended ${newGoal.id}.` };
     Reflect.set(summaryEntry, "kind", "blocker_recorded");
     const ledgerEntries = [blockedEntry, addedEntry, summaryEntry];
-    await writePlan(repoRoot, plan, scope);
-    for (const entry of ledgerEntries)
-      await appendLedger(repoRoot, entry, scope);
+    await commitPlanAndLedgerEntries(repoRoot, plan, ledgerEntries, scope);
     return { plan, blockedGoal: goal, newGoal, ledgerEntries };
   });
 }
@@ -2223,8 +2886,8 @@ function changedGoalIdsBetween(before, after2) {
 // src/steering.ts
 var SOURCES2 = ["user_prompt_submit", "finding", "cli"];
 var PROTECTED = new Set(["aggregateCompletion", "codexObjective", "codexObjectiveAliases", "originalConstraints", "qualityGate", "status", "completedAt", "completionStatus"]);
-var isObject2 = (value) => typeof value === "object" && value !== null;
-var isPlain2 = (value) => isObject2(value) && !Array.isArray(value);
+var isObject3 = (value) => typeof value === "object" && value !== null;
+var isPlain2 = (value) => isObject3(value) && !Array.isArray(value);
 var read3 = (value, key) => Object.entries(value).find(([name]) => name === key)?.[1];
 var isText2 = (value) => typeof value === "string" && value.trim().length > 0;
 var text4 = (value, key) => {
@@ -2270,7 +2933,7 @@ var pendingOrder = (proposal) => {
   return direct.length > 0 ? direct : texts(after2(proposal) ?? proposal, "pendingGoalIds");
 };
 function hasProtected(value) {
-  if (!isObject2(value))
+  if (!isObject3(value))
     return false;
   for (const [key, childValue] of Object.entries(value))
     if (PROTECTED.has(key) || key.toLowerCase().includes("complete") || hasProtected(childValue))
@@ -2280,7 +2943,7 @@ function hasProtected(value) {
 function allText(value) {
   if (typeof value === "string")
     return value;
-  return isObject2(value) ? Object.values(value).map(allText).filter(Boolean).join(`
+  return isObject3(value) ? Object.values(value).map(allText).filter(Boolean).join(`
 `) : "";
 }
 function weakens(value) {
@@ -2437,11 +3100,11 @@ async function steerUlwLoop(repoRoot, proposal, scope) {
     }
     const at = proposal.now?.toISOString() ?? iso();
     const batchEntry = accepted ? batchUpdateLedgerEntry(plan, next, at) : null;
-    if (accepted)
-      await writePlan(repoRoot, next, scope);
-    await appendLedger(repoRoot, ledgerEntry(proposal, finalAudit, at), scope);
-    if (batchEntry !== null)
-      await appendLedger(repoRoot, batchEntry, scope);
+    const auditEntry = ledgerEntry(proposal, finalAudit, at);
+    if (accepted) {
+      await commitPlanAndLedgerEntries(repoRoot, next, batchEntry === null ? [auditEntry] : [auditEntry, batchEntry], scope);
+    } else
+      await appendLedger(repoRoot, auditEntry, scope);
     return { plan: next, accepted, audit: finalAudit, rejectedReasons: audit.invariant.rejectedReasons, deduped: false };
   });
 }
@@ -2474,10 +3137,9 @@ async function steerUlwLoopBatch(repoRoot, proposals, scope) {
         next = item.prepared.next;
     const fresh = prepared.items.filter((item) => item.kind === "fresh");
     if (fresh.length > 0) {
-      await writePlan(repoRoot, next, scope);
       const entries = fresh.map((item) => ledgerEntry2(item.prepared.proposal, item.prepared.audit, item.prepared.proposal.now?.toISOString() ?? iso()));
       const batchEntry = batchUpdateLedgerEntry(plan, next, iso());
-      await appendLedgerEntries(repoRoot, batchEntry === null ? entries : [...entries, batchEntry], scope);
+      await commitPlanAndLedgerEntries(repoRoot, next, batchEntry === null ? entries : [...entries, batchEntry], scope);
     }
     return { plan: next, accepted: true, results: prepared.results, rejectedReasons: [] };
   });
@@ -2539,9 +3201,10 @@ function ledgerEntry2(proposal, audit, at) {
 }
 
 // src/cli-subcommands.ts
+import { resolve as resolve7 } from "node:path";
 async function createGoals(repoRoot, argv, json, scope) {
   const briefFile = readValue(argv, "--brief-file");
-  const brief = readValue(argv, "--brief") ?? (briefFile === undefined ? undefined : await readFile6(briefFile, "utf8")) ?? (hasFlag(argv, "--from-stdin") ? await readStdin() : undefined) ?? positionalText(argv);
+  const brief = readValue(argv, "--brief") ?? (briefFile === undefined ? undefined : safeReadWorkspaceTextFile(repoRoot, resolve7(repoRoot, briefFile))) ?? (hasFlag(argv, "--from-stdin") ? await readStdin() : undefined) ?? positionalText(argv);
   if (!brief.trim()) {
     throw new UlwLoopError("Missing brief text. Pass --brief, --brief-file, --from-stdin, or positional text.", "ULW_LOOP_BRIEF_REQUIRED");
   }
@@ -2567,7 +3230,7 @@ async function status(repoRoot, json, scope) {
   const plan = await readUlwLoopPlan(repoRoot, scope);
   if (json) {
     const active = plan.goals.find((goal3) => goal3.id === plan.activeGoalId);
-    const currentAttemptDir = plan.evidenceLayoutVersion === 2 && active ? ulwLoopAttemptEvidenceDir(active.id, active.attempt, scope) : undefined;
+    const currentAttemptDir = plan.evidenceLayoutVersion === 2 && active ? ulwLoopAttemptEvidenceDir(repoRoot, active.id, active.attempt, scope) : undefined;
     printJson({
       ok: true,
       plan,
@@ -2605,7 +3268,7 @@ async function completeGoals(repoRoot, argv, json, scope) {
   return 0;
 }
 async function steer(repoRoot, argv, json, scope) {
-  const proposals = await parseSteeringProposals(argv);
+  const proposals = await parseSteeringProposals(argv, repoRoot);
   const single = proposals[0];
   if (single !== undefined && proposals.length === 1 && readValue(argv, "--proposals-json") === undefined) {
     const result2 = await steerUlwLoop(repoRoot, single, scope);
@@ -2651,7 +3314,7 @@ async function captureEvidence(repoRoot, argv, json, scope) {
   return 0;
 }
 async function reviewBlockers(repoRoot, argv, json, scope) {
-  const codexGoalJson = await parseCodexGoalJson(required4(argv, "--codex-goal-json"));
+  const codexGoalJson = await parseCodexGoalJson(required4(argv, "--codex-goal-json"), repoRoot);
   if (codexGoalJson === undefined) {
     throw new UlwLoopError("Missing --codex-goal-json.", "ULW_LOOP_CODEX_GOAL_JSON_REQUIRED");
   }
@@ -2695,8 +3358,7 @@ function findGoal3(plan, goalId) {
 }
 
 // src/light-quality-gate.ts
-import { mkdir as mkdir3, writeFile as writeFile3 } from "node:fs/promises";
-import { join as join2 } from "node:path";
+import { join as join6 } from "node:path";
 async function buildLightQualityGate(repoRoot, goalId, scope) {
   const plan = await readUlwLoopPlan(repoRoot, scope);
   const goal3 = plan.goals.find((g) => g.id === goalId);
@@ -2709,13 +3371,12 @@ async function buildLightQualityGate(repoRoot, goalId, scope) {
   if (pending.length > 0) {
     throw new UlwLoopError(`Cannot build light quality gate: criteria not all pass (${pending.map((c) => c.id).join(", ")})`, "ULW_LOOP_CRITERIA_INCOMPLETE");
   }
-  const attemptDir = ulwLoopAttemptEvidenceDir(goal3.id, goal3.attempt ?? 0, scope);
-  const absAttempt = join2(repoRoot, attemptDir);
-  await mkdir3(absAttempt, { recursive: true });
+  const attemptDir = ulwLoopAttemptEvidenceDir(repoRoot, goal3.id, goal3.attempt ?? 0, scope);
+  const absAttempt = safeWorkspacePath(repoRoot, join6(repoRoot, attemptDir));
   const artifactId = "artifact-light-cli";
   const artifactRel = `${attemptDir}/light-cli-evidence.txt`;
-  const codeReportRel = `${attemptDir}/light-code-review.md`;
-  const gateReportRel = `${attemptDir}/light-gate-review.md`;
+  const codeReportRel = `${attemptDir}/light-root-code-review.md`;
+  const gateReportRel = `${attemptDir}/light-root-gate-review.md`;
   const evidenceLines = criteria2.map((c) => `- ${c.id} (${c.status}): ${c.capturedEvidence ?? c.scenario ?? ""}`);
   const cliBody = [
     `LIGHT quality gate evidence for ${goal3.id}`,
@@ -2728,23 +3389,31 @@ async function buildLightQualityGate(repoRoot, goalId, scope) {
     "Grok LIGHT path: root agent self-review + criterion evidence (no multi-agent gate required)."
   ].join(`
 `);
-  await writeFile3(join2(repoRoot, artifactRel), cliBody + `
-`, "utf8");
-  await writeFile3(join2(repoRoot, codeReportRel), `# Light code review
+  await safeWriteWorkspaceTextFile(repoRoot, join6(repoRoot, artifactRel), `${cliBody}
+`);
+  await safeWriteWorkspaceTextFile(repoRoot, join6(repoRoot, codeReportRel), `# LIGHT root code self-review
 
-APPROVE — LIGHT tier self-review.
+APPROVE — performed by the LazyGrok root agent, not an independent reviewer.
 
 ${evidenceLines.join(`
 `)}
-`, "utf8");
-  await writeFile3(join2(repoRoot, gateReportRel), `# Light gate review
+`);
+  await safeWriteWorkspaceTextFile(repoRoot, join6(repoRoot, gateReportRel), `# LIGHT root gate self-review
 
-APPROVE — all ${criteria2.length} criteria pass with captured evidence.
-`, "utf8");
+APPROVE — root agent confirmed all ${criteria2.length} criteria pass with captured evidence.
+`);
   const first = criteria2[0];
+  if (first === undefined) {
+    throw new UlwLoopError("Goal has no success criteria", "ULW_LOOP_NO_CRITERIA");
+  }
   const qualityGate = {
+    provenance: {
+      mode: "root-self-review",
+      producer: "lazygrok-root",
+      sessionId: scope?.sessionId ?? resolveUlwLoopSessionIdFromEnv() ?? "session"
+    },
     codeReview: {
-      by: "lazygrok-code-reviewer",
+      by: "lazygrok-root",
       recommendation: "APPROVE",
       codeQualityStatus: "CLEAR",
       reportPath: codeReportRel,
@@ -2752,7 +3421,7 @@ APPROVE — all ${criteria2.length} criteria pass with captured evidence.
       blockers: []
     },
     manualQa: {
-      by: "lazygrok-qa-executor",
+      by: "lazygrok-root",
       status: "passed",
       evidence: criteria2.map((c) => c.capturedEvidence || c.id).join(" | "),
       surfaceEvidence: [
@@ -2786,7 +3455,7 @@ APPROVE — all ${criteria2.length} criteria pass with captured evidence.
       ]
     },
     gateReview: {
-      by: "lazygrok-gate-reviewer",
+      by: "lazygrok-root",
       recommendation: "APPROVE",
       reportPath: gateReportRel,
       evidence: "LIGHT gate: criteria coverage complete",
@@ -2807,9 +3476,9 @@ APPROVE — all ${criteria2.length} criteria pass with captured evidence.
       adversarialClassesCovered: ["none-applicable: LIGHT tier"]
     }
   };
-  const qualityGatePath = join2(attemptDir, "quality-gate.light.json");
-  await writeFile3(join2(repoRoot, qualityGatePath), JSON.stringify(qualityGate, null, 2) + `
-`, "utf8");
+  const qualityGatePath = join6(attemptDir, "quality-gate.light.json");
+  await safeWriteWorkspaceTextFile(repoRoot, join6(repoRoot, qualityGatePath), `${JSON.stringify(qualityGate, null, 2)}
+`);
   return { qualityGatePath, attemptDir: absAttempt, qualityGate };
 }
 async function lightQualityGateCmd(repoRoot, argv, json, scope) {
@@ -2858,7 +3527,7 @@ async function ulwLoopCommand(argv) {
   const repoRoot = process.cwd();
   const json = hasFlag(rest, "--json");
   try {
-    const scope = commandScope(rest);
+    const scope = commandScope(rest, repoRoot);
     if (!isUlwLoopSubcommand(command)) {
       if (json) {
         printJsonError(new UlwLoopError(`Unknown ulw-loop subcommand: ${command}.`, "ULW_LOOP_SUBCOMMAND_UNKNOWN", {
@@ -2922,27 +3591,34 @@ var SESSION_ID_FLAG = "--session-id";
 function sessionIdFlagPresent(argv) {
   return hasFlag(argv, SESSION_ID_FLAG) || argv.some((arg) => arg.startsWith(`${SESSION_ID_FLAG}=`));
 }
-function commandScope(argv) {
+function commandScope(argv, repoRoot) {
+  const boundSessionId = resolveUlwLoopSessionIdFromBinding(repoRoot);
   if (sessionIdFlagPresent(argv)) {
-    const sessionId2 = readValue(argv, SESSION_ID_FLAG)?.trim();
-    if (!sessionId2) {
+    const sessionId2 = readValue(argv, SESSION_ID_FLAG);
+    if (sessionId2 === undefined || sessionId2.length === 0) {
       throw new UlwLoopError(`${SESSION_ID_FLAG} requires a non-empty value.`, "ULW_LOOP_SESSION_ID_REQUIRED", {
         details: { flag: SESSION_ID_FLAG }
       });
     }
+    if (normalizeUlwLoopSessionId(sessionId2) === null) {
+      throw new UlwLoopError(`${SESSION_ID_FLAG} requires an exact safe session ID.`, "ULW_LOOP_SESSION_ID_INVALID");
+    }
+    if (boundSessionId !== null && sessionId2 !== boundSessionId) {
+      throw new UlwLoopError(`The requested session ID does not match the current Grok session ${boundSessionId}.`, "ULW_LOOP_SESSION_MISMATCH");
+    }
     return { sessionId: sessionId2 };
   }
-  const sessionId = resolveUlwLoopSessionIdFromEnv();
+  const sessionId = resolveUlwLoopSessionIdFromEnv() ?? boundSessionId;
   return sessionId === null ? undefined : { sessionId };
 }
 
 // src/ultrawork-directive.ts
-import { readFileSync as readFileSync2 } from "node:fs";
+import { closeSync as closeSync4, constants as constants3, fstatSync as fstatSync4, openSync as openSync2, readSync as readSync2 } from "node:fs";
 
 // src/ultrawork-skill-pointer.ts
-import { existsSync as existsSync5, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join as join3, resolve as resolve4 } from "node:path";
+import { existsSync as existsSync5, readFileSync as readFileSync2 } from "node:fs";
+import { dirname as dirname3, join as join7, resolve as resolve8 } from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 var ULTRAWORK_SKILL_POINTER_TEMPLATE = `<ultrawork-mode>
 ULTRAWORK MODE IS ACTIVE FOR THIS TASK.
 
@@ -2975,28 +3651,38 @@ continue with steps 1 and 2 plus evidence-bound execution.
 
 4. Live checklist: \`todo_write\` (exactly one \`in_progress\`).
 
+5. CODING MULTI-AGENT — after reading the skill, use only Grok tools.
+User switch is ONLY \`ulw\`/\`ultrawork\` — never ask them to run /workflow or name panels.
+- Multi-file / unfamiliar: BEFORE product edits, auto-call the \`workflow\` tool with name \`ulw-discover\` (or script_path under GROK_PLUGIN_ROOT/docs/examples/). Fallback: same-turn \`spawn_subagent\` explore (+ librarian if external).
+- Independent slices: one worker each (\`lazygrok:lazygrok-worker-*\` / hephaestus) via spawn_subagent.
+- HEAVY after evidence: auto-call \`workflow\` name \`ulw-review\` (or script_path); fallback code-reviewer spawn. Parent owns goals, RED→GREEN, commits, done claim — panels never ship.
+- Wait: \`get_command_or_subagent_output\` for spawns; wait for workflow run completion for panels. Kill: \`kill_command_or_subagent\`.
+- Child prompt: TASK / DELIVERABLE / SCOPE / VERIFY / STOP WHEN. Depth 1. Barrier before dependent implement.
+- Trivial single-file known fix may stay serial; record "no fan-out: trivial" in the notepad.
+- Do not narrate harness internals (workflow/Rhai) to the user. Tool allowlist: rules/15-grok-tools-only.md.
+
 Do not start the requested work until bootstrap is complete.
 LIGHT complete: ulw-loop light-quality-gate then checkpoint. HEAVY: reviewer gate in the skill.
 </ultrawork-mode>
 `;
 var ULTRAWORK_SKILL_PATH_PLACEHOLDER = "{{ULTRAWORK_SKILL_PATH}}";
 function resolveUltraworkSkillFilePath() {
-  const here = dirname(fileURLToPath(import.meta.url));
+  const here = dirname3(fileURLToPath2(import.meta.url));
   const envRoot = process.env["GROK_PLUGIN_ROOT"]?.trim();
   const candidates = [
-    join3(here, "../skills/ultrawork/SKILL.md"),
-    join3(here, "../../../../skills/ultrawork/SKILL.md"),
-    join3(here, "../../../skills/ultrawork/SKILL.md"),
-    join3(here, "../../ultrawork/skills/ultrawork/SKILL.md"),
-    envRoot ? join3(envRoot, "skills/ultrawork/SKILL.md") : "",
-    envRoot ? join3(envRoot, "vendor/lazygrok-hooks/ultrawork/skills/ultrawork/SKILL.md") : ""
+    join7(here, "../skills/ultrawork/SKILL.md"),
+    join7(here, "../../../../skills/ultrawork/SKILL.md"),
+    join7(here, "../../../skills/ultrawork/SKILL.md"),
+    join7(here, "../../ultrawork/skills/ultrawork/SKILL.md"),
+    envRoot ? join7(envRoot, "skills/ultrawork/SKILL.md") : "",
+    envRoot ? join7(envRoot, "vendor/lazygrok-hooks/ultrawork/skills/ultrawork/SKILL.md") : ""
   ].filter(Boolean);
   for (const c of candidates) {
-    const abs = resolve4(c);
+    const abs = resolve8(c);
     if (existsSync5(abs))
       return abs;
   }
-  return resolve4(join3(here, "../../ultrawork/skills/ultrawork/SKILL.md"));
+  return resolve8(join7(here, "../../ultrawork/skills/ultrawork/SKILL.md"));
 }
 function buildUltraworkSkillPointer(skillFilePath) {
   return ULTRAWORK_SKILL_POINTER_TEMPLATE.replace(ULTRAWORK_SKILL_PATH_PLACEHOLDER, skillFilePath);
@@ -3006,7 +3692,7 @@ function buildUltraworkAdditionalContext(options = {}) {
   if (skillFilePath !== null && existsSync5(skillFilePath)) {
     return buildUltraworkSkillPointer(skillFilePath);
   }
-  return readFileSync(new URL("../directive.md", import.meta.url), "utf8");
+  return readFileSync2(new URL("../directive.md", import.meta.url), "utf8");
 }
 
 // src/ultrawork-directive.ts
@@ -3057,8 +3743,18 @@ function hasUltraworkDirectiveAlreadyInTranscript(transcriptPath) {
   return false;
 }
 function readTranscriptTail(transcriptPath) {
-  const rawTranscript = readFileSync2(transcriptPath);
-  return rawTranscript.subarray(Math.max(0, rawTranscript.byteLength - TRANSCRIPT_SEARCH_BYTES)).toString("utf8");
+  const fileDescriptor = openSync2(transcriptPath, constants3.O_RDONLY | constants3.O_NOFOLLOW);
+  try {
+    const file = fstatSync4(fileDescriptor);
+    if (!file.isFile())
+      throw new Error("transcript is not a regular file");
+    const length = Math.min(file.size, TRANSCRIPT_SEARCH_BYTES);
+    const buffer = Buffer.alloc(length);
+    const bytesRead = readSync2(fileDescriptor, buffer, 0, length, file.size - length);
+    return buffer.subarray(0, bytesRead).toString("utf8");
+  } finally {
+    closeSync4(fileDescriptor);
+  }
 }
 function isUltraworkPrompt(prompt) {
   return ULTRAWORK_CURRENT_PROMPT_PATTERN.test(prompt);
@@ -3114,6 +3810,7 @@ function isRecord3(value) {
 
 // src/codex-hook.ts
 var CREATE_GOAL_TOOL_NAME = "create_goal";
+var MAX_HOOK_INPUT_BYTES = 10 * 1024 * 1024;
 var CREATE_GOAL_PAYLOAD_WARNING = "Use create_goal with objective only. Omit token_budget so the goal stays unlimited, and put lifecycle status changes on update_goal.";
 function parseUserPromptSubmitPayload(raw) {
   if (raw.trim().length === 0)
@@ -3192,7 +3889,10 @@ function applyPreToolUseGoalBudgetGuard(payload) {
 }
 async function runUlwLoopHookCli(stdin, stdout, options = {}) {
   try {
-    const payload = parseUserPromptSubmitPayload(await readAll(stdin));
+    const raw = await readAll(stdin);
+    if (raw === null)
+      return;
+    const payload = parseUserPromptSubmitPayload(raw);
     if (payload === null)
       return;
     const output = await applyUserPromptUlwLoopSteering(payload, options);
@@ -3206,7 +3906,10 @@ async function runUlwLoopHookCli(stdin, stdout, options = {}) {
 }
 async function runPreToolUseGoalBudgetGuardCli(stdin, stdout) {
   try {
-    const payload = parsePreToolUsePayload(await readAll(stdin));
+    const raw = await readAll(stdin);
+    if (raw === null)
+      return;
+    const payload = parsePreToolUsePayload(raw);
     if (payload === null)
       return;
     const output = applyPreToolUseGoalBudgetGuard(payload);
@@ -3237,63 +3940,109 @@ function isRecord4(value) {
 function optionalString(value) {
   return value === undefined || typeof value === "string";
 }
-function readAll(stdin) {
-  return new Promise((resolve5, reject) => {
-    let data = "";
-    stdin.setEncoding("utf8");
-    stdin.on("data", (chunk) => {
-      data += chunk instanceof Buffer ? chunk.toString() : String(chunk);
-    });
-    stdin.once("error", reject);
-    stdin.once("end", () => resolve5(data));
-  });
+async function readAll(stdin) {
+  const chunks = [];
+  let totalBytes = 0;
+  for await (const chunk of stdin) {
+    const bytes = Buffer.from(chunk);
+    totalBytes += bytes.length;
+    if (totalBytes > MAX_HOOK_INPUT_BYTES)
+      return null;
+    chunks.push(bytes);
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 // src/spawn-guard.ts
-import { existsSync as existsSync6, readdirSync, readFileSync as readFileSync3, statSync as statSync2, writeFileSync } from "node:fs";
-import { join as join4 } from "node:path";
-var SPAWN_TOOL_TOKENS = new Set(["spawn_agent", "collaborationspawn_agent", "collaboration.spawn_agent"]);
+import { readdirSync as readdirSync2 } from "node:fs";
+import { join as join8 } from "node:path";
+var SPAWN_TOOL_TOKENS = new Set([
+  "spawn_subagent",
+  "spawn_agent",
+  "collaborationspawn_agent",
+  "collaboration.spawn_agent",
+  "task"
+]);
 var DEFAULT_FANOUT_LIMIT = 60;
+var MAX_HOOK_INPUT_BYTES2 = 10 * 1024 * 1024;
 var GATE_MESSAGE_PATTERN = /lazycodex-gate-reviewer|final gate review/i;
 function applySpawnGuards(payload) {
   if (payload.hook_event_name !== "PreToolUse" || !SPAWN_TOOL_TOKENS.has(payload.tool_name))
     return "";
-  const stateDir = ulwLoopDir(payload.cwd, { sessionId: payload.session_id });
-  const plan = readPlan(join4(stateDir, "goals.json"));
+  let stateDir;
+  try {
+    stateDir = ulwLoopDir(payload.cwd, { sessionId: payload.session_id });
+  } catch (error) {
+    if (error instanceof Error)
+      return deny("unsafe ulw-loop state path");
+    throw error;
+  }
+  const plan = readPlan(payload.cwd, join8(stateDir, "goals.json"));
   if (plan === null)
     return "";
-  const fanOutDenial = consumeFanOutBudget(stateDir);
-  if (fanOutDenial !== null)
-    return deny(fanOutDenial);
   const missingArtifact = missingGateArtifact(payload, plan);
   if (missingArtifact !== null)
     return deny(`spawn code-review + QA first; gate audits their artifacts: missing ${missingArtifact}`);
+  const fanOutDenial = consumeFanOutBudget(payload.cwd, stateDir);
+  if (fanOutDenial !== null)
+    return deny(fanOutDenial);
   return "";
 }
 async function runSpawnGuardCli(stdin, stdout) {
+  let payload;
   try {
     const chunks = [];
-    for await (const chunk of stdin)
-      chunks.push(Buffer.from(chunk));
-    const payload = parsePreToolUsePayload(Buffer.concat(chunks).toString("utf8"));
-    if (payload === null)
+    let totalBytes = 0;
+    let oversized = false;
+    for await (const chunk of stdin) {
+      const bytes = Buffer.from(chunk);
+      totalBytes += bytes.length;
+      if (totalBytes > MAX_HOOK_INPUT_BYTES2) {
+        oversized = true;
+        continue;
+      }
+      if (!oversized)
+        chunks.push(bytes);
+    }
+    if (oversized) {
+      stdout.write(deny("ulw-loop spawn guard denied oversized hook input"));
       return;
+    }
+    payload = parsePreToolUsePayload(Buffer.concat(chunks).toString("utf8"));
+  } catch (error) {
+    if (error instanceof Error) {
+      stdout.write(deny("ulw-loop spawn guard denied invalid hook input"));
+      return;
+    }
+    throw error;
+  }
+  if (payload === null) {
+    stdout.write(deny("ulw-loop spawn guard denied invalid hook input"));
+    return;
+  }
+  try {
     const output = applySpawnGuards(payload);
     if (output.length > 0)
       stdout.write(output);
   } catch (error) {
-    if (error instanceof Error)
+    if (error instanceof Error) {
+      stdout.write(deny("ulw-loop spawn guard denied because budget could not be reserved safely"));
       return;
+    }
+    throw error;
   }
 }
-function consumeFanOutBudget(stateDir) {
-  const counterPath = join4(stateDir, "spawn-count.json");
-  const count = readCount(counterPath) + 1;
-  writeFileSync(counterPath, JSON.stringify({ count }));
-  const limit = fanOutLimit();
-  if (count <= limit)
+function consumeFanOutBudget(repoRoot, stateDir) {
+  return withInterprocessLockSync(repoRoot, join8(stateDir, ".spawn-count.lock"), () => {
+    const counterPath = join8(stateDir, "spawn-count.json");
+    const count = readCount(repoRoot, counterPath) + 1;
+    const limit = fanOutLimit();
+    if (count > limit) {
+      return `ulw-loop spawn fan-out cap reached (${count}/${limit}). Consolidate work into the agents already running, or raise OMO_SPAWN_FANOUT_LIMIT if this volume is intentional.`;
+    }
+    safeWriteWorkspaceTextFileSync(repoRoot, counterPath, JSON.stringify({ count }));
     return null;
-  return `ulw-loop spawn fan-out cap reached (${count}/${limit}). Consolidate work into the agents already running, or raise OMO_SPAWN_FANOUT_LIMIT if this volume is intentional.`;
+  });
 }
 function missingGateArtifact(payload, plan) {
   if (!isGateReviewerSpawn(payload.tool_input))
@@ -3305,19 +4054,20 @@ function missingGateArtifact(payload, plan) {
     return null;
   const scope = { sessionId: payload.session_id };
   if (plan.evidenceLayoutVersion === 2) {
-    const attemptDir = ulwLoopAttemptEvidenceDir(goal3.id, goal3.attempt, scope);
+    const attemptDir = ulwLoopAttemptEvidenceDir(payload.cwd, goal3.id, goal3.attempt, scope);
     for (const name of [`${goal3.id}-code-review.md`, `${goal3.id}-manual-qa.md`]) {
-      const relative2 = `${attemptDir}/${name}`;
-      if (!isNonEmptyFile(join4(payload.cwd, relative2)))
-        return relative2;
+      const relative3 = `${attemptDir}/${name}`;
+      if (!isNonEmptyFile(payload.cwd, join8(payload.cwd, relative3)))
+        return relative3;
     }
     return null;
   }
-  const flatReport = `.omo/evidence/${goal3.id}-code-review.md`;
-  if (!isNonEmptyFile(join4(payload.cwd, flatReport)))
+  const evidenceRoot = ulwLoopEvidenceRoot(payload.cwd, scope);
+  const flatReport = `${evidenceRoot}/${goal3.id}-code-review.md`;
+  if (!isNonEmptyFile(payload.cwd, join8(payload.cwd, flatReport)))
     return flatReport;
-  if (!hasOtherEvidenceFile(join4(payload.cwd, ".omo", "evidence"), `${goal3.id}-code-review.md`))
-    return `.omo/evidence/<any manual-QA artifact besides ${goal3.id}-code-review.md>`;
+  if (!hasOtherEvidenceFile(payload.cwd, join8(payload.cwd, evidenceRoot), `${goal3.id}-code-review.md`))
+    return `${evidenceRoot}/<any manual-QA artifact besides ${goal3.id}-code-review.md>`;
   return null;
 }
 function isGateReviewerSpawn(toolInput) {
@@ -3348,37 +4098,42 @@ function fanOutLimit() {
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_FANOUT_LIMIT;
 }
-function isNonEmptyFile(path) {
+function isNonEmptyFile(repoRoot, path) {
   try {
-    return existsSync6(path) && statSync2(path).size > 0;
+    return safeReadWorkspaceTextFile(repoRoot, path, 1024 * 1024).length > 0;
   } catch (error) {
     if (error instanceof Error)
       return false;
     throw error;
   }
 }
-function hasOtherEvidenceFile(evidenceDir, excludedName) {
+function hasOtherEvidenceFile(repoRoot, evidenceDir, excludedName) {
   try {
-    return readdirSync(evidenceDir).some((name) => name !== excludedName && isNonEmptyFile(join4(evidenceDir, name)));
+    const safeEvidenceDir = safeWorkspacePath(repoRoot, evidenceDir);
+    return readdirSync2(safeEvidenceDir).some((name) => name !== excludedName && isNonEmptyFile(repoRoot, join8(safeEvidenceDir, name)));
   } catch (error) {
     if (error instanceof Error)
       return false;
     throw error;
   }
 }
-function readCount(counterPath) {
+function readCount(repoRoot, counterPath) {
   try {
-    const parsed = JSON.parse(readFileSync3(counterPath, "utf8"));
-    return typeof parsed["count"] === "number" && parsed["count"] >= 0 ? parsed["count"] : 0;
+    const parsed = JSON.parse(safeReadWorkspaceTextFile(repoRoot, counterPath, 64 * 1024));
+    const count = parsed["count"];
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
+      throw new Error("invalid ulw-loop spawn counter");
+    }
+    return count;
   } catch (error) {
-    if (error instanceof Error)
+    if (error instanceof Error && "code" in error && error.code === "ENOENT")
       return 0;
     throw error;
   }
 }
-function readPlan(goalsPath) {
+function readPlan(repoRoot, goalsPath) {
   try {
-    return JSON.parse(readFileSync3(goalsPath, "utf8"));
+    return JSON.parse(safeReadWorkspaceTextFile(repoRoot, goalsPath));
   } catch (error) {
     if (error instanceof Error)
       return null;
@@ -3387,9 +4142,99 @@ function readPlan(goalsPath) {
 }
 
 // src/stop-resume-hook.ts
-import { existsSync as existsSync7, readFileSync as readFileSync4, writeFileSync as writeFileSync2 } from "node:fs";
-import { isAbsolute as isAbsolute2, join as join5, resolve as resolve5, sep as sep2 } from "node:path";
+import { join as join10, resolve as resolve10 } from "node:path";
+
+// src/resume-budget.ts
+import { closeSync as closeSync5, fstatSync as fstatSync5, readSync as readSync3 } from "node:fs";
+import { join as join9, resolve as resolve9, sep as sep3 } from "node:path";
 var RESUME_CAP = 2;
+var MAX_RESUME_LEDGER_BYTES = 64 * 1024 * 1024;
+function consumeResumeBudget(repoRoot, stateDir, goalId) {
+  try {
+    assertSafeUlwLoopPathSegment(goalId, "goal id");
+  } catch {
+    return false;
+  }
+  const counterPath = resolve9(stateDir, `auto-resume-${goalId}.json`);
+  const stuckPath = resolve9(stateDir, `auto-resume-${goalId}.stuck`);
+  const lockPath = resolve9(stateDir, `auto-resume-${goalId}.lock`);
+  if (!isInsideDir(stateDir, counterPath) || !isInsideDir(stateDir, stuckPath) || !isInsideDir(stateDir, lockPath))
+    return false;
+  try {
+    return withInterprocessLockSync(repoRoot, lockPath, () => {
+      const ledgerLineCount = countLedgerLines(repoRoot, join9(stateDir, "ledger.jsonl"));
+      if (ledgerLineCount === null)
+        return false;
+      const previous = readCounter(repoRoot, counterPath);
+      const count = previous !== null && previous.ledgerLineCount === ledgerLineCount ? previous.count : 0;
+      if (count >= RESUME_CAP) {
+        safeWriteWorkspaceTextFileSync(repoRoot, stuckPath, `no ledger progress after ${count} resumes
+`);
+        return false;
+      }
+      safeWriteWorkspaceTextFileSync(repoRoot, counterPath, JSON.stringify({ count: count + 1, ledgerLineCount }));
+      return true;
+    });
+  } catch (error) {
+    if (error instanceof Error)
+      return false;
+    throw error;
+  }
+}
+function isInsideDir(dir, candidate) {
+  return candidate.startsWith(resolve9(dir) + sep3);
+}
+function countLedgerLines(repoRoot, ledgerPath) {
+  let fileDescriptor = null;
+  try {
+    fileDescriptor = safeOpenWorkspaceReadFile(repoRoot, ledgerPath, MAX_RESUME_LEDGER_BYTES);
+    const fileSize = fstatSync5(fileDescriptor).size;
+    const buffer = Buffer.allocUnsafe(64 * 1024);
+    let offset = 0;
+    let lineCount = 0;
+    let lastByte = -1;
+    while (offset < fileSize) {
+      const requested = Math.min(buffer.length, fileSize - offset);
+      const bytesRead = readSync3(fileDescriptor, buffer, 0, requested, offset);
+      if (bytesRead <= 0)
+        return null;
+      for (let index = 0;index < bytesRead; index += 1) {
+        if (buffer[index] === 10)
+          lineCount += 1;
+      }
+      lastByte = buffer[bytesRead - 1] ?? lastByte;
+      offset += bytesRead;
+    }
+    return fileSize > 0 && lastByte !== 10 ? lineCount + 1 : lineCount;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT")
+      return 0;
+    if (error instanceof Error)
+      return null;
+    throw error;
+  } finally {
+    if (fileDescriptor !== null)
+      closeSync5(fileDescriptor);
+  }
+}
+function readCounter(repoRoot, counterPath) {
+  try {
+    const parsed = JSON.parse(safeReadWorkspaceTextFile(repoRoot, counterPath));
+    const count = parsed["count"];
+    const ledgerLineCount = parsed["ledgerLineCount"];
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0 || typeof ledgerLineCount !== "number" || !Number.isSafeInteger(ledgerLineCount) || ledgerLineCount < 0) {
+      throw new Error("Invalid ULW auto-resume counter.");
+    }
+    return { count, ledgerLineCount };
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT")
+      return null;
+    throw error;
+  }
+}
+
+// src/stop-resume-hook.ts
+var MAX_HOOK_INPUT_BYTES3 = 10 * 1024 * 1024;
 var CONTEXT_PRESSURE_MARKERS2 = [
   "context compacted",
   "context_length_exceeded",
@@ -3401,20 +4246,20 @@ var CONTEXT_PRESSURE_MARKERS2 = [
 ];
 function runStopResumeHook(input) {
   const payload = parseStopPayload(input);
-  if (payload === null || payload.stop_hook_active)
+  if (payload === null)
     return "";
   if (transcriptShowsContextPressure(payload.transcript_path))
     return "";
   if (boulderContinuationWillFire(payload.cwd, payload.session_id))
     return "";
   const stateDir = ulwLoopDir(payload.cwd, { sessionId: payload.session_id });
-  const plan = readPlan2(join5(stateDir, "goals.json"));
+  const plan = readPlan2(payload.cwd, join10(stateDir, "goals.json"));
   if (plan === null || plan.aggregateCompletion?.status === "complete")
     return "";
-  const goal3 = resumableGoal(plan);
+  const goal3 = resumableGoal(plan) ?? incompleteAggregateGoal(plan);
   if (goal3 === undefined)
     return "";
-  if (!consumeResumeBudget(stateDir, goal3.id))
+  if (!consumeResumeBudget(payload.cwd, stateDir, goal3.id))
     return "";
   const output = {
     decision: "block",
@@ -3425,8 +4270,14 @@ function runStopResumeHook(input) {
 async function runStopResumeHookCli(stdin, stdout) {
   try {
     const chunks = [];
-    for await (const chunk of stdin)
-      chunks.push(Buffer.from(chunk));
+    let totalBytes = 0;
+    for await (const chunk of stdin) {
+      const bytes = Buffer.from(chunk);
+      totalBytes += bytes.length;
+      if (totalBytes > MAX_HOOK_INPUT_BYTES3)
+        return;
+      chunks.push(bytes);
+    }
     const output = runStopResumeHook(JSON.parse(Buffer.concat(chunks).toString("utf8")));
     if (output.length > 0)
       stdout.write(output);
@@ -3444,65 +4295,30 @@ function resumableGoal(plan) {
 function isResumableStatus(status2) {
   return status2 === "pending" || status2 === "in_progress";
 }
-function consumeResumeBudget(stateDir, goalId) {
-  const ledgerLineCount = countLedgerLines(join5(stateDir, "ledger.jsonl"));
-  const counterPath = resolve5(stateDir, `auto-resume-${goalId}.json`);
-  const stuckPath = resolve5(stateDir, `auto-resume-${goalId}.stuck`);
-  if (!isInsideDir(stateDir, counterPath) || !isInsideDir(stateDir, stuckPath))
-    return false;
-  const previous = readCounter(counterPath);
-  const count = previous !== null && previous.ledgerLineCount === ledgerLineCount ? previous.count : 0;
-  if (count >= RESUME_CAP) {
-    writeFileSync2(stuckPath, `no ledger progress after ${count} resumes
-`);
-    return false;
+function incompleteAggregateGoal(plan) {
+  if (plan.codexGoalMode !== "aggregate" || plan.aggregateCompletion?.status === "complete" || plan.goals.length === 0 || !plan.goals.every((goal3) => goal3.status === "complete")) {
+    return;
   }
-  writeFileSync2(counterPath, JSON.stringify({ count: count + 1, ledgerLineCount }));
-  return true;
-}
-function isInsideDir(dir, candidate) {
-  return candidate.startsWith(resolve5(dir) + sep2);
+  return plan.goals.at(-1);
 }
 function renderResumeDirective(plan, goal3, sessionId) {
-  const normalized = normalizeUlwLoopSessionId(sessionId);
-  const option = normalized !== null && plan.goalsPath.includes(`/${normalized}/`) ? ` --session-id ${normalized}` : "";
+  const option = plan.goalsPath.includes(`/${sessionId}/`) ? ` --session-id ${sessionId}` : "";
   return [
     `The ulw-loop run in this session still has unfinished goals (next: ${goal3.id} — ${goal3.title}).`,
     "The turn ended before the loop completed. Resume it now:",
-    `1. Run \`omo ulw-loop status${option} --json\` to reload the plan, the active goal, and currentAttemptDir.`,
+    `1. Run \`${grokUlwCli()} status${option} --json\` to reload the plan, the active goal, and currentAttemptDir.`,
     "2. Continue the active goal's remaining success criteria, recording evidence with record-evidence.",
-    `3. Checkpoint through \`omo ulw-loop checkpoint${option}\` when the goal's criteria are proven; a complete checkpoint prints the next goal instruction.`,
+    `3. Checkpoint through \`${grokUlwCli()} checkpoint${option}\` when the goal's criteria are proven; a complete checkpoint prints the next goal instruction.`,
     "If the loop is genuinely blocked on the user, checkpoint the goal as blocked with the reason instead."
   ].join(`
 `);
 }
-function readPlan2(goalsPath) {
+function readPlan2(repoRoot, goalsPath) {
   try {
-    return JSON.parse(readFileSync4(goalsPath, "utf8"));
-  } catch (error) {
-    if (error instanceof Error)
-      return null;
-    throw error;
-  }
-}
-function countLedgerLines(ledgerPath) {
-  try {
-    return readFileSync4(ledgerPath, "utf8").split(`
-`).filter(Boolean).length;
-  } catch (error) {
-    if (error instanceof Error)
-      return 0;
-    throw error;
-  }
-}
-function readCounter(counterPath) {
-  try {
-    if (!existsSync7(counterPath))
-      return null;
-    const parsed = JSON.parse(readFileSync4(counterPath, "utf8"));
-    if (typeof parsed["count"] !== "number" || typeof parsed["ledgerLineCount"] !== "number")
-      return null;
-    return { count: parsed["count"], ledgerLineCount: parsed["ledgerLineCount"] };
+    const parsed = JSON.parse(safeReadWorkspaceTextFile(repoRoot, goalsPath));
+    for (const goal3 of parsed.goals)
+      assertSafeUlwLoopPathSegment(goal3.id, "goal id");
+    return parsed;
   } catch (error) {
     if (error instanceof Error)
       return null;
@@ -3510,27 +4326,38 @@ function readCounter(counterPath) {
   }
 }
 function boulderContinuationWillFire(cwd, sessionId) {
-  try {
-    const raw = JSON.parse(readFileSync4(join5(cwd, ".omo", "boulder.json"), "utf8"));
-    const works = raw["works"];
-    const entries = typeof works === "object" && works !== null ? Object.values(works) : [raw];
-    return entries.some((work) => {
-      if (typeof work !== "object" || work === null)
-        return false;
-      const entry = work;
-      const sessionIds = Array.isArray(entry["session_ids"]) ? entry["session_ids"] : [];
-      const continuable = entry["status"] === "active" || entry["status"] === "paused";
-      return continuable && sessionIds.includes(`codex:${sessionId}`) && boulderPlanHasChecklist(cwd, entry);
-    });
-  } catch (error) {
-    if (error instanceof Error)
-      return false;
-    throw error;
+  for (const relativePath of [join10(".lazygrok", "boulder.json"), join10(".omo", "boulder.json")]) {
+    try {
+      const raw = JSON.parse(safeReadWorkspaceTextFile(cwd, join10(cwd, relativePath), 1024 * 1024));
+      const works = raw["works"];
+      const entries = typeof works === "object" && works !== null ? Object.values(works) : [raw];
+      const continuationExists = entries.some((work) => {
+        if (typeof work !== "object" || work === null)
+          return false;
+        const entry = work;
+        const sessionIds = Array.isArray(entry["session_ids"]) ? entry["session_ids"] : [];
+        const continuable = entry["status"] === "active" || entry["status"] === "paused";
+        const ownsSession = sessionIds.some((candidate) => {
+          if (typeof candidate !== "string")
+            return false;
+          return candidate === sessionId || candidate === `grok:${sessionId}` || candidate === `codex:${sessionId}`;
+        });
+        return continuable && ownsSession && boulderPlanHasChecklist(cwd, entry);
+      });
+      if (continuationExists)
+        return true;
+    } catch (error) {
+      if (!(error instanceof Error))
+        throw error;
+    }
   }
+  return false;
 }
 function transcriptShowsContextPressure(transcriptPath) {
+  if (transcriptPath === null || transcriptPath.length === 0)
+    return false;
   try {
-    const transcript = readFileSync4(transcriptPath, "utf8").toLowerCase();
+    const transcript = readBoundedRegularTextFile(transcriptPath, 10 * 1024 * 1024).toLowerCase();
     return CONTEXT_PRESSURE_MARKERS2.some((marker) => transcript.includes(marker));
   } catch (error) {
     if (error instanceof Error)
@@ -3542,16 +4369,11 @@ function boulderPlanHasChecklist(cwd, entry) {
   const activePlan = entry["active_plan"];
   if (typeof activePlan !== "string" || activePlan.trim().length === 0)
     return false;
-  const planPath = isAbsolute2(activePlan) ? activePlan : join5(cwd, activePlan);
-  const worktree = entry["worktree_path"];
-  const candidates = typeof worktree === "string" && worktree.trim().length > 0 && !isAbsolute2(activePlan) ? [join5(isAbsolute2(worktree) ? worktree : join5(cwd, worktree), activePlan), planPath] : [planPath];
-  for (const candidate of candidates) {
-    try {
-      return readFileSync4(candidate, "utf8").split(/\r?\n/).some((line) => line.startsWith("- [ ] ") || line.startsWith("- [x] ") || line.startsWith("- [X] "));
-    } catch (error) {
-      if (!(error instanceof Error))
-        throw error;
-    }
+  try {
+    return safeReadWorkspaceTextFile(cwd, resolve10(cwd, activePlan), 10 * 1024 * 1024).split(/\r?\n/).some((line) => line.startsWith("- [ ] ") || line.startsWith("- [x] ") || line.startsWith("- [X] "));
+  } catch (error) {
+    if (!(error instanceof Error))
+      throw error;
   }
   return false;
 }
@@ -3560,24 +4382,26 @@ function parseStopPayload(value) {
     return null;
   const record = value;
   const optionalMessage = record["last_assistant_message"];
-  const valid = record["hook_event_name"] === "Stop" && typeof record["session_id"] === "string" && typeof record["turn_id"] === "string" && typeof record["transcript_path"] === "string" && typeof record["cwd"] === "string" && typeof record["model"] === "string" && typeof record["permission_mode"] === "string" && typeof record["stop_hook_active"] === "boolean" && (optionalMessage === undefined || typeof optionalMessage === "string");
+  const transcriptPath = record["transcript_path"];
+  const sessionId = record["session_id"];
+  const valid = record["hook_event_name"] === "Stop" && typeof sessionId === "string" && normalizeUlwLoopSessionId(sessionId) === sessionId && typeof record["turn_id"] === "string" && (transcriptPath === undefined || transcriptPath === null || typeof transcriptPath === "string") && typeof record["cwd"] === "string" && typeof record["model"] === "string" && typeof record["permission_mode"] === "string" && typeof record["stop_hook_active"] === "boolean" && (optionalMessage === undefined || typeof optionalMessage === "string");
   if (!valid)
     return null;
   return {
-    session_id: record["session_id"],
+    session_id: sessionId,
     cwd: record["cwd"],
-    transcript_path: record["transcript_path"],
+    transcript_path: typeof transcriptPath === "string" ? transcriptPath : null,
     stop_hook_active: record["stop_hook_active"]
   };
 }
 
 // src/cli.ts
 var TOP_LEVEL_HELP = `Usage:
-  omo ulw-loop <subcommand> [args]
-  omo hook user-prompt-submit [--with-ultrawork]  (Codex UserPromptSubmit hook)
-  omo help | --help | -h                          (this message)
+  ulw-loop <subcommand> [args]
+  ulw-loop hook user-prompt-submit [--with-ultrawork]  (Grok UserPromptSubmit hook)
+  ulw-loop help | --help | -h                          (this message)
 
-Run \`omo ulw-loop help\` for ulw-loop subcommands.
+Run \`ulw-loop help\` for subcommands.
 `;
 async function main() {
   const argv = process.argv.slice(2);
@@ -3619,9 +4443,9 @@ ${TOP_LEVEL_HELP}`);
   return 1;
 }
 main().then((code) => {
-  process.exit(code);
+  process.exitCode = code;
 }).catch((error) => {
   process.stderr.write(`[omo] ${error instanceof Error ? error.message : String(error)}
 `);
-  process.exit(1);
+  process.exitCode = 1;
 });

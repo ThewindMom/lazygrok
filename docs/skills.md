@@ -1,6 +1,9 @@
 # Skills and slash commands
 
-lazygrok bundles user-invocable skills under `skills/` plus **[superpowers](https://github.com/obra/superpowers)** at `vendor/superpowers/skills/` (no separate superpowers plugin install). Grok discovers both via `plugin.json` and `grok inspect`.
+LazyGrok registers user-invocable skills from the three roots listed in
+`plugin.json`: `skills/`, `vendor/lazygrok-skills/`, and
+`vendor/lazygrok-hooks/`. The retained upstream superpowers source tree is not
+an active skill root.
 
 ## Skill gate flow
 
@@ -16,9 +19,11 @@ Hooks: `hooks/pre-tool-mutate.sh`, `hooks/post-tool-read.sh`, `hooks/session-sta
 |-------|-----------------|--------|
 | `agent-skill-gate` | (meta) | Read before mutating tools; hooks block writes until a catalog skill was Read |
 | `ralph-loop` | `/ralph-loop "task"` | Work-until-done via Stop-hook continuations |
-| `ulw-loop` | `/ulw-loop`, `/ultrawork` | Ralph loop + mandatory verifier before exit |
+| `ultrawork` | `ulw`, `/ulw`, `ultrawork`, `/ultrawork` | Binding ULW process and goal-ledger contract |
+| `ulw-loop` | `/ulw-loop` | Durable ULW goals, criteria, evidence, and checkpoints; never Ralph state or `VERIFIED` |
+| `ulw-ralph-loop` | `/ulw-ralph-loop` | Explicit Ralph-family promise + verifier loop; separate from ULW goal-ledger triggers |
 | `ulw-workflow` | (not user-facing) | Internal panel protocol under `ulw` only |
-| `cancel-ralph` | `/cancel-ralph` | Clear active Ralph / ultrawork state |
+| `cancel-ralph` | `/cancel-ralph` | Clear an explicit Ralph-family promise loop |
 | `handoff` | `/handoff` | Structured HANDOFF CONTEXT for a new session |
 
 ## Related prompts (hooks, not separate skills)
@@ -38,6 +43,7 @@ When delegating subagents, paste skill **paths** from inspect into the subagent 
 
 - `skills/agent-skill-gate/SKILL.md`
 - `skills/ralph-loop/SKILL.md`
+- `skills/ultrawork/SKILL.md`
 - `skills/ulw-loop/SKILL.md`
 - `skills/ulw-workflow/SKILL.md`
 - `skills/cancel-ralph/SKILL.md`

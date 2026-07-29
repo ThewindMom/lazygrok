@@ -31,26 +31,26 @@ Keep workspace `AGENTS.md` focused on project constraints; use `docs/` in this p
 
 | Variable | Default | Role |
 |----------|---------|------|
-| `LAZYGROK_HASHLINE` | `1` | After Read, cache line hashes under `~/.grok/state/hashline/<session>/`; PreToolUse denies stale `LINE#ID` in `StrReplace` `old_string` |
+| `LAZYGROK_HASHLINE` | `prefer` | Hashline mode (`off`, `prefer`, or `strict`); after Read, cache line hashes under `~/.grok/state/hashline/<session>/` and deny stale `LINE#ID` edits according to the selected mode |
 | `LAZYGROK_INTENT_GATE` | `1` | UserPromptSubmit keyword modes (search / analyze / team / hyperplan) |
 | `LAZYGROK_LSP_ENFORCE` | `1` | Stop hook blocks while LSP error diagnostics remain in session stash |
 | `LAZYGROK_PLAN_MODE` | (off) | Prometheus plan mode (also toggled via `/plan`) |
 
 Local hook tests: `export GROK_PLUGIN_ROOT="$(pwd)"`.
 
-## Bundled superpowers
+## Registered skill roots
 
-[superpowers](https://github.com/obra/superpowers) skills ship inside lazygrok at `vendor/superpowers/skills/` (see `vendor/superpowers/VERSION`). You do **not** need a separate `grok plugin install` for superpowers.
-
-Maintainers refresh the vendor tree: `task vendor:superpowers` (or `bash scripts/vendor-superpowers.sh`).
-
-If you still have a standalone superpowers plugin installed, its skills also appear in `grok inspect`; lazygrok hooks own SessionStart / skill-gate — avoid duplicate global `~/.grok/hooks/*.json`.
+`plugin.json` registers `skills/`, `vendor/lazygrok-skills/`, and
+`vendor/lazygrok-hooks/`. Other retained upstream source trees are provenance
+or regeneration inputs only and do not appear in LazyGrok's skill catalog.
+Avoid duplicate global `~/.grok/hooks/*.json`; the first-install bridge is the
+single documented exception.
 
 ## Stop continuation priority
 
 See [hooks/README.md](../hooks/README.md). First block wins:
 
-1. Ralph / ultrawork loop
+1. Ralph loop
 2. Boulder (`.lazygrok/plans/`)
 3. Todo continuation (todo enforcer cooldown / abort window)
 4. LSP error diagnostics stash (`LAZYGROK_LSP_ENFORCE`)

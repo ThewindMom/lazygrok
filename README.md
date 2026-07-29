@@ -105,7 +105,9 @@ python3 ~/.grok/installed-plugins/lazygrok-*/scripts/audit-hooks.py full
 node ~/.grok/installed-plugins/lazygrok-*/scripts/verify-ups-inject.mjs
 ```
 
-Dynamic plugin root — `grok plugin update` does **not** require re-run. UPS probe self-heals a missing/stale bridge.
+Dynamic plugin root: `grok plugin update` does **not** require re-running the
+installer. Missing bridges are repaired explicitly with `install-user-hooks.mjs`;
+the prompt hook never rewrites user configuration.
 
 ---
 
@@ -116,6 +118,7 @@ Dynamic plugin root — `grok plugin update` does **not** require re-run. UPS pr
 | `create_goal` / `update_goal` | Optional host tools; default **ulw-loop CLI** + `# Goal` |
 | `update_plan` | `todo_write` |
 | `multi_agent_v1.spawn_agent` / `wait_agent` | `spawn_subagent` / `get_command_or_subagent_output` |
+| Codex worktree-capable workers | Grok `spawn_subagent(..., isolation: "worktree")` when branch/review/conflict isolation is warranted |
 | Parallel coding (explore/worker/review) | Same-turn subagent waves **and** silent `workflow` discover/review panels under ULW |
 | **No Rhai workflow engine** | Grok **`workflow`** — LazyGrok addition, user-invisible under `ulw` |
 | **Grok tools only** | Always-on `rules/15-grok-tools-only.md` |
@@ -123,8 +126,19 @@ Dynamic plugin root — `grok plugin update` does **not** require re-run. UPS pr
 | `apply_patch` | `search_replace` / `write` |
 | In-app browser | `playwright` MCP (else agent-browser) |
 | `lazycodex-*` agents | `lazygrok:*` / `lazygrok-*.md` |
-| `.omo/plans` | `.lazygrok/plans` (accept mid-run `.omo/ulw-loop/`) |
+| `.omo/{plans,boulder.json,start-work,ulw-loop,evidence}` | `.lazygrok/...` for new work; an existing `.omo` run stays on its original root |
 | npm auto-update SessionStart | Not ported — use `grok plugin update` |
+
+LazyGrok aims for behavioral parity, not fake API parity. Ordinary `ulw` work does not create a worktree merely to display a larger checklist; LazyCodex does not require that either. LazyGrok requires or recommends worktrees at the same risk boundaries where isolation matters: PR/branch review, conflicting parallel edits, and explicitly isolated subagents. Grok Build can provide per-child worktree isolation, but it does not expose LazyCodex’s durable team mailbox/task bus. `git_bash` is also intentionally unavailable on Grok/Linux.
+
+For whole-session isolation, choose the worktree before Grok starts. Interactive Grok documents `grok --worktree=<name> "<prompt>"`, but Grok Build `0.2.114` does not materialize `--worktree` in the headless `-p` path. The reliable headless form is:
+
+```bash
+git worktree add --detach /absolute/task-worktree HEAD
+grok --cwd /absolute/task-worktree -p "ulw <task>"
+```
+
+Hooks cannot move an already-running Grok process into another checkout. If a running ULW session reaches a PR/branch, conflicting-edit, or explicit-isolation boundary, LazyGrok instead creates or selects a task-owned worktree and requires all subsequent edits, commands, tests, and evidence capture to use that absolute path.
 
 ---
 
@@ -133,10 +147,12 @@ Dynamic plugin root — `grok plugin update` does **not** require re-run. UPS pr
 ### Skills (trimmed LazyCodex-for-Grok surface)
 
 **Top-level (`skills/`):**  
-`ultrawork` · `ulw-loop` · `ulw-plan` · `ulw-evidence` · `ulw-ralph-loop` · `ulw-workflow` (internal) · `ralph-loop` · `cancel-ralph` · `prometheus-plan` · `start-work-execution` · `agent-skill-gate` · `hashline-edit` · `handoff` · `init-deep` · `lsp` · `git-master` · `review-work` · `refactoring` · `remove-ai-slops` · `coding-agent-sessions` · `ultimate-browsing`
+`ultrawork` · `ulw-loop` · `ulw-plan` · `ulw-evidence` · `ulw-ralph-loop` · `ulw-workflow` (internal) · `ralph-loop` · `cancel-ralph` · `prometheus-plan` · `start-work-execution` · `agent-skill-gate` · `hashline-edit` · `handoff` · `init-deep` · `lsp` · `git-master` · `refactoring` · `remove-ai-slops` · `coding-agent-sessions` · `ultimate-browsing`
 
 **Vendored OmO (`vendor/lazygrok-skills/`):**  
-`programming` · `debugging` · `frontend` · `visual-qa` · `ultraresearch` / `ulw-research` · `start-work` · `ast-grep` · `comment-checker` · `rules` · `refactor` · `lsp-setup` · `teammode` · `lcx-*` · …
+`programming` · `debugging` · `frontend` · `visual-qa` · `review-work` · `ultraresearch` / `ulw-research` · `ast-grep` · `comment-checker` · `rules` · `refactor` · `lsp-setup` · `teammode` · `lcx-*` · …
+
+There is exactly one user-facing `start-work` catalog entry: `skills/start-work-execution/`. The upstream vendored copy is retained only as the non-invocable `start-work-reference` for provenance and regeneration, so Grok skill discovery cannot choose between two same-name workflows.
 
 As of **0.4.1+**, superpowers and non-OmO filler packs are **not** registered. First-prompt skill inject uses **agent-skill-gate**.
 
@@ -152,11 +168,13 @@ Agent models default to **`inherit`** (no hard-coded Codex model IDs).
 
 Aligned with LazyCodex 4.19.3 OmO components, Grok-patched where needed:
 
-`ultrawork` · `ulw-loop` · `bootstrap` · `codegraph` · `comment-checker` · `git-bash` · `git-bash-mcp` · `lsp` · `lsp-daemon` · `lsp-tools-mcp` · `rules` · `start-work-continuation` · `lazygrok-executor-verify` · `teammode` · `telemetry`
+`ultrawork` · `ulw-loop` · `bootstrap` · `codegraph` · `comment-checker` · `lsp` · `lsp-daemon` · `lsp-tools-mcp` · `rules` · `start-work-continuation` · `lazygrok-executor-verify`
 
-The `git-bash` sources stay vendored for upstream compatibility, but the `git_bash` MCP is intentionally not registered or supported on Grok/Linux.
+The `git-bash` and `git-bash-mcp` sources stay vendored only for upstream provenance and regeneration. They have no active hook or MCP registration because Git Bash is unsupported on Grok/Linux. LazyGrok does not ship or invoke the upstream telemetry component.
 
-Rebuild ULW dists: `scripts/rebuild-ulw-components.sh`.
+The v4.19.3 LSP source is vendored alongside its bundle. In-flight aborts propagate to the language server as JSON-RPC `$/cancelRequest`; on Linux, workspace edits are revalidated at commit time and reject symlink/path-identity changes before descriptor-anchored writes. The LSP tools and daemon have lockfile-backed, source-sensitive builds. Host-side Grok cancellation still follows Grok Build’s own cancellation token lifecycle.
+
+Rebuild ULW dists: `scripts/rebuild-ulw-components.sh`. Runtime parity checks: `python3 scripts/test_runtime_parity.py -v`. The 4.19.3 port generator preserves the hand-adapted Grok `ulw-loop` and `start-work` workflows instead of replacing them with mechanically renamed Codex instructions, then synchronizes the complete canonical ULW tree into both runtime mirrors.
 
 ### MCP servers
 
@@ -165,17 +183,16 @@ Rebuild ULW dists: `scripts/rebuild-ulw-components.sh`.
 | `hashline` | Hash-anchored read/edit |
 | `lazygrok-codegraph` | Symbol/edge knowledge graph |
 | `lazygrok-lsp` / `lazygrok-lsp-tools` / `lazygrok-lsp-daemon` | LSP diagnostics & navigation |
-| `lsp` | Bundled LSP MCP |
 
 `git_bash` is not an available LazyGrok MCP server on Grok/Linux; use Grok's normal terminal/git tools.
 
 ### Hooks
 
-**40 entries** across 14 lifecycle events (`hooks/hooks.json`), including:
+**35 entries** across 14 lifecycle events (`hooks/hooks.json`), including:
 
 - **UserPromptSubmit** — ultrawork / ulw-loop / rules  
 - **Stop** — Ralph / ulw-loop resume / start-work continuation  
-- **PreToolUse** — skill-gate, spawn guard, goal budget, git-bash  
+- **PreToolUse** — skill-gate, spawn guard, goal budget
 - **PostToolUse** — LSP, comment-checker, hashline cache, rules  
 - **SubagentStop** — executor-verify (includes `lazygrok-worker-*`)
 
@@ -189,14 +206,19 @@ Performance-critical paths use the Go binary (`bin/lazygrok-hook-*`) via `hooks/
 
 ### Continuation & evidence
 
+Grok terminal subprocesses do not inherit hook-only session variables. The
+prompt hook therefore records a private, prompt-free workspace-hash binding;
+the ULW CLI uses it only when no explicit ID is supplied and rejects concurrent
+ambiguity or a conflicting invented ID.
+
 | Mode | Behavior |
 | --- | --- |
 | **Ralph** | Stop-hook work-until-done + completion promise |
 | **ulw-ralph-loop** | Ralph + `<promise>VERIFIED</promise>` verifier gate |
-| **ulw-loop (OmO ledger)** | `goals.json` + `ledger.jsonl` + checkpoints; LIGHT: `light-quality-gate` then `checkpoint`; HEAVY: reviewer gate |
+| **ulw-loop (OmO ledger)** | `goals.json` + `ledger.jsonl` + checkpoints; LIGHT: explicit root-self-review provenance; HEAVY: independent reviewer gate |
 | **start-work / boulder** | Prometheus plan execution with continuation |
 
-State prefers **`.lazygrok/`** (accepts mid-run **`.omo/ulw-loop/`** if already created).
+New state is written under **`.lazygrok/`**. Existing **`.omo/`** boulder, start-work, ULW, and evidence state remains readable and stays on that root for mid-run continuity; new ULW plan scaffolds use `.lazygrok`, while an existing same-slug legacy plan remains on `.omo`. ULW state is keyed by the exact session ID injected by Grok's prompt hook; inherited Codex session/thread variables are stripped before vendored hook CLIs run so launching Grok from another agent cannot cross-contaminate ledgers. Native Grok `SubagentStop` receipts block LazyGrok executors/workers for three attempts unless the active run has a real, non-empty `.lazygrok/evidence/executors/<session>/<agent>/` receipt (or the same scoped legacy path for an existing `.omo` run); the fourth attempt is the documented bounded escape hatch and clears the counter, including when an unsafe hard-linked primary counter forces the guarded recovery counter. ULW spawn reservations fail closed on oversized hook input or malformed counters, and persist through a synced temporary sibling plus atomic rename so a killed writer cannot reset the fan-out budget. State roots, plans, receipts, counters, Boulder files, ledgers, direct CLI input, and session-history enrichment reject symlink and hard-link aliases and use descriptor-pinned bounded access. Generated recovery commands bind to the running package location rather than an installation hash, so plugin updates and relocated installations keep working. Plans are written through a synced temporary sibling and atomic rename. On Linux, Go workspace-state and LSP edit mutations stay bound to verified directory descriptors so concurrent parent swaps cannot redirect creation, reads, writes, renames, or deletes; executor attempt-state writes never delete through legacy paths. Sensitive state/evidence and LSP mutation operations fail closed on macOS and Windows instead of using pathname-only fallbacks. Local state directories/files are repaired to `0700`/`0600`; active hook paths retain neither diagnostic payloads nor user prompts. Grok ULW Stop re-fires remain enforced under the ledger-aware two-strike retry budget even after Grok sets `stopHookActive`. Start-work accepts plans only from the selected state root and trusts a recorded worktree only when Git proves it belongs to the current repository.
 
 ---
 

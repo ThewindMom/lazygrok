@@ -20,16 +20,21 @@
 // Example: node lazygrok-shim.mjs ultrawork user-prompt-submit
 
 import { spawn } from "node:child_process";
-import { resolve, dirname, join } from "node:path";
+import { resolve, dirname, join, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { env } from "node:process";
 import { homedir } from "node:os";
 import {
 	readFileSync,
-	mkdirSync,
-	writeFileSync,
 	existsSync,
 	readdirSync,
+	lstatSync,
+	realpathSync,
+	statSync,
+	openSync,
+	closeSync,
+	fstatSync,
+	constants,
 } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -108,6 +113,70 @@ function pick(input, ...keys) {
 	return undefined;
 }
 
+const MAX_ENRICHED_FILE_BYTES = 1024 * 1024;
+const MAX_HOOK_INPUT_BYTES = 10 * 1024 * 1024;
+const MAX_TRANSCRIPT_BYTES = 10 * 1024 * 1024;
+const MAX_SESSION_CANDIDATES = 512;
+
+function isPathWithin(root, candidate) {
+	const fromRoot = relative(root, candidate);
+	return (
+		fromRoot === "" ||
+		(fromRoot !== ".." &&
+			!fromRoot.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) &&
+			!isAbsolute(fromRoot))
+	);
+}
+
+function readWorkspaceFile(workspace, filePath) {
+	try {
+		if (typeof filePath !== "string" || !filePath) return "";
+		return readBoundedRegularFile(workspace, filePath, MAX_ENRICHED_FILE_BYTES);
+	} catch {
+		return "";
+	}
+}
+
+function readBoundedRegularFile(root, filePath, maxBytes) {
+	const canonicalRoot = realpathSync(root);
+	const requested = resolve(canonicalRoot, filePath);
+	if (!isPathWithin(canonicalRoot, requested)) throw new Error("file escapes approved root");
+	let current = canonicalRoot;
+	const pathFromRoot = relative(canonicalRoot, requested);
+	for (const component of pathFromRoot.split(/[\\/]+/u).filter(Boolean)) {
+		current = join(current, component);
+		if (lstatSync(current).isSymbolicLink()) throw new Error("file path contains a symlink");
+	}
+	const fileDescriptor = openSync(requested, constants.O_RDONLY | constants.O_NOFOLLOW);
+	try {
+		const procPath = `/proc/self/fd/${fileDescriptor}`;
+		if (existsSync(procPath) && !isPathWithin(canonicalRoot, realpathSync(procPath))) {
+			throw new Error("opened file escapes approved root");
+		}
+		const file = fstatSync(fileDescriptor);
+		if (!file.isFile() || file.size > maxBytes) throw new Error("file is not a bounded regular file");
+		return readFileSync(fileDescriptor, "utf8");
+	} finally {
+		closeSync(fileDescriptor);
+	}
+}
+
+function safeTranscriptPath(workspace, transcriptPath) {
+	try {
+		if (typeof transcriptPath !== "string" || !transcriptPath) return "";
+		const requested = resolve(workspace, transcriptPath);
+		const link = lstatSync(requested);
+		if (link.isSymbolicLink() || !link.isFile() || link.size > MAX_TRANSCRIPT_BYTES) return "";
+		const requestedReal = realpathSync(requested);
+		const allowedRoots = [workspace, join(homedir(), ".grok", "sessions")]
+			.filter((root) => existsSync(root))
+			.map((root) => realpathSync(root));
+		return allowedRoots.some((root) => isPathWithin(root, requestedReal)) ? requestedReal : "";
+	} catch {
+		return "";
+	}
+}
+
 /**
  * Recover user prompt when stdin lacks it.
  * Prefer prompt_history.jsonl (session_id + prompt), then chat_history.
@@ -116,25 +185,28 @@ function pick(input, ...keys) {
 function listSessionCandidates(sessionId, workspaceRoot) {
 	const sessionsRoot = join(homedir(), ".grok", "sessions");
 	const encoded = workspaceRoot ? encodeURIComponent(workspaceRoot) : "";
-	const candidates = [];
+	const candidates = new Set();
 	if (encoded) {
-		candidates.push(join(sessionsRoot, encoded, "prompt_history.jsonl"));
+		candidates.add(join(sessionsRoot, encoded, "prompt_history.jsonl"));
 		if (sessionId) {
-			candidates.push(join(sessionsRoot, encoded, sessionId, "chat_history.jsonl"));
+			candidates.add(join(sessionsRoot, encoded, sessionId, "chat_history.jsonl"));
 		}
 	}
 	if (existsSync(sessionsRoot)) {
-		for (const d of readdirSync(sessionsRoot)) {
-			candidates.push(join(sessionsRoot, d, "prompt_history.jsonl"));
+		for (const entry of readdirSync(sessionsRoot, { withFileTypes: true })) {
+			if (candidates.size >= MAX_SESSION_CANDIDATES) break;
+			if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+			candidates.add(join(sessionsRoot, entry.name, "prompt_history.jsonl"));
 			if (sessionId) {
-				candidates.push(join(sessionsRoot, d, sessionId, "chat_history.jsonl"));
+				candidates.add(join(sessionsRoot, entry.name, sessionId, "chat_history.jsonl"));
 			}
 		}
 	}
-	return candidates;
+	return [...candidates].slice(0, MAX_SESSION_CANDIDATES);
 }
 
 function recoverPromptOnce(sessionId, workspaceRoot) {
+	if (!sessionId) return { prompt: "", source: "none" };
 	try {
 		const candidates = listSessionCandidates(sessionId, workspaceRoot);
 		for (const p of candidates) {
@@ -173,25 +245,23 @@ async function recoverPromptFromSessionAsync(sessionId, workspaceRoot) {
 }
 
 function extractFromPromptHistory(path, sessionId) {
-	const lines = readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean);
-	// Prefer match on sessionId; else last non-bash prompt
-	let last = "";
+	if (!sessionId) return "";
+	const lines = readSessionHistory(path).split(/\r?\n/).filter(Boolean);
 	for (let i = lines.length - 1; i >= 0; i--) {
 		try {
 			const o = JSON.parse(lines[i]);
 			const prompt = typeof o.prompt === "string" ? o.prompt.trim() : "";
 			if (!prompt || o.is_bash) continue;
-			if (sessionId && o.session_id === sessionId) return prompt;
-			if (!last) last = prompt;
+			if (o.session_id === sessionId) return prompt;
 		} catch {
 			// continue
 		}
 	}
-	return last;
+	return "";
 }
 
 function extractLastUserQuery(historyPath) {
-	const lines = readFileSync(historyPath, "utf8").split(/\r?\n/).filter(Boolean);
+	const lines = readSessionHistory(historyPath).split(/\r?\n/).filter(Boolean);
 	for (let i = lines.length - 1; i >= 0; i--) {
 		try {
 			const o = JSON.parse(lines[i]);
@@ -216,6 +286,11 @@ function extractLastUserQuery(historyPath) {
 		}
 	}
 	return "";
+}
+
+function readSessionHistory(path) {
+	const sessionsRoot = join(homedir(), ".grok", "sessions");
+	return readBoundedRegularFile(sessionsRoot, path, MAX_TRANSCRIPT_BYTES);
 }
 
 /**
@@ -274,36 +349,29 @@ async function extractPromptMeta(input, raw) {
 	return { prompt: "", source: "none", attempts: recovered.attempts || 0 };
 }
 
-function dumpUpsResult(payload) {
-	try {
-		const dir = join(homedir(), ".grok/state/lazygrok");
-		mkdirSync(dir, { recursive: true });
-		writeFileSync(join(dir, "last-ups-shim.json"), JSON.stringify(payload, null, 2));
-		writeFileSync(join(dir, "last-ups-result.json"), JSON.stringify(payload, null, 2));
-	} catch {
-		// ignore
-	}
-}
-
 const chunks = [];
-process.stdin.on("data", (chunk) => chunks.push(chunk));
+let inputBytes = 0;
+let inputTooLarge = false;
+process.stdin.on("data", (chunk) => {
+	inputBytes += chunk.length;
+	if (inputBytes > MAX_HOOK_INPUT_BYTES) {
+		inputTooLarge = true;
+		return;
+	}
+	chunks.push(chunk);
+});
 process.stdin.on("end", () => {
 	void (async () => {
+		if (inputTooLarge) {
+			process.stderr.write("LazyGrok hook envelope exceeds 10 MiB; ignoring it.\n");
+			process.exit(0);
+		}
 		const raw = Buffer.concat(chunks).toString("utf8").trim();
 		if (!raw) {
 			const sessionId = env.GROK_SESSION_ID || "";
 			const workspace = env.GROK_WORKSPACE_ROOT || env.CLAUDE_PROJECT_DIR || process.cwd();
 			const recovered = await recoverPromptFromSessionAsync(sessionId, workspace);
 			if (!recovered.prompt || !/(?:ultrawork|\bulw\b)/i.test(recovered.prompt)) {
-				if (componentName === "ultrawork") {
-					dumpUpsResult({
-						reason: "empty_stdin_no_ulw_recovery",
-						component: componentName,
-						envSessionId: sessionId || null,
-						recovery: recovered,
-						at: new Date().toISOString(),
-					});
-				}
 				process.exit(0);
 			}
 			const fabricated = {
@@ -354,12 +422,22 @@ async function processEnvelope(input, raw, promptMeta) {
 	const toolUseId = asString(pick(input, "toolUseId", "tool_use_id", "toolCallId"));
 	const stopHookActive = Boolean(pick(input, "stopHookActive", "stop_hook_active"));
 	const subagentId = asString(pick(input, "subagentId", "subagent_id"));
+	const subagentType = asString(
+		pick(input, "subagentType", "subagent_type", "agentType", "agent_type"),
+	);
+	const lastAssistantMessage = asString(
+		pick(input, "lastAssistantMessage", "last_assistant_message"),
+	);
+	const transcriptPath = safeTranscriptPath(
+		workspace,
+		asString(pick(input, "transcriptPath", "transcript_path")),
+	);
 
 	const codexEvent = {
 		hook_event_name: grokEvent,
 		session_id: sessionId,
 		turn_id: sessionId,
-		transcript_path: pick(input, "transcriptPath", "transcript_path") ?? null,
+		transcript_path: transcriptPath || null,
 		cwd: asString(pick(input, "cwd")) || workspace,
 		model: asString(pick(input, "model")) || "grok-build",
 		permission_mode:
@@ -382,19 +460,22 @@ async function processEnvelope(input, raw, promptMeta) {
 				lower,
 			)
 		) {
-			try {
-				enriched.content = readFileSync(resolve(workspace, filePath), "utf8");
-			} catch {
-				// skip
-			}
+			const content = readWorkspaceFile(workspace, filePath);
+			if (content) enriched.content = content;
 		}
 		codexEvent.tool_input = enriched;
 	} else if (grokEvent === "Stop") {
 		codexEvent.stop_hook_active = stopHookActive;
-		const last = asString(pick(input, "lastAssistantMessage", "last_assistant_message"));
-		if (last) codexEvent.last_assistant_message = last;
+		if (lastAssistantMessage) codexEvent.last_assistant_message = lastAssistantMessage;
 	} else if (grokEvent === "SubagentStop") {
+		codexEvent.agent_id = subagentId;
+		codexEvent.agent_type = subagentType;
 		codexEvent.subagent_id = subagentId;
+		codexEvent.stop_hook_active = stopHookActive;
+		codexEvent.transcript_path = transcriptPath;
+		if (lastAssistantMessage) {
+			codexEvent.last_assistant_message = lastAssistantMessage;
+		}
 	} else if (grokEvent === "SessionStart") {
 		codexEvent.source = asString(pick(input, "source")) || "startup";
 	} else if (grokEvent === "PostCompact") {
@@ -402,6 +483,9 @@ async function processEnvelope(input, raw, promptMeta) {
 	}
 
 	const childEnv = { ...env };
+	delete childEnv.CODEX_SESSION_ID;
+	delete childEnv.CODEX_THREAD_ID;
+	delete childEnv.THREAD_ID;
 	if (!childEnv.CODEX_HOME) {
 		childEnv.CODEX_HOME = env.HOME ? `${env.HOME}/.codex` : "/tmp/codex-home";
 	}
@@ -415,14 +499,10 @@ async function processEnvelope(input, raw, promptMeta) {
 		},
 	});
 
-	let stdout = "";
-	let stderr = "";
 	child.stdout.on("data", (d) => {
-		stdout += d;
 		process.stdout.write(d);
 	});
 	child.stderr.on("data", (d) => {
-		stderr += d;
 		process.stderr.write(d);
 	});
 
@@ -430,29 +510,6 @@ async function processEnvelope(input, raw, promptMeta) {
 	child.stdin.end();
 
 	child.on("exit", (code) => {
-		if (componentName === "ultrawork" && grokEvent === "UserPromptSubmit") {
-			const ok = stdout.includes("ultrawork-mode") || stdout.includes("ULTRAWORK MODE");
-			dumpUpsResult({
-				reason: ok ? "inject_ok" : "empty_ultrawork_stdout",
-				injectOk: ok,
-				component: componentName,
-				rawEvent,
-				grokEvent,
-				promptLen: prompt.length,
-				promptPreview: prompt.slice(0, 300),
-				promptSource: promptMeta?.source || "unknown",
-				recoveryAttempts: promptMeta?.attempts ?? 0,
-				keys: Object.keys(input || {}),
-				envHookEvent: env.GROK_HOOK_EVENT || null,
-				envSessionId: env.GROK_SESSION_ID || null,
-				exitCode: code,
-				stdoutBytes: stdout.length,
-				stderrPreview: stderr.slice(0, 500),
-				codexEvent,
-				rawPreview: String(raw).slice(0, 3000),
-				at: new Date().toISOString(),
-			});
-		}
 		process.exit(code || 0);
 	});
 }

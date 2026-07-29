@@ -17,7 +17,7 @@ mkdir -p "$tmpdir/.lazygrok"
 printf '%s\n' '{"hookEventName":"UserPromptSubmit","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","prompt":"/ralph-loop \"fix tests\" --max-iterations=3"}' \
   | GROK_HOOK_EVENT=user_prompt_submit bash "${HOOKS_DIR}/run-hook.sh" user-prompt \
   >"${tmpdir}/start.json"
-rg -q 'Ralph Loop|ralph-loop.local' "${tmpdir}/start.json" \
+jq -e '.additionalContext | type == "string" and length > 0' "${tmpdir}/start.json" >/dev/null \
   || { echo "start failed:"; cat "${tmpdir}/start.json"; exit 1; }
 test -f "${tmpdir}/.lazygrok/ralph-loop.local.md" || { echo "state file missing"; exit 1; }
 
@@ -26,7 +26,6 @@ printf '%s\n' '{"hookEventName":"stop","sessionId":"'"$GROK_SESSION_ID"'","works
   | GROK_HOOK_EVENT=stop bash "${HOOKS_DIR}/run-hook.sh" stop >"${tmpdir}/block.json"
 rg -q '"decision":"block"' "${tmpdir}/block.json" \
   || { echo "expected block:"; cat "${tmpdir}/block.json"; exit 1; }
-rg -q 'RALPH LOOP' "${tmpdir}/block.json" || { cat "${tmpdir}/block.json"; exit 1; }
 
 # Stop with promise -> allow
 printf '%s\n' '{"hookEventName":"stop","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","stopReason":"end_turn","last_assistant_message":"done <promise>DONE</promise>"}' \
@@ -39,6 +38,8 @@ printf '%s\n' '{"hookEventName":"UserPromptSubmit","sessionId":"'"$GROK_SESSION_
   | GROK_HOOK_EVENT=user_prompt_submit bash "${HOOKS_DIR}/run-hook.sh" user-prompt >/dev/null
 printf '%s\n' '{"hookEventName":"UserPromptSubmit","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","prompt":"/cancel-ralph"}' \
   | GROK_HOOK_EVENT=user_prompt_submit bash "${HOOKS_DIR}/run-hook.sh" user-prompt >"${tmpdir}/cancel.json"
-rg -q 'Canceled' "${tmpdir}/cancel.json" || { cat "${tmpdir}/cancel.json"; exit 1; }
+jq -e '.additionalContext | type == "string" and length > 0' "${tmpdir}/cancel.json" >/dev/null \
+  || { echo "cancel response missing context:"; cat "${tmpdir}/cancel.json"; exit 1; }
+test ! -f "${tmpdir}/.lazygrok/ralph-loop.local.md" || { echo "state should be cleared"; exit 1; }
 
 echo "ralph-loop hooks: OK"

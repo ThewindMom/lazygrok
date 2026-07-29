@@ -1,5 +1,5 @@
 # https://taskfile.dev — run `task --list` for targets.
-# Uses existing scripts under scripts/; does not add new shell scripts.
+# Uses repository-maintained scripts under scripts/.
 version: "3"
 
 vars:
@@ -73,9 +73,13 @@ tasks:
       - bash scripts/build-hook.sh
 
   build:mcp:
-    desc: Build ast-grep and LSP MCP vendor dist/
+    desc: Build Go hashline and source-backed LSP MCP runtimes
     cmds:
-      - bash scripts/build-mcp-runtimes.sh
+      - bash scripts/build-mcp.sh
+      - test -s vendor/lazygrok-hooks/codegraph/dist/cli.js
+      - npm --prefix vendor/lazygrok-hooks/lsp-daemon run build
+      - npm --prefix vendor/lazygrok-hooks/lsp-tools-mcp run build
+      - npm --prefix vendor/lazygrok-hooks/lsp run build
 
   vendor:superpowers:
     desc: Refresh vendor/superpowers/skills from obra/superpowers (SUPERPOWERS_REF=v5.1.0)
@@ -120,3 +124,4 @@ tasks:
     cmds:
       - bash scripts/remove-global-overlays.sh
       - task: dev:install
+      - node scripts/install-user-hooks.mjs

@@ -31,11 +31,13 @@ func stopCmd() *cobra.Command {
 			ws := workspace(ev)
 			sid := sessionID(ev)
 			gh := hookenv.GrokHome()
+			lspStopEnabled := lsp.EnforceEnabled()
 
 			// --- NEW core pipeline (tried first) ---
 
 			// 1. core/continuation: bounded loops, cooldowns, repeated-state detection
 			if cfg, err := config.Load(ws, gh); err == nil {
+				lspStopEnabled = cfg.LSPEnabled && cfg.LSPStopEnforcement
 				if result := continuation.EvaluateStop(ws, gh, sid, cfg); result.ShouldContinue {
 					hookio.EmitStopBlock(w, result.Message)
 					os.Exit(0)
@@ -79,7 +81,7 @@ func stopCmd() *cobra.Command {
 					hookio.EmitStopBlock(w, msg)
 					os.Exit(0)
 				}
-				if block, msg := lsp.EvaluateStop(sid); block {
+				if block, msg := lsp.EvaluateStopWithPolicy(sid, lspStopEnabled); block {
 					hookio.EmitStopBlock(w, msg)
 					os.Exit(0)
 				}

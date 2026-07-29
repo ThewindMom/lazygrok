@@ -1,12 +1,11 @@
 package prometheus
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 
 	"lazygrok/internal/config"
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 // PlanModeActive reports whether Prometheus plan mode is enabled.
@@ -15,10 +14,10 @@ func PlanModeActive(sessionID string) bool {
 		return true
 	}
 	if sessionID == "" {
-		sessionID = "unknown"
+		return false
 	}
-	flag := filepath.Join(hookenv.GrokHome(), "state", "plan-mode", sessionID, "enabled")
-	_, err := os.Stat(flag)
+	flag := planModeFlag(sessionID)
+	_, err := safestate.ReadFileBelow(hookenv.GrokHome(), flag)
 	return err == nil
 }
 

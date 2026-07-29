@@ -146,6 +146,9 @@ function sendToolCall(paths, token, name, args, options) {
                 finish(() => resolve(result));
             else
                 finish(() => reject(new DaemonRequestError("invalid daemon response", requestWritten)));
+        }, (_raw, error) => {
+            const message = error instanceof Error ? error.message : "invalid daemon response";
+            finish(() => reject(new DaemonRequestError(message, requestWritten)));
         });
         socket.once("connect", () => {
             const payload = encodeJsonLine({

@@ -4,8 +4,8 @@
 import { argv, stderr } from "node:process";
 
 // src/proxy.ts
-import { existsSync as existsSync11, realpathSync as realpathSync4 } from "node:fs";
-import { basename as basename3, delimiter as delimiter4, dirname as dirname9, isAbsolute as isAbsolute4 } from "node:path";
+import { existsSync as existsSync11, realpathSync as realpathSync5 } from "node:fs";
+import { basename as basename4, delimiter as delimiter4, dirname as dirname10, isAbsolute as isAbsolute4 } from "node:path";
 
 // ../mcp-stdio-core/src/record.ts
 function isPlainRecord(value) {
@@ -28,12 +28,33 @@ function messageFromError(error) {
 var HEADER_SEPARATOR = Buffer.from(`\r
 \r
 `);
-async function* readStdioJsonRpcMessages(input) {
+var DEFAULT_MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
+var DEFAULT_MAX_HEADER_BYTES = 8 * 1024;
+
+class StdioJsonRpcMessageTooLargeError extends Error {
+  actualBytes;
+  maxBytes;
+  name = "StdioJsonRpcMessageTooLargeError";
+  constructor(actualBytes, maxBytes) {
+    super(`JSON-RPC message exceeds ${maxBytes} bytes (received or declared ${actualBytes} bytes)`);
+    this.actualBytes = actualBytes;
+    this.maxBytes = maxBytes;
+  }
+}
+async function* readStdioJsonRpcMessages(input, limits = {}) {
   let buffer = Buffer.alloc(0);
+  const maxMessageBytes = limits.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES;
+  const maxHeaderBytes = limits.maxHeaderBytes ?? DEFAULT_MAX_HEADER_BYTES;
+  const maxBufferedBytes = maxMessageBytes + maxHeaderBytes;
   for await (const chunk of input) {
-    buffer = Buffer.concat([buffer, bufferFromChunk(chunk)]);
+    const chunkBuffer = bufferFromChunk(chunk);
+    const nextLength = buffer.length + chunkBuffer.length;
+    if (nextLength > maxBufferedBytes) {
+      throw new StdioJsonRpcMessageTooLargeError(nextLength, maxMessageBytes);
+    }
+    buffer = buffer.length === 0 ? chunkBuffer : Buffer.concat([buffer, chunkBuffer], nextLength);
     while (true) {
-      const result = readNextMessage(buffer);
+      const result = readNextMessage(buffer, maxMessageBytes, maxHeaderBytes);
       if (result.kind === "incomplete")
         break;
       buffer = result.remaining;
@@ -86,15 +107,22 @@ function writeChunk(output, chunk) {
     }
   });
 }
-function readNextMessage(buffer) {
+function readNextMessage(buffer, maxMessageBytes, maxHeaderBytes) {
   if (buffer.length === 0)
     return { kind: "incomplete" };
-  return startsWithContentLength(buffer) ? readFramedMessage(buffer) : readLineMessage(buffer);
+  return startsWithContentLength(buffer) ? readFramedMessage(buffer, maxMessageBytes, maxHeaderBytes) : readLineMessage(buffer, maxMessageBytes);
 }
-function readLineMessage(buffer) {
+function readLineMessage(buffer, maxMessageBytes) {
   const newlineIndex = buffer.indexOf(10);
-  if (newlineIndex === -1)
+  if (newlineIndex === -1) {
+    if (buffer.length > maxMessageBytes) {
+      throw new StdioJsonRpcMessageTooLargeError(buffer.length, maxMessageBytes);
+    }
     return { kind: "incomplete" };
+  }
+  if (newlineIndex > maxMessageBytes) {
+    throw new StdioJsonRpcMessageTooLargeError(newlineIndex, maxMessageBytes);
+  }
   const line = buffer.subarray(0, newlineIndex).toString("utf8").replace(/\r$/, "");
   if (line.trim().length === 0) {
     return { kind: "complete", remaining: buffer.subarray(newlineIndex + 1) };
@@ -105,10 +133,17 @@ function readLineMessage(buffer) {
     remaining: buffer.subarray(newlineIndex + 1)
   };
 }
-function readFramedMessage(buffer) {
+function readFramedMessage(buffer, maxMessageBytes, maxHeaderBytes) {
   const separatorIndex = buffer.indexOf(HEADER_SEPARATOR);
-  if (separatorIndex === -1)
+  if (separatorIndex === -1) {
+    if (buffer.length > maxHeaderBytes) {
+      throw new StdioJsonRpcMessageTooLargeError(buffer.length, maxHeaderBytes);
+    }
     return { kind: "incomplete" };
+  }
+  if (separatorIndex > maxHeaderBytes) {
+    throw new StdioJsonRpcMessageTooLargeError(separatorIndex, maxHeaderBytes);
+  }
   const headers = buffer.subarray(0, separatorIndex).toString("ascii");
   const contentLength = parseContentLength(headers);
   const bodyStart = separatorIndex + HEADER_SEPARATOR.length;
@@ -122,6 +157,9 @@ function readFramedMessage(buffer) {
       },
       remaining: buffer.subarray(bodyStart)
     };
+  }
+  if (contentLength > maxMessageBytes) {
+    throw new StdioJsonRpcMessageTooLargeError(contentLength, maxMessageBytes);
   }
   const bodyEnd = bodyStart + contentLength;
   if (buffer.length < bodyEnd)
@@ -146,7 +184,8 @@ function parseContentLength(headers) {
     const value = match[1];
     if (value === undefined)
       return;
-    return Number(value);
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : undefined;
   }
   return;
 }
@@ -316,7 +355,7 @@ function createIdleTimer(idleTimeoutMs, log, onTimeout) {
 }
 // ../lsp-core/src/lsp/client-wrapper.ts
 import { existsSync as existsSync9, statSync as statSync3 } from "node:fs";
-import { dirname as dirname6, join as join4, resolve as resolve7 } from "node:path";
+import { dirname as dirname7, join as join5, resolve as resolve7 } from "node:path";
 
 // ../lsp-core/src/request-context.ts
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -580,7 +619,7 @@ function reportBestEffortCleanupError(operation, error, logger = writeCleanupErr
 
 // ../lsp-core/src/lsp/client.ts
 import { resolve as resolve6 } from "node:path";
-import { pathToFileURL as pathToFileURL3 } from "node:url";
+import { pathToFileURL as pathToFileURL4 } from "node:url";
 
 // ../lsp-core/src/lsp/connection.ts
 import { pathToFileURL } from "node:url";
@@ -1086,8 +1125,58 @@ function parseDiagnosticsParams(params) {
   const version = typeof params["version"] === "number" ? params["version"] : undefined;
   return { uri: params["uri"], diagnostics, ...version === undefined ? {} : { version } };
 }
-function createLspSpawnEnv(_root, input) {
-  return { ...input };
+function createLspSpawnEnv(_root, ambient, configured = {}) {
+  const safeAmbient = {};
+  for (const [key, value] of Object.entries(ambient)) {
+    if (value !== undefined && isAllowedAmbientEnv(key))
+      safeAmbient[key] = value;
+  }
+  return { ...safeAmbient, ...configured };
+}
+var SAFE_AMBIENT_ENV = new Set([
+  "PATH",
+  "PATHEXT",
+  "SYSTEMROOT",
+  "WINDIR",
+  "COMSPEC",
+  "HOME",
+  "USERPROFILE",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "LANG",
+  "SHELL",
+  "XDG_CACHE_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_STATE_HOME",
+  "CARGO_HOME",
+  "RUSTUP_HOME",
+  "GOPATH",
+  "GOROOT",
+  "GOMODCACHE",
+  "GOCACHE",
+  "GOTOOLCHAIN",
+  "GOENV",
+  "VIRTUAL_ENV",
+  "PYENV_ROOT",
+  "CONDA_PREFIX",
+  "NVM_BIN",
+  "VOLTA_HOME",
+  "BUN_INSTALL",
+  "DENO_INSTALL",
+  "JAVA_HOME",
+  "GRADLE_USER_HOME",
+  "MAVEN_HOME",
+  "DOTNET_ROOT",
+  "NUGET_PACKAGES",
+  "GEM_HOME",
+  "GEM_PATH",
+  "RBENV_ROOT"
+]);
+function isAllowedAmbientEnv(key) {
+  const normalized = key.toUpperCase();
+  return SAFE_AMBIENT_ENV.has(normalized) || normalized.startsWith("LC_");
 }
 function isDiagnostic(value) {
   return isRecord2(value) && isRange(value["range"]) && typeof value["message"] === "string";
@@ -1151,10 +1240,7 @@ class LspClientTransport {
     this.diagnosticsStore.set(params.uri, [...params.diagnostics]);
   }
   async start() {
-    const env = createLspSpawnEnv(this.root, {
-      ...process.env,
-      ...this.server.env
-    });
+    const env = createLspSpawnEnv(this.root, process.env, this.server.env);
     this.proc = spawnProcess(this.server.command, {
       cwd: this.root,
       env
@@ -1887,7 +1973,19 @@ function workspaceApplyEditConcurrentFailureReason(phase) {
 }
 
 // ../lsp-core/src/lsp/workspace-edit-commit.ts
-import { existsSync as existsSync4, lstatSync as lstatSync2, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  existsSync as existsSync4,
+  lstatSync as lstatSync2,
+  openSync,
+  realpathSync as realpathSync4,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
+import { basename as basename3, dirname as dirname3, join as join3 } from "node:path";
+import { pathToFileURL as pathToFileURL3 } from "node:url";
 
 // ../lsp-core/src/lsp/workspace-edit-path.ts
 import { existsSync as existsSync3, lstatSync, readFileSync as readFileSync2, readdirSync, realpathSync as realpathSync3 } from "node:fs";
@@ -1978,7 +2076,14 @@ function snapshotPath(path, includeChildren) {
 // ../lsp-core/src/lsp/workspace-edit-commit.ts
 var DEFAULT_IO = {
   writeFile(path, content) {
-    writeFileSync(path, content, "utf-8");
+    const noFollow = constants.O_NOFOLLOW ?? 0;
+    const flags = existsSync4(path) ? constants.O_WRONLY | constants.O_TRUNC | noFollow : constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | noFollow;
+    const descriptor = openSync(path, flags, 438);
+    try {
+      writeFileSync(descriptor, content, "utf-8");
+    } finally {
+      closeSync(descriptor);
+    }
   },
   rename(oldPath, newPath) {
     renameSync(oldPath, newPath);
@@ -2004,7 +2109,14 @@ function firstOperationIndex(plan) {
   return plan.operations[0]?.changeIndex ?? 0;
 }
 function failedCommit(plan, failure) {
-  const { message, changeIndex, mutations = [], filesModified = [], totalEdits = 0, lateAbort = false } = failure;
+  const {
+    message,
+    changeIndex,
+    mutations = [],
+    filesModified = [],
+    totalEdits = 0,
+    lateAbort = false
+  } = failure;
   return {
     result: {
       success: false,
@@ -2026,11 +2138,17 @@ function verifySnapshots(plan) {
     } catch (error) {
       const changeIndex = plan.firstChangeByPath.get(path) ?? firstOperationIndex(plan);
       const detail = error instanceof Error ? error.message : String(error);
-      return failedCommit(plan, { message: `cannot verify snapshot for ${path}: ${detail}`, changeIndex });
+      return failedCommit(plan, {
+        message: `cannot verify snapshot for ${path}: ${detail}`,
+        changeIndex
+      });
     }
     if (!snapshotsEqual(expected, actual)) {
       const changeIndex = plan.firstChangeByPath.get(path) ?? firstOperationIndex(plan);
-      return failedCommit(plan, { message: `workspace state changed before commit: ${path}`, changeIndex });
+      return failedCommit(plan, {
+        message: `workspace state changed before commit: ${path}`,
+        changeIndex
+      });
     }
   }
   return null;
@@ -2065,7 +2183,7 @@ function commitOperation(context, operation) {
   if (operation.kind === "noop")
     return;
   if (operation.kind === "text") {
-    io.writeFile(operation.path, operation.afterText);
+    withBoundCommitPath(plan, operation.path, (path) => io.writeFile(path, operation.afterText));
     accumulator.mutations.push({
       kind: "text",
       path: operation.path,
@@ -2077,19 +2195,29 @@ function commitOperation(context, operation) {
     return;
   }
   if (operation.kind === "create") {
-    io.writeFile(operation.path, "");
-    accumulator.mutations.push({ kind: "create", path: operation.path, replaced: operation.replaced });
+    withBoundCommitPath(plan, operation.path, (path) => io.writeFile(path, ""));
+    accumulator.mutations.push({
+      kind: "create",
+      path: operation.path,
+      replaced: operation.replaced
+    });
     addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.path));
     return;
   }
   if (operation.kind === "rename") {
-    if (operation.replaceDestination) {
-      const targetKind = existsSync4(operation.newPath) && lstatSync2(operation.newPath).isDirectory() ? "directory" : "file";
-      io.remove(operation.newPath, targetKind === "directory");
-      accumulator.mutations.push({ kind: "delete", path: operation.newPath, targetKind });
-      addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.newPath));
-    }
-    io.rename(operation.oldPath, operation.newPath);
+    withBoundCommitPath(plan, operation.oldPath, (oldPath) => withBoundCommitPath(plan, operation.newPath, (newPath) => {
+      if (operation.replaceDestination) {
+        const targetKind = existsSync4(newPath) && lstatSync2(newPath).isDirectory() ? "directory" : "file";
+        io.remove(newPath, targetKind === "directory");
+        accumulator.mutations.push({
+          kind: "delete",
+          path: operation.newPath,
+          targetKind
+        });
+        addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.newPath));
+      }
+      io.rename(oldPath, newPath);
+    }));
     accumulator.mutations.push({
       kind: "rename",
       oldPath: operation.oldPath,
@@ -2099,7 +2227,7 @@ function commitOperation(context, operation) {
     addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.newPath));
     return;
   }
-  io.remove(operation.path, operation.recursive);
+  withBoundCommitPath(plan, operation.path, (path) => io.remove(path, operation.recursive));
   accumulator.mutations.push({
     kind: "delete",
     path: operation.path,
@@ -2107,18 +2235,49 @@ function commitOperation(context, operation) {
   });
   addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.path));
 }
+function withBoundCommitPath(plan, path, mutate) {
+  const resolved = uriToCanonicalWorkspacePath(pathToFileURL3(path).href, plan.workspaceRoot);
+  if (!resolved.success || resolved.followedSymbolicLink || resolved.path !== path) {
+    const detail = resolved.success ? `path identity changed before commit: ${path}` : resolved.error;
+    throw new Error(detail);
+  }
+  if (process.platform !== "linux") {
+    throw new Error("workspace mutation requires Linux descriptor anchoring");
+  }
+  const parent = dirname3(path);
+  const descriptor = openSync(parent, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | (constants.O_NOFOLLOW ?? 0));
+  try {
+    const descriptorParent = `/proc/self/fd/${descriptor}`;
+    if (realpathSync4(descriptorParent) !== parent) {
+      throw new Error(`parent identity changed before commit: ${parent}`);
+    }
+    return mutate(join3(descriptorParent, basename3(path)));
+  } finally {
+    closeSync(descriptor);
+  }
+}
 function commitWorkspaceEditPlan(plan, options = {}) {
   if (options.signal?.aborted) {
-    return failedCommit(plan, { message: "cancelled before commit", changeIndex: firstOperationIndex(plan) });
+    return failedCommit(plan, {
+      message: "cancelled before commit",
+      changeIndex: firstOperationIndex(plan)
+    });
   }
   const stale = verifySnapshots(plan);
   if (stale)
     return stale;
   if (options.signal?.aborted) {
-    return failedCommit(plan, { message: "cancelled before commit", changeIndex: firstOperationIndex(plan) });
+    return failedCommit(plan, {
+      message: "cancelled before commit",
+      changeIndex: firstOperationIndex(plan)
+    });
   }
   const io = resolveIo(options.io);
-  const accumulator = { mutations: [], filesModified: [], totalEdits: 0 };
+  const accumulator = {
+    mutations: [],
+    filesModified: [],
+    totalEdits: 0
+  };
   const context = { plan, io, accumulator };
   let lateAbort = false;
   for (const operation of plan.operations) {
@@ -2145,7 +2304,11 @@ function commitWorkspaceEditPlan(plan, options = {}) {
     errors: [],
     ...lateAbort ? { lateAbort: true } : {}
   };
-  return { result, delta: mutationDelta(accumulator.mutations), fingerprint: plan.fingerprint };
+  return {
+    result,
+    delta: mutationDelta(accumulator.mutations),
+    fingerprint: plan.fingerprint
+  };
 }
 
 // ../lsp-core/src/lsp/workspace-edit-fingerprint.ts
@@ -2450,7 +2613,7 @@ function parseDocumentChange(input) {
 }
 
 // ../lsp-core/src/lsp/workspace-edit-simulation.ts
-import { dirname as dirname3, relative as relative4, resolve as resolve4 } from "node:path";
+import { dirname as dirname4, relative as relative4, resolve as resolve4 } from "node:path";
 
 // ../lsp-core/src/lsp/workspace-edit-text.ts
 function comparePosition(left, right) {
@@ -2574,7 +2737,7 @@ function virtualDirectoryHasChildren(virtual, path) {
   return false;
 }
 function requireVirtualParent(virtual, path, changeIndex) {
-  if (virtual.get(dirname3(path))?.kind !== "directory") {
+  if (virtual.get(dirname4(path))?.kind !== "directory") {
     throw new WorkspaceEditValidationError(changeIndex, `parent directory does not exist for ${path}`);
   }
 }
@@ -2695,7 +2858,7 @@ function simulateDelete(operation, virtual) {
 
 // ../lsp-core/src/lsp/workspace-edit-snapshot.ts
 import { existsSync as existsSync5, lstatSync as lstatSync3, readdirSync as readdirSync2 } from "node:fs";
-import { dirname as dirname4, resolve as resolve5 } from "node:path";
+import { dirname as dirname5, resolve as resolve5 } from "node:path";
 class WorkspaceSnapshotBuilder {
   workspaceRoot;
   snapshots = new Map;
@@ -2730,7 +2893,7 @@ class WorkspaceSnapshotBuilder {
       }
       if (candidate === this.workspaceRoot)
         break;
-      candidate = dirname4(candidate);
+      candidate = dirname5(candidate);
     }
     if (!includeChildren || !existsSync5(path) || !lstatSync3(path).isDirectory())
       return;
@@ -2992,7 +3155,7 @@ class LspClient extends LspClientConnection {
     await this.openFile(absPath);
     const options = signal === undefined ? {} : { signal };
     return this.sendRequest("textDocument/definition", {
-      textDocument: { uri: pathToFileURL3(absPath).href },
+      textDocument: { uri: pathToFileURL4(absPath).href },
       position: { line: line - 1, character }
     }, options);
   }
@@ -3001,7 +3164,7 @@ class LspClient extends LspClientConnection {
     await this.openFile(absPath);
     const options = signal === undefined ? {} : { signal };
     return this.sendRequest("textDocument/references", {
-      textDocument: { uri: pathToFileURL3(absPath).href },
+      textDocument: { uri: pathToFileURL4(absPath).href },
       position: { line: line - 1, character },
       context: { includeDeclaration }
     }, options);
@@ -3011,7 +3174,7 @@ class LspClient extends LspClientConnection {
     await this.openFile(absPath);
     const options = signal === undefined ? {} : { signal };
     return this.sendRequest("textDocument/documentSymbol", {
-      textDocument: { uri: pathToFileURL3(absPath).href }
+      textDocument: { uri: pathToFileURL4(absPath).href }
     }, options);
   }
   async workspaceSymbols(query, signal) {
@@ -3051,7 +3214,7 @@ class LspClient extends LspClientConnection {
   async diagnostics(filePath, signal) {
     signal?.throwIfAborted();
     const absPath = this.resolveWorkspacePath(filePath);
-    const uri = pathToFileURL3(absPath).href;
+    const uri = pathToFileURL4(absPath).href;
     await this.openFile(absPath);
     const deadlineAt = Date.now() + this.diagnosticsFreshnessTimeoutMs;
     for (;; ) {
@@ -3118,7 +3281,7 @@ class LspClient extends LspClientConnection {
     await this.openFile(absPath);
     const options = signal === undefined ? {} : { signal };
     return this.sendRequest("textDocument/prepareRename", {
-      textDocument: { uri: pathToFileURL3(absPath).href },
+      textDocument: { uri: pathToFileURL4(absPath).href },
       position: { line: line - 1, character }
     }, options);
   }
@@ -3131,7 +3294,7 @@ class LspClient extends LspClientConnection {
     const preCommitSignal = createPreCommitAbortSignal(signal, () => this.workspaceMutations.isBeforeCommit(acquired.lease));
     try {
       const renameParams = {
-        textDocument: { uri: pathToFileURL3(absPath).href },
+        textDocument: { uri: pathToFileURL4(absPath).href },
         position: { line: line - 1, character },
         newName
       };
@@ -3145,7 +3308,11 @@ class LspClient extends LspClientConnection {
     }
   }
   resolveWorkspacePath(filePath) {
-    return resolve6(this.root, filePath);
+    const canonical = canonicalizeExistingOrNearestAncestor(resolve6(this.root, filePath));
+    if (!isPathInside(this.root, canonical)) {
+      throw new LspInvalidPathError(`LSP file path must be inside workspace root: ${filePath}`);
+    }
+    return canonical;
   }
 }
 function waitForDiagnosticsActivity(wait, signal) {
@@ -3287,8 +3454,8 @@ class LspManager {
       this.reaperHandle.unref();
     }
   }
-  getKey(root, serverId) {
-    return `${root}::${serverId}`;
+  getKey(root, server2) {
+    return JSON.stringify([root, requestContextIdentity(), serverIdentity(server2)]);
   }
   reapStale() {
     const t = this.now();
@@ -3315,7 +3482,7 @@ class LspManager {
       throw new Error("LspManager has been disposed");
     }
     signal?.throwIfAborted();
-    const key = this.getKey(root, server2.id);
+    const key = this.getKey(root, server2);
     let managed = this.clients.get(key);
     if (managed) {
       const t = this.now();
@@ -3358,6 +3525,8 @@ class LspManager {
     })();
     const newManaged = {
       client,
+      root,
+      serverId: server2.id,
       refCount: 0,
       pendingWaiters: 1,
       lastUsedAt: initStartedAt,
@@ -3388,16 +3557,16 @@ class LspManager {
     newManaged.lastUsedAt = this.now();
     return client;
   }
-  releaseClient(root, serverId) {
-    const key = this.getKey(root, serverId);
+  releaseClient(root, server2) {
+    const key = this.getKey(root, server2);
     const managed = this.clients.get(key);
     if (managed && managed.refCount > 0) {
       managed.refCount--;
       managed.lastUsedAt = this.now();
     }
   }
-  invalidateClient(root, serverId, client) {
-    const key = this.getKey(root, serverId);
+  invalidateClient(root, server2, client) {
+    const key = this.getKey(root, server2);
     const managed = this.clients.get(key);
     if (!managed)
       return;
@@ -3409,7 +3578,7 @@ class LspManager {
   warmupClient(root, server2) {
     if (this.disposed)
       return;
-    const key = this.getKey(root, server2.id);
+    const key = this.getKey(root, server2);
     if (this.clients.has(key))
       return;
     const client = this.clientFactory(root, server2);
@@ -3420,6 +3589,8 @@ class LspManager {
     })();
     const managed = {
       client,
+      root,
+      serverId: server2.id,
       refCount: 0,
       pendingWaiters: 0,
       lastUsedAt: initStartedAt,
@@ -3440,17 +3611,16 @@ class LspManager {
       stopClientBestEffort(client);
     });
   }
-  isServerInitializing(root, serverId) {
-    const managed = this.clients.get(this.getKey(root, serverId));
+  isServerInitializing(root, server2) {
+    const managed = this.clients.get(this.getKey(root, server2));
     return managed?.isInitializing ?? false;
   }
   getSnapshot() {
     const snapshots = [];
-    for (const [key, managed] of this.clients) {
-      const [root, serverId] = key.split("::");
+    for (const managed of this.clients.values()) {
       snapshots.push({
-        root,
-        serverId,
+        root: managed.root,
+        serverId: managed.serverId,
         refCount: managed.refCount,
         pendingWaiters: managed.pendingWaiters,
         lastUsedAt: managed.lastUsedAt,
@@ -3461,8 +3631,8 @@ class LspManager {
     }
     return snapshots;
   }
-  hasClient(root, serverId) {
-    return this.clients.has(this.getKey(root, serverId));
+  hasClient(root, server2) {
+    return this.clients.has(this.getKey(root, server2));
   }
   clientCount() {
     return this.clients.size;
@@ -3485,6 +3655,39 @@ class LspManager {
     await Promise.allSettled(stopPromises);
   }
 }
+function requestContextIdentity() {
+  try {
+    const context = lspRequestContext();
+    return [
+      context.cwd,
+      context.projectConfigPaths,
+      context.userConfigPath,
+      context.installDecisionsPath,
+      context.capabilities.installDecisionTool
+    ];
+  } catch (error) {
+    if (error instanceof LspRequestContextUnavailableError)
+      return null;
+    throw error;
+  }
+}
+function serverIdentity(server2) {
+  return [
+    server2.id,
+    server2.command,
+    server2.extensions,
+    server2.priority,
+    Object.entries(server2.env ?? {}).sort(([left], [right]) => left.localeCompare(right)),
+    canonicalJson(server2.initialization ?? null)
+  ];
+}
+function canonicalJson(value) {
+  if (Array.isArray(value))
+    return value.map(canonicalJson);
+  if (typeof value !== "object" || value === null)
+    return value;
+  return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, entry]) => [key, canonicalJson(entry)]));
+}
 var _defaultInstance = null;
 function getLspManager() {
   if (!_defaultInstance) {
@@ -3502,7 +3705,7 @@ async function disposeDefaultLspManager() {
 
 // ../lsp-core/src/lsp/server-install-state.ts
 import { existsSync as existsSync6, mkdirSync, readFileSync as readFileSync3, renameSync as renameSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { dirname as dirname5 } from "node:path";
+import { dirname as dirname6 } from "node:path";
 function getInstallDecisionsPath() {
   return lspRequestContext().installDecisionsPath;
 }
@@ -3530,7 +3733,7 @@ function isInstallDecision(value) {
 }
 function writeInstallDecisions(decisions) {
   const path = getInstallDecisionsPath();
-  mkdirSync(dirname5(path), { recursive: true });
+  mkdirSync(dirname6(path), { recursive: true });
   const tmpPath = `${path}.tmp`;
   writeFileSync2(tmpPath, `${JSON.stringify(decisions, null, 2)}
 `, "utf8");
@@ -3895,7 +4098,7 @@ function getDisabledServerIds() {
 
 // ../lsp-core/src/lsp/server-installation.ts
 import { existsSync as existsSync8 } from "node:fs";
-import { delimiter as delimiter3, join as join3 } from "node:path";
+import { delimiter as delimiter3, join as join4 } from "node:path";
 function isServerInstalled(command, _workingDirectory) {
   if (command.length === 0)
     return false;
@@ -3924,7 +4127,7 @@ function isServerInstalled(command, _workingDirectory) {
   const paths = pathEnv.split(delimiter3);
   for (const p of paths) {
     for (const suffix of exts) {
-      if (existsSync8(join3(p, cmd + suffix))) {
+      if (existsSync8(join4(p, cmd + suffix))) {
         return true;
       }
     }
@@ -4030,21 +4233,22 @@ function isDirectoryPath(filePath) {
 }
 function findWorkspaceRoot(filePath) {
   const abs = resolvePathInsideContext(filePath);
+  const cwd = contextCwd();
   let dir = abs;
   if (!isDirectoryPath(dir)) {
-    dir = dirname6(dir);
+    dir = dirname7(dir);
   }
-  let prevDir = "";
-  while (dir !== prevDir) {
+  while (isPathInside(cwd, dir)) {
     for (const marker of WORKSPACE_MARKERS) {
-      if (existsSync9(join4(dir, marker))) {
+      if (existsSync9(join5(dir, marker))) {
         return dir;
       }
     }
-    prevDir = dir;
-    dir = dirname6(dir);
+    if (dir === cwd)
+      break;
+    dir = dirname7(dir);
   }
-  return dirname6(abs);
+  return cwd;
 }
 function resolvePathInsideContext(filePath) {
   const cwd = contextCwd();
@@ -4152,17 +4356,17 @@ async function withLspClient(filePath, fn, toolName, options = {}) {
       return await fn(client, root);
     } catch (err) {
       if (allowRetry && READ_ONLY_RETRY_TOOLS.has(toolName) && isLspDeadConnectionError(err)) {
-        manager.invalidateClient(root, server2.id, client);
+        manager.invalidateClient(root, server2, client);
         return acquireAndCall(false);
       }
       if (err instanceof LspRequestTimeoutError) {
-        if (manager.isServerInitializing(root, server2.id)) {
+        if (manager.isServerInitializing(root, server2)) {
           throw new LspServerInitializingError(err);
         }
       }
       throw err;
     } finally {
-      manager.releaseClient(root, server2.id);
+      manager.releaseClient(root, server2);
     }
   };
   return acquireAndCall(true);
@@ -4170,7 +4374,7 @@ async function withLspClient(filePath, fn, toolName, options = {}) {
 
 // ../lsp-core/src/lsp/directory-diagnostics.ts
 import { existsSync as existsSync10, lstatSync as lstatSync4, readdirSync as readdirSync3 } from "node:fs";
-import { join as join5, resolve as resolve8 } from "node:path";
+import { join as join6, resolve as resolve8 } from "node:path";
 
 // ../lsp-core/src/lsp/formatters.ts
 import { fileURLToPath as fileURLToPath2 } from "node:url";
@@ -4300,7 +4504,7 @@ function collectFilesWithExtension(dir, extension, maxFiles) {
     for (const entry of entries) {
       if (files.length >= maxFiles)
         return;
-      const fullPath = join5(currentDir, entry);
+      const fullPath = join6(currentDir, entry);
       let stat;
       try {
         stat = lstatSync4(fullPath);
@@ -4381,7 +4585,7 @@ async function aggregateDiagnosticsForDirectory(directory, extension, severity, 
     });
     await Promise.all(workers);
   } finally {
-    manager.releaseClient(root, server2.id);
+    manager.releaseClient(root, server2);
   }
   const displayDiagnostics = allDiagnostics.slice(0, DEFAULT_MAX_DIAGNOSTICS);
   const wasDiagCapped = allDiagnostics.length > DEFAULT_MAX_DIAGNOSTICS;
@@ -4413,7 +4617,7 @@ async function aggregateDiagnosticsForDirectory(directory, extension, severity, 
 
 // ../lsp-core/src/lsp/infer-extension.ts
 import { lstatSync as lstatSync5, readdirSync as readdirSync4 } from "node:fs";
-import { join as join6 } from "node:path";
+import { join as join7 } from "node:path";
 var SKIP_DIRECTORIES2 = new Set(["node_modules", ".git", "dist", "build", ".next", "out"]);
 var MAX_SCAN_ENTRIES = 500;
 function inferExtensionFromDirectory(directory) {
@@ -4431,7 +4635,7 @@ function inferExtensionFromDirectory(directory) {
     for (const entry of entries) {
       if (scanned >= MAX_SCAN_ENTRIES)
         return;
-      const fullPath = join6(dir, entry);
+      const fullPath = join7(dir, entry);
       let stat;
       try {
         stat = lstatSync5(fullPath);
@@ -5113,7 +5317,7 @@ function requestedProtocolVersion(params) {
 // src/daemon-client.ts
 import { connect } from "node:net";
 import { homedir as homedir3 } from "node:os";
-import { join as join7 } from "node:path";
+import { join as join8 } from "node:path";
 
 // src/daemon-request-error.ts
 class DaemonRequestError extends Error {
@@ -5192,27 +5396,27 @@ function errorText(error) {
 
 // src/ensure-daemon.ts
 import { spawn as spawn2 } from "node:child_process";
-import { closeSync as closeSync2, mkdirSync as mkdirSync3, openSync as openSync2 } from "node:fs";
+import { closeSync as closeSync3, mkdirSync as mkdirSync3, openSync as openSync3 } from "node:fs";
 import { Socket } from "node:net";
-import { dirname as dirname8 } from "node:path";
+import { dirname as dirname9 } from "node:path";
 import { execPath } from "node:process";
 
 // src/ipc-protocol.ts
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
   chmodSync,
-  closeSync,
-  constants,
+  closeSync as closeSync2,
+  constants as constants2,
   fchmodSync,
   fstatSync,
   lstatSync as lstatSync6,
   mkdirSync as mkdirSync2,
-  openSync,
+  openSync as openSync2,
   readFileSync as readFileSync5,
   unlinkSync,
   writeSync
 } from "node:fs";
-import { dirname as dirname7 } from "node:path";
+import { dirname as dirname8 } from "node:path";
 var OMO_DAEMON_PROTOCOL_VERSION = 1;
 var AUTH_ERROR_CODE = -32001;
 var PROTOCOL_ERROR_CODE = -32002;
@@ -5275,7 +5479,11 @@ function authenticateMessage(raw, expectedToken) {
     return authError(id);
   const cleanParams = { ...params };
   delete cleanParams["_omo"];
-  return { input: { ...raw, params: cleanParams }, id, method: typeof raw["method"] === "string" ? raw["method"] : undefined };
+  return {
+    input: { ...raw, params: cleanParams },
+    id,
+    method: typeof raw["method"] === "string" ? raw["method"] : undefined
+  };
 }
 function isAuthErrorResponse(message) {
   if (!isPlainRecord(message))
@@ -5287,11 +5495,11 @@ function isAuthErrorResponse(message) {
   return error["code"] === AUTH_ERROR_CODE && isPlainRecord(data) && data["code"] === "daemon_authentication_failed";
 }
 function writePrivateFile(path, data) {
-  const fd = openSync(path, "w", 384);
+  const fd = openSync2(path, "w", 384);
   try {
     writeSync(fd, data);
   } finally {
-    closeSync(fd);
+    closeSync2(fd);
   }
   setPrivateFileMode(path);
 }
@@ -5305,7 +5513,7 @@ function ensurePrivateDirectory(path, options = {}) {
   if (process.platform === "win32")
     return;
   const before = validatePrivateDirectory(path, options);
-  const fd = openSync(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  const fd = openSync2(path, constants2.O_RDONLY | constants2.O_DIRECTORY | constants2.O_NOFOLLOW);
   try {
     fchmodSync(fd, 448);
     const after = validatePrivateDirectory(path, options);
@@ -5314,7 +5522,7 @@ function ensurePrivateDirectory(path, options = {}) {
       throw new UnsafePrivateDirectoryError(path, "changed_during_chmod");
     }
   } finally {
-    closeSync(fd);
+    closeSync2(fd);
   }
 }
 function setPrivateFileMode(path) {
@@ -5322,11 +5530,11 @@ function setPrivateFileMode(path) {
     chmodSync(path, 384);
 }
 function createAuthToken(paths) {
-  ensurePrivateDirectory(dirname7(paths.auth));
+  ensurePrivateDirectory(dirname8(paths.auth));
   const token = randomBytes(AUTH_TOKEN_BYTES).toString("base64url");
   let fd;
   try {
-    fd = openSync(paths.auth, "wx", 384);
+    fd = openSync2(paths.auth, "wx", 384);
   } catch (error) {
     if (errorCode2(error) === "EEXIST") {
       const existing = readAuthToken(paths);
@@ -5339,7 +5547,7 @@ function createAuthToken(paths) {
     writeSync(fd, `${token}
 `);
   } finally {
-    closeSync(fd);
+    closeSync2(fd);
   }
   setPrivateFileMode(paths.auth);
   return token;
@@ -5383,14 +5591,22 @@ function authError(id) {
   return {
     jsonrpc: "2.0",
     id,
-    error: { code: AUTH_ERROR_CODE, message: "daemon authentication failed", data: { code: "daemon_authentication_failed" } }
+    error: {
+      code: AUTH_ERROR_CODE,
+      message: "daemon authentication failed",
+      data: { code: "daemon_authentication_failed" }
+    }
   };
 }
 function protocolError(id) {
   return {
     jsonrpc: "2.0",
     id,
-    error: { code: PROTOCOL_ERROR_CODE, message: "daemon protocol mismatch", data: { code: "daemon_protocol_mismatch" } }
+    error: {
+      code: PROTOCOL_ERROR_CODE,
+      message: "daemon protocol mismatch",
+      data: { code: "daemon_protocol_mismatch" }
+    }
   };
 }
 
@@ -5558,16 +5774,48 @@ function encodeJsonLine(message) {
   return `${JSON.stringify(message)}
 `;
 }
-function createLineDecoder(onMessage, onParseError) {
-  let buffer = "";
+
+class JsonRpcLineTooLargeError extends Error {
+  actualBytes;
+  maxBytes;
+  name = "JsonRpcLineTooLargeError";
+  constructor(actualBytes, maxBytes) {
+    super(`JSON-RPC line exceeds ${maxBytes} bytes (received ${actualBytes} bytes)`);
+    this.actualBytes = actualBytes;
+    this.maxBytes = maxBytes;
+  }
+}
+var DEFAULT_MAX_MESSAGE_BYTES2 = 8 * 1024 * 1024;
+function createLineDecoder(onMessage, onParseError, options = {}) {
+  let buffer = Buffer.alloc(0);
+  let rejected = false;
+  const maxMessageBytes = options.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES2;
+  const rejectOversized = (actualBytes) => {
+    buffer = Buffer.alloc(0);
+    rejected = true;
+    const error = new JsonRpcLineTooLargeError(actualBytes, maxMessageBytes);
+    if (onParseError) {
+      onParseError("", error);
+      return;
+    }
+    throw error;
+  };
   return {
     push(chunk) {
-      buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
-      let index = buffer.indexOf(`
-`);
+      if (rejected)
+        return;
+      const input = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+      let offset = 0;
+      let index = input.indexOf(10, offset);
       while (index !== -1) {
-        const raw = buffer.slice(0, index).trim();
-        buffer = buffer.slice(index + 1);
+        const segment = input.subarray(offset, index);
+        const lineBytes = buffer.length + segment.length;
+        if (lineBytes > maxMessageBytes) {
+          rejectOversized(lineBytes);
+          return;
+        }
+        const raw = (buffer.length === 0 ? segment.toString("utf8") : Buffer.concat([buffer, segment], lineBytes).toString("utf8")).replace(/\r$/, "").trim();
+        buffer = Buffer.alloc(0);
         if (raw.length > 0) {
           try {
             onMessage(JSON.parse(raw));
@@ -5579,8 +5827,17 @@ function createLineDecoder(onMessage, onParseError) {
             }
           }
         }
-        index = buffer.indexOf(`
-`);
+        offset = index + 1;
+        index = input.indexOf(10, offset);
+      }
+      const trailing = input.subarray(offset);
+      const pendingBytes = buffer.length + trailing.length;
+      if (pendingBytes > maxMessageBytes) {
+        rejectOversized(pendingBytes);
+        return;
+      }
+      if (trailing.length > 0) {
+        buffer = buffer.length === 0 ? Buffer.from(trailing) : Buffer.concat([buffer, trailing], pendingBytes);
       }
     }
   };
@@ -5643,7 +5900,7 @@ function pingDaemon(paths, token, timeoutMs = PROBE_TIMEOUT_MS, signal) {
     const onAbort = () => finish(null);
     const decoder = createLineDecoder((message) => {
       finish(parsePingResponse(message));
-    });
+    }, () => finish(null));
     socket.once("connect", () => {
       socket.write(encodeJsonLine({ jsonrpc: "2.0", id: 1, method: "omo/ping", params: { _omo: authEnvelope(token) } }));
     });
@@ -5662,8 +5919,8 @@ function pingDaemon(paths, token, timeoutMs = PROBE_TIMEOUT_MS, signal) {
   });
 }
 function spawnDaemonProcess(paths) {
-  mkdirSync3(dirname8(paths.log), { recursive: true });
-  const logFd = openSync2(paths.log, "a");
+  mkdirSync3(dirname9(paths.log), { recursive: true });
+  const logFd = openSync3(paths.log, "a");
   try {
     const child = spawn2(execPath, [paths.cliPath, "daemon"], {
       detached: true,
@@ -5671,7 +5928,7 @@ function spawnDaemonProcess(paths) {
     });
     child.unref();
   } finally {
-    closeSync2(logFd);
+    closeSync3(logFd);
   }
 }
 function defaultEnsureDaemonDeps() {
@@ -5887,9 +6144,9 @@ function currentRequestContext(env = process.env) {
   const home = env["HOME"] ?? homedir3();
   return parseLspRequestContext({
     cwd,
-    projectConfigPaths: [join7(cwd, ".codex", "lsp-client.json")],
-    userConfigPath: join7(home, ".codex", "lsp-client.json"),
-    installDecisionsPath: join7(home, ".codex", "lsp-install-decisions.json"),
+    projectConfigPaths: [join8(cwd, ".codex", "lsp-client.json")],
+    userConfigPath: join8(home, ".codex", "lsp-client.json"),
+    installDecisionsPath: join8(home, ".codex", "lsp-install-decisions.json"),
     capabilities: { installDecisionTool: true }
   });
 }
@@ -5979,6 +6236,9 @@ function sendToolCall(paths, token, name, args, options) {
         finish(() => resolve9(result));
       else
         finish(() => reject(new DaemonRequestError("invalid daemon response", requestWritten)));
+    }, (_raw, error) => {
+      const message = error instanceof Error ? error.message : "invalid daemon response";
+      finish(() => reject(new DaemonRequestError(message, requestWritten)));
     });
     socket.once("connect", () => {
       const payload = encodeJsonLine({
@@ -6146,16 +6406,16 @@ function canonicalizePathList(value) {
 function canonicalizePath(value) {
   if (value === undefined || !isAbsolute4(value) || !existsSync11(value))
     return value;
-  return realpathSync4(value);
+  return realpathSync5(value);
 }
 function projectRootFromOpenCodeConfigPath(path2) {
-  if (basename3(path2) !== "lsp.json" && basename3(path2) !== "lsp-client.json")
+  if (basename4(path2) !== "lsp.json" && basename4(path2) !== "lsp-client.json")
     return;
-  const configDir = dirname9(path2);
-  const configDirName = basename3(configDir);
+  const configDir = dirname10(path2);
+  const configDirName = basename4(configDir);
   if (configDirName !== ".opencode" && configDirName !== ".omo")
     return;
-  return dirname9(configDir);
+  return dirname10(configDir);
 }
 
 // src/daemon-server.ts
@@ -6165,11 +6425,11 @@ import { createServer as createServer2 } from "node:net";
 // src/ownership.ts
 import { randomUUID } from "node:crypto";
 import { existsSync as existsSync12, lstatSync as lstatSync7, readFileSync as readFileSync7, statSync as statSync5, unlinkSync as unlinkSync3 } from "node:fs";
-import { dirname as dirname11 } from "node:path";
+import { dirname as dirname12 } from "node:path";
 
 // src/lock.ts
-import { closeSync as closeSync3, mkdirSync as mkdirSync4, openSync as openSync3, readFileSync as readFileSync6, unlinkSync as unlinkSync2, writeSync as writeSync2 } from "node:fs";
-import { dirname as dirname10 } from "node:path";
+import { closeSync as closeSync4, mkdirSync as mkdirSync4, openSync as openSync4, readFileSync as readFileSync6, unlinkSync as unlinkSync2, writeSync as writeSync2 } from "node:fs";
+import { dirname as dirname11 } from "node:path";
 function isProcessAlive2(pid) {
   if (!Number.isInteger(pid) || pid <= 0)
     return false;
@@ -6191,7 +6451,7 @@ function readLockPid(lockPath) {
   }
 }
 function tryAcquireLock(lockPath, ownerPid = process.pid) {
-  mkdirSync4(dirname10(lockPath), { recursive: true });
+  mkdirSync4(dirname11(lockPath), { recursive: true });
   for (let attempt = 0;attempt < 2; attempt += 1) {
     const handle = writeLockFile(lockPath, ownerPid);
     if (handle)
@@ -6203,10 +6463,10 @@ function tryAcquireLock(lockPath, ownerPid = process.pid) {
 }
 function writeLockFile(lockPath, ownerPid) {
   try {
-    const fd = openSync3(lockPath, "wx", 384);
+    const fd = openSync4(lockPath, "wx", 384);
     writeSync2(fd, `${ownerPid}
 `);
-    closeSync3(fd);
+    closeSync4(fd);
     return { release: () => unlinkQuietly(lockPath) };
   } catch (error) {
     if (errorCode3(error) === "EEXIST")
@@ -6272,7 +6532,7 @@ async function acquireStartupLease(paths, pingOwner) {
 function ensureDaemonDirectories(paths) {
   ensurePrivateDirectory(paths.dir);
   if (process.platform !== "win32")
-    ensurePrivateDirectory(dirname11(paths.socket));
+    ensurePrivateDirectory(dirname12(paths.socket));
 }
 function readDaemonOwner(paths) {
   try {
@@ -6403,7 +6663,7 @@ function parseEndpoint(value) {
 // src/version-reap.ts
 import { execFile } from "node:child_process";
 import { readdir, readFile, rm } from "node:fs/promises";
-import { basename as basename4, dirname as dirname12, join as join8 } from "node:path";
+import { basename as basename5, dirname as dirname13, join as join9 } from "node:path";
 var TERM_GRACE_MS = 5000;
 var KILL_GRACE_MS = 1000;
 var VERSION_ENTRY_PATTERN = /^v([A-Za-z0-9][A-Za-z0-9._+-]{0,127})$/;
@@ -6424,7 +6684,7 @@ async function attestDaemonCliProcess(pid, platform, deps = {}) {
   return isNodeCliDaemonCommand(command.trim());
 }
 async function reapStaleDaemonVersions(ownPaths, deps = {}) {
-  const baseDir = dirname12(ownPaths.dir);
+  const baseDir = dirname13(ownPaths.dir);
   const platform = deps.platform ?? process.platform;
   const isAlive = deps.isAlive ?? isProcessAlive2;
   const attest = deps.attest ?? ((pid) => attestDaemonCliProcess(pid, platform));
@@ -6443,7 +6703,7 @@ async function reapStaleDaemonVersions(ownPaths, deps = {}) {
     const version = parseVersionEntry(entry.name);
     if (version === null || !entry.isDirectory())
       continue;
-    const versionDir = join8(baseDir, entry.name);
+    const versionDir = join9(baseDir, entry.name);
     const siblingPaths = daemonPaths({ [OMO_LSP_DAEMON_DIR]: baseDir }, { cliPath: ownPaths.cliPath, version });
     results.push(await reapOneVersion({
       version,
@@ -6467,7 +6727,7 @@ async function reapOneVersion(context) {
   const { version, versionDir } = context;
   const owner = context.readOwner(context.siblingPaths);
   if (!owner) {
-    const lockPid = readLockPid(join8(versionDir, "daemon.lock"));
+    const lockPid = readLockPid(join9(versionDir, "daemon.lock"));
     if (lockPid !== null && context.isAlive(lockPid)) {
       context.log(`reap: sparing v${version}: owner metadata missing but daemon.lock is held by live pid ${lockPid}`);
       return { version, status: "spared", reason: `owner metadata missing but lock held by live pid ${lockPid}` };
@@ -6533,7 +6793,7 @@ function splitCmdline(buffer) {
 function isNodeCliDaemonArgv(argv) {
   if (argv.length < 2 || !argv.includes("daemon"))
     return false;
-  const executable = basename4(argv[0] ?? "");
+  const executable = basename5(argv[0] ?? "");
   if (!/^node(?:\.exe)?$/i.test(executable))
     return false;
   return argv.some((value) => value === "cli.js" || value.endsWith("/cli.js") || value.endsWith("\\cli.js"));
@@ -6598,6 +6858,9 @@ async function startDaemonServer(paths, options = {}) {
     const decoder = createLineDecoder((message) => {
       touch();
       respond(socket, message, lease.token, routeOwner, activeRequests);
+    }, (_raw, error) => {
+      logServerError(error);
+      socket.destroy();
     });
     socket.on("data", (chunk) => decoder.push(chunk));
     socket.on("error", () => socket.destroy());

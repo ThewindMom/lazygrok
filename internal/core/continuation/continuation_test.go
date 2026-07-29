@@ -3,9 +3,11 @@ package continuation
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"lazygrok/internal/core/config"
+	"lazygrok/internal/core/state"
 )
 
 func TestStartAndEvaluateLoop(t *testing.T) {
@@ -21,6 +23,55 @@ func TestStartAndEvaluateLoop(t *testing.T) {
 	result := EvaluateStop(ws, gh, "session1", cfg)
 	if !result.ShouldContinue {
 		t.Errorf("expected continuation, got reason: %s", result.Reason)
+	}
+}
+
+func TestEvaluateStopReservesOneConcurrentContinuation(t *testing.T) {
+	ws := t.TempDir()
+	gh := t.TempDir()
+	cfg := config.Defaults()
+	cfg.CooldownSeconds = 10
+
+	if err := StartLoop(ws, "ultrawork", "ship", "DONE", "session1", cfg); err != nil {
+		t.Fatal(err)
+	}
+	var initial LoopState
+	if err := state.ReadJSON(statePath(ws), &initial); err != nil {
+		t.Fatal(err)
+	}
+	initial.LastIterationAt = "2020-01-01T00:00:00Z"
+	if err := state.WriteJSON(statePath(ws), initial); err != nil {
+		t.Fatal(err)
+	}
+
+	const workers = 10
+	results := make(chan StopResult, workers)
+	var group sync.WaitGroup
+	for range workers {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			results <- EvaluateStop(ws, gh, "session1", cfg)
+		}()
+	}
+	group.Wait()
+	close(results)
+
+	continueCount := 0
+	for result := range results {
+		if result.ShouldContinue {
+			continueCount++
+		}
+	}
+	if continueCount != 1 {
+		t.Fatalf("continuations = %d, want 1", continueCount)
+	}
+	var persisted LoopState
+	if err := state.ReadJSON(statePath(ws), &persisted); err != nil {
+		t.Fatal(err)
+	}
+	if persisted.Iteration != 1 {
+		t.Fatalf("persisted iteration = %d, want 1", persisted.Iteration)
 	}
 }
 

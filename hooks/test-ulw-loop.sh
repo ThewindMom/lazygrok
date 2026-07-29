@@ -5,51 +5,33 @@ HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HOOKS_DIR}/test-support.sh"
 
 export GROK_HOME="${GROK_HOME:-$(resolve_grok_home)}"
-export GROK_SESSION_ID="test-ulw-$$"
+export GROK_SESSION_ID="test-ulw-split-$$"
 
 tmpdir="$(mktemp -d)"
 export GROK_WORKSPACE_ROOT="$tmpdir"
 trap 'rm -rf "$tmpdir"' EXIT
 mkdir -p "$tmpdir/.lazygrok"
 
-# Start ultrawork
-printf '%s\n' '{"hookEventName":"UserPromptSubmit","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","prompt":"/ulw-loop \"ship feature\" --max-iterations=5"}' \
+# Given: a ULW goal-ledger command reaches the merged UserPromptSubmit hook.
+printf '%s\n' '{"hookEventName":"UserPromptSubmit","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","prompt":"/ulw-loop \"ship feature\""}' \
   | GROK_HOOK_EVENT=user_prompt_submit bash "${HOOKS_DIR}/run-hook.sh" user-prompt \
-  >"${tmpdir}/start.json"
-rg -q 'ULTRAWORK|VERIFIED|ultrawork' "${tmpdir}/start.json" \
-  || { echo "ulw start failed:"; cat "${tmpdir}/start.json"; exit 1; }
-rg -q 'ultrawork: true' "${tmpdir}/.lazygrok/ralph-loop.local.md" || { cat "${tmpdir}/.lazygrok/ralph-loop.local.md"; exit 1; }
+  >"${tmpdir}/ulw.json"
 
-# Stop without promise -> block (ultrawork continuation)
-printf '%s\n' '{"hookEventName":"stop","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","stopReason":"end_turn","last_assistant_message":"wip"}' \
-  | GROK_HOOK_EVENT=stop bash "${HOOKS_DIR}/run-hook.sh" stop >"${tmpdir}/block.json"
-rg -q '"decision":"block"' "${tmpdir}/block.json" || { cat "${tmpdir}/block.json"; exit 1; }
-rg -q 'ULTRAWORK LOOP' "${tmpdir}/block.json" || { cat "${tmpdir}/block.json"; exit 1; }
+# Then: the legacy Ralph runtime does not claim it or create Ralph state.
+test ! -f "${tmpdir}/.lazygrok/ralph-loop.local.md" \
+  || { echo "/ulw-loop created legacy Ralph state"; cat "${tmpdir}/.lazygrok/ralph-loop.local.md"; exit 1; }
 
-# DONE -> verification phase (still block, not cleared)
-printf '%s\n' '{"hookEventName":"stop","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","stopReason":"end_turn","last_assistant_message":"finished <promise>DONE</promise>"}' \
-  | GROK_HOOK_EVENT=stop bash "${HOOKS_DIR}/run-hook.sh" stop >"${tmpdir}/verify.json"
-rg -q '"decision":"block"' "${tmpdir}/verify.json" || { cat "${tmpdir}/verify.json"; exit 1; }
-rg -q 'VERIFICATION' "${tmpdir}/verify.json" || { cat "${tmpdir}/verify.json"; exit 1; }
-rg -q 'code-reviewer' "${tmpdir}/verify.json" || { cat "${tmpdir}/verify.json"; exit 1; }
-test -f "${tmpdir}/.lazygrok/ralph-loop.local.md" || { echo "state cleared too early"; exit 1; }
-rg -q 'verification_pending: true' "${tmpdir}/.lazygrok/ralph-loop.local.md" || { cat "${tmpdir}/.lazygrok/ralph-loop.local.md"; exit 1; }
+# When: the legacy Ralph command reaches the same hook.
+printf '%s\n' '{"hookEventName":"UserPromptSubmit","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","prompt":"/ralph-loop \"ship feature\" --max-iterations=5"}' \
+  | GROK_HOOK_EVENT=user_prompt_submit bash "${HOOKS_DIR}/run-hook.sh" user-prompt \
+  >"${tmpdir}/ralph.json"
 
-# VERIFIED without Agent: oracle -> still block
-printf '%s\n' '{"hookEventName":"stop","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","stopReason":"end_turn","last_assistant_message":"<promise>VERIFIED</promise>"}' \
-  | GROK_HOOK_EVENT=stop bash "${HOOKS_DIR}/run-hook.sh" stop >"${tmpdir}/bad-verify.json"
-rg -q '"decision":"block"' "${tmpdir}/bad-verify.json" || { cat "${tmpdir}/bad-verify.json"; exit 1; }
-rg -q 'VERIFICATION FAILED' "${tmpdir}/bad-verify.json" || { cat "${tmpdir}/bad-verify.json"; exit 1; }
+# Then: Ralph still owns its continuation state and injects non-empty context.
+jq -e '.additionalContext | type == "string" and length > 0' "${tmpdir}/ralph.json" >/dev/null \
+  || { echo "ralph start failed:"; cat "${tmpdir}/ralph.json"; exit 1; }
+test -f "${tmpdir}/.lazygrok/ralph-loop.local.md" \
+  || { echo "Ralph state file missing"; exit 1; }
+rg -q 'ultrawork: false' "${tmpdir}/.lazygrok/ralph-loop.local.md" \
+  || { cat "${tmpdir}/.lazygrok/ralph-loop.local.md"; exit 1; }
 
-# Oracle VERIFIED -> allow
-printf '%s\n' '{"hookEventName":"stop","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","stopReason":"end_turn","last_assistant_message":"Agent: oracle\n<promise>VERIFIED</promise>"}' \
-  | GROK_HOOK_EVENT=stop bash "${HOOKS_DIR}/run-hook.sh" stop >"${tmpdir}/done.json"
-test "$(cat "${tmpdir}/done.json")" = "{}" || { echo "expected allow:"; cat "${tmpdir}/done.json"; exit 1; }
-test ! -f "${tmpdir}/.lazygrok/ralph-loop.local.md" || { echo "state should be cleared"; exit 1; }
-
-# Bare ultrawork prefix
-printf '%s\n' '{"hookEventName":"UserPromptSubmit","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","prompt":"ultrawork fix lint in src"}' \
-  | GROK_HOOK_EVENT=user_prompt_submit bash "${HOOKS_DIR}/run-hook.sh" user-prompt >"${tmpdir}/bare.json"
-rg -q 'ULTRAWORK' "${tmpdir}/bare.json" || { cat "${tmpdir}/bare.json"; exit 1; }
-
-echo "ulw-loop hooks: OK"
+echo "ulw/Ralph split hooks: OK"

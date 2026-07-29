@@ -63,7 +63,7 @@ export function pingDaemon(paths, token, timeoutMs = PROBE_TIMEOUT_MS, signal) {
         const onAbort = () => finish(null);
         const decoder = createLineDecoder((message) => {
             finish(parsePingResponse(message));
-        });
+        }, () => finish(null));
         socket.once("connect", () => {
             socket.write(encodeJsonLine({ jsonrpc: "2.0", id: 1, method: "omo/ping", params: { _omo: authEnvelope(token) } }));
         });

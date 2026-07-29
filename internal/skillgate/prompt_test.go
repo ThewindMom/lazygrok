@@ -1,11 +1,40 @@
 package skillgate
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"lazygrok/internal/hookenv"
 )
+
+func TestDiscoverSkillsUsesVendoredReviewWork(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GROK_PLUGIN_ROOT", root)
+	t.Setenv("GROK_HOME", t.TempDir())
+
+	const sessionID = "review-work-catalog"
+	if err := discoverSkillsOnDisk(sessionID, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	want := filepath.Join(root, "vendor", "lazygrok-skills", "review-work", "SKILL.md")
+	var matches []catalogEntry
+	for _, entry := range loadCatalog(sessionID) {
+		if entry.ID == "review-work" {
+			matches = append(matches, entry)
+		}
+	}
+	if len(matches) != 1 {
+		t.Fatalf("review-work catalog entries = %d, want 1", len(matches))
+	}
+	if matches[0].Path != want {
+		t.Fatalf("review-work catalog path = %q, want %q", matches[0].Path, want)
+	}
+}
 
 func TestMatchUnloadedSkills(t *testing.T) {
 	catalog := []catalogEntry{

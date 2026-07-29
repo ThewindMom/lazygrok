@@ -3,18 +3,18 @@ package boulder
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"lazygrok/internal/hookenv"
 	"lazygrok/internal/ralph"
+	"lazygrok/internal/safestate"
 )
 
 var (
-	stopContRE    = regexp.MustCompile(`(?i)^/?stop-continuation\b`)
-	resumeContRE  = regexp.MustCompile(`(?i)^/?resume-continuation\b`)
+	stopContRE   = regexp.MustCompile(`(?i)^/?stop-continuation\b`)
+	resumeContRE = regexp.MustCompile(`(?i)^/?resume-continuation\b`)
 )
 
 func markerPath(workspace, sessionID string) string {
@@ -22,20 +22,19 @@ func markerPath(workspace, sessionID string) string {
 }
 
 // SetContinuationStopped marks auto-continue paused for this session.
-func SetContinuationStopped(workspace, sessionID string) {
+func SetContinuationStopped(workspace, sessionID string) error {
 	if sessionID == "" {
-		return
+		return nil
 	}
-	dir := filepath.Join(hookenv.GrokHome(), "state", "stop-continuation", sessionID)
-	_ = os.MkdirAll(dir, 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "stopped"), []byte(nowISO()+"\n"), 0o644)
+	root := hookenv.GrokHome()
+	flag := filepath.Join(root, "state", "stop-continuation", sessionID, "stopped")
+	_ = safestate.WriteFileBelow(root, flag, []byte(nowISO()+"\n"), 0o600)
 	if workspace == "" {
-		return
+		return nil
 	}
 	mp := markerPath(workspace, sessionID)
-	_ = os.MkdirAll(filepath.Dir(mp), 0o755)
 	existing := map[string]any{}
-	if b, err := os.ReadFile(mp); err == nil {
+	if b, err := safestate.ReadFile(mp); err == nil {
 		_ = json.Unmarshal(b, &existing)
 	}
 	sources, _ := existing["sources"].(map[string]any)
@@ -51,18 +50,22 @@ func SetContinuationStopped(workspace, sessionID string) {
 	existing["updatedAt"] = nowISO()
 	existing["sources"] = sources
 	b, _ := json.MarshalIndent(existing, "", "  ")
-	_ = os.WriteFile(mp, append(b, '\n'), 0o644)
+	return safestate.WriteFile(mp, append(b, '\n'), 0o600)
 }
 
 // ClearContinuationStopped resumes auto-continue.
 func ClearContinuationStopped(workspace, sessionID string) {
-	flag := filepath.Join(hookenv.GrokHome(), "state", "stop-continuation", sessionID, "stopped")
-	_ = os.Remove(flag)
+	if sessionID == "" {
+		return
+	}
+	root := hookenv.GrokHome()
+	flag := filepath.Join(root, "state", "stop-continuation", sessionID, "stopped")
+	_ = safestate.RemoveBelow(root, flag)
 	if workspace == "" {
 		return
 	}
 	mp := markerPath(workspace, sessionID)
-	b, err := os.ReadFile(mp)
+	b, err := safestate.ReadFile(mp)
 	if err != nil {
 		return
 	}
@@ -78,7 +81,7 @@ func ClearContinuationStopped(workspace, sessionID string) {
 	data["sources"] = sources
 	data["updatedAt"] = nowISO()
 	out, _ := json.MarshalIndent(data, "", "  ")
-	_ = os.WriteFile(mp, append(out, '\n'), 0o644)
+	_ = safestate.WriteFile(mp, append(out, '\n'), 0o600)
 }
 
 // ClearBoulder removes .lazygrok/boulder.json in workspace.
@@ -86,7 +89,7 @@ func ClearBoulder(workspace string) {
 	if workspace == "" {
 		return
 	}
-	_ = os.Remove(boulderPath(workspace))
+	_ = safestate.Remove(boulderPath(workspace))
 }
 
 // CollectStopContinuation handles /stop-continuation and /resume-continuation.
@@ -181,7 +184,7 @@ func CleanupOMOSession(workspace, sessionID string) {
 		return
 	}
 	ClearContinuationStopped(workspace, sessionID)
-	nudge := filepath.Join(hookenv.GrokHome(), "state", "boulder-nudge", sessionID)
-	_ = os.RemoveAll(nudge)
+	root := hookenv.GrokHome()
+	nudge := filepath.Join(root, "state", "boulder-nudge", sessionID, "nudged.json")
+	_ = safestate.RemoveBelow(root, nudge)
 }
-

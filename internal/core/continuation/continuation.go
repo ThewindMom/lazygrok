@@ -18,13 +18,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"lazygrok/internal/core/config"
 	"lazygrok/internal/core/state"
+	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 // StateVersion is the continuation state schema version.
@@ -32,21 +33,21 @@ const StateVersion = 2
 
 // LoopState represents the continuation loop state.
 type LoopState struct {
-	SchemaVersion      int    `json:"schemaVersion"`
-	Active             bool   `json:"active"`
-	Type               string `json:"type"` // "ralph" or "ultrawork"
-	Objective          string `json:"objective"`
-	CompletionCriteria string `json:"completionCriteria"`
-	Iteration          int    `json:"iteration"`
-	MaxIterations      int    `json:"maxIterations"`
-	SessionID          string `json:"sessionId"`
-	StartedAt          string `json:"startedAt"`
-	LastIterationAt   string `json:"lastIterationAt"`
-	StateFingerprints  []string `json:"stateFingerprints"`
-	FailureCount       int    `json:"failureCount"`
-	VerificationPending bool   `json:"verificationPending"`
-	Paused             bool   `json:"paused"`
-	PauseReason        string `json:"pauseReason"`
+	SchemaVersion       int      `json:"schemaVersion"`
+	Active              bool     `json:"active"`
+	Type                string   `json:"type"` // "ralph" or "ultrawork"
+	Objective           string   `json:"objective"`
+	CompletionCriteria  string   `json:"completionCriteria"`
+	Iteration           int      `json:"iteration"`
+	MaxIterations       int      `json:"maxIterations"`
+	SessionID           string   `json:"sessionId"`
+	StartedAt           string   `json:"startedAt"`
+	LastIterationAt     string   `json:"lastIterationAt"`
+	StateFingerprints   []string `json:"stateFingerprints"`
+	FailureCount        int      `json:"failureCount"`
+	VerificationPending bool     `json:"verificationPending"`
+	Paused              bool     `json:"paused"`
+	PauseReason         string   `json:"pauseReason"`
 }
 
 // StopResult represents the result of a stop pipeline evaluation.
@@ -63,15 +64,18 @@ func statePath(workspace string) string {
 
 // stopMarkerPath returns the path to the stop-continuation marker.
 func stopMarkerPath(grokHome, sessionID string) string {
+	if _, err := hookenv.ParseSessionID(sessionID); err != nil || sessionID == "" {
+		return ""
+	}
 	return filepath.Join(grokHome, "state", "stop-continuation", sessionID, "stopped")
 }
 
 // IsExplicitlyStopped checks whether the user has explicitly stopped continuation.
 func IsExplicitlyStopped(grokHome, sessionID string) bool {
-	if sessionID == "" {
+	if stopMarkerPath(grokHome, sessionID) == "" {
 		return false
 	}
-	if _, err := os.Stat(stopMarkerPath(grokHome, sessionID)); err == nil {
+	if _, err := safestate.ReadFileBelow(grokHome, stopMarkerPath(grokHome, sessionID)); err == nil {
 		return true
 	}
 	return false
@@ -79,12 +83,12 @@ func IsExplicitlyStopped(grokHome, sessionID string) bool {
 
 // StopContinuation writes the stop marker and pauses any active loops.
 func StopContinuation(workspace, grokHome, sessionID string) error {
+	if stopMarkerPath(grokHome, sessionID) == "" {
+		return hookenv.ErrInvalidSessionID
+	}
 	// Write stop marker
 	markerPath := stopMarkerPath(grokHome, sessionID)
-	if err := os.MkdirAll(filepath.Dir(markerPath), 0o755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(markerPath, []byte(time.Now().UTC().Format(time.RFC3339)), 0o644); err != nil {
+	if err := safestate.WriteFileBelow(grokHome, markerPath, []byte(time.Now().UTC().Format(time.RFC3339)), 0o600); err != nil {
 		return err
 	}
 
@@ -105,8 +109,8 @@ func StopContinuation(workspace, grokHome, sessionID string) error {
 
 // ResumeContinuation clears the stop marker and resumes paused loops.
 func ResumeContinuation(grokHome, sessionID, workspace string) error {
-	if sessionID != "" {
-		_ = os.Remove(stopMarkerPath(grokHome, sessionID))
+	if stopMarkerPath(grokHome, sessionID) != "" {
+		_ = safestate.RemoveBelow(grokHome, stopMarkerPath(grokHome, sessionID))
 	}
 	// Clear paused state
 	if workspace != "" {
@@ -139,7 +143,7 @@ func StartLoop(workspace, loopType, objective, completionCriteria, sessionID str
 		MaxIterations:      maxIter,
 		SessionID:          sessionID,
 		StartedAt:          time.Now().UTC().Format(time.RFC3339),
-		LastIterationAt:   time.Now().UTC().Format(time.RFC3339),
+		LastIterationAt:    time.Now().UTC().Format(time.RFC3339),
 		StateFingerprints:  []string{},
 		FailureCount:       0,
 		Paused:             false,
@@ -163,11 +167,26 @@ func EvaluateStop(workspace, grokHome, sessionID string, cfg *config.Config) Sto
 		return StopResult{ShouldContinue: false, Reason: "continuation_disabled"}
 	}
 
-	// Check for active loop
 	path := statePath(workspace)
 	var ls LoopState
 	if err := state.ReadJSON(path, &ls); err != nil || !ls.Active || ls.Paused {
-		// No active loop — check boulder and todos
+		return StopResult{ShouldContinue: false, Reason: "no_active_loop"}
+	}
+
+	var result StopResult
+	lockPath := filepath.Join(workspace, ".lazygrok", ".continuation.lock")
+	if err := safestate.WithFileLockBelow(workspace, lockPath, func() error {
+		result = evaluateActiveLoop(path, sessionID, cfg)
+		return nil
+	}); err != nil {
+		return statePersistenceFailure()
+	}
+	return result
+}
+
+func evaluateActiveLoop(path, sessionID string, cfg *config.Config) StopResult {
+	var ls LoopState
+	if err := state.ReadJSON(path, &ls); err != nil || !ls.Active || ls.Paused {
 		return StopResult{ShouldContinue: false, Reason: "no_active_loop"}
 	}
 
@@ -180,7 +199,9 @@ func EvaluateStop(workspace, grokHome, sessionID string, cfg *config.Config) Sto
 	if ls.Iteration >= ls.MaxIterations {
 		ls.Active = false
 		ls.PauseReason = fmt.Sprintf("max iterations (%d) reached", ls.MaxIterations)
-		state.WriteJSON(path, ls)
+		if err := state.WriteJSON(path, ls); err != nil {
+			return statePersistenceFailure()
+		}
 		return StopResult{
 			ShouldContinue: false,
 			Reason:         "max_iterations",
@@ -192,7 +213,9 @@ func EvaluateStop(workspace, grokHome, sessionID string, cfg *config.Config) Sto
 	if ls.FailureCount >= cfg.RepeatedStateThreshold {
 		ls.Paused = true
 		ls.PauseReason = fmt.Sprintf("repeated failure threshold (%d) reached", cfg.RepeatedStateThreshold)
-		state.WriteJSON(path, ls)
+		if err := state.WriteJSON(path, ls); err != nil {
+			return statePersistenceFailure()
+		}
 		return StopResult{
 			ShouldContinue: false,
 			Reason:         "failure_threshold",
@@ -213,7 +236,9 @@ func EvaluateStop(workspace, grokHome, sessionID string, cfg *config.Config) Sto
 		if allSame {
 			ls.Paused = true
 			ls.PauseReason = "repeated state detected — no progress"
-			state.WriteJSON(path, ls)
+			if err := state.WriteJSON(path, ls); err != nil {
+				return statePersistenceFailure()
+			}
 			return StopResult{
 				ShouldContinue: false,
 				Reason:         "repeated_state",
@@ -240,7 +265,9 @@ func EvaluateStop(workspace, grokHome, sessionID string, cfg *config.Config) Sto
 	// Increment iteration
 	ls.Iteration++
 	ls.LastIterationAt = time.Now().UTC().Format(time.RFC3339)
-	state.WriteJSON(path, ls)
+	if err := state.WriteJSON(path, ls); err != nil {
+		return statePersistenceFailure()
+	}
 
 	return StopResult{
 		ShouldContinue: true,
@@ -249,6 +276,14 @@ func EvaluateStop(workspace, grokHome, sessionID string, cfg *config.Config) Sto
 			"[%s LOOP %d/%d]\nContinue working toward: %s\nCompletion criteria: %s\n\nOutput <promise>DONE</promise> when verifiably complete.",
 			strings.ToUpper(ls.Type), ls.Iteration, ls.MaxIterations, ls.Objective, ls.CompletionCriteria,
 		),
+	}
+}
+
+func statePersistenceFailure() StopResult {
+	return StopResult{
+		ShouldContinue: true,
+		Reason:         "state_persistence_failed",
+		Message:        "Continuation state could not be reserved safely. Inspect .lazygrok/continuation.json before retrying.",
 	}
 }
 
@@ -299,21 +334,21 @@ func ComputeFingerprint(data []byte) string {
 // MigrateV1ToV2 migrates old continuation state format to v2.
 func MigrateV1ToV2(old map[string]any) map[string]any {
 	new := map[string]any{
-		"schemaVersion": StateVersion,
-		"active":        old["active"],
-		"type":          old["type"],
-		"objective":     old["objective"],
-		"completionCriteria": old["completion_criteria"],
-		"iteration":     old["iteration"],
-		"maxIterations": old["max_iterations"],
-		"sessionId":     old["session_id"],
-		"startedAt":     old["started_at"],
-		"lastIterationAt": old["last_iteration_at"],
-		"stateFingerprints": []string{},
-		"failureCount":  0,
+		"schemaVersion":       StateVersion,
+		"active":              old["active"],
+		"type":                old["type"],
+		"objective":           old["objective"],
+		"completionCriteria":  old["completion_criteria"],
+		"iteration":           old["iteration"],
+		"maxIterations":       old["max_iterations"],
+		"sessionId":           old["session_id"],
+		"startedAt":           old["started_at"],
+		"lastIterationAt":     old["last_iteration_at"],
+		"stateFingerprints":   []string{},
+		"failureCount":        0,
 		"verificationPending": old["verification_pending"],
-		"paused":        old["paused"],
-		"pauseReason":   old["pause_reason"],
+		"paused":              old["paused"],
+		"pauseReason":         old["pause_reason"],
 	}
 	return new
 }
@@ -337,8 +372,8 @@ func ListResumableWork(workspace string) ([]map[string]any, error) {
 	// Check continuation state
 	if ls, err := GetActiveLoop(workspace); err == nil && ls != nil {
 		items = append(items, map[string]any{
-			"type":     "continuation",
-			"loopType": ls.Type,
+			"type":      "continuation",
+			"loopType":  ls.Type,
 			"objective": ls.Objective,
 			"status":    "paused",
 			"iteration": ls.Iteration,
@@ -347,7 +382,7 @@ func ListResumableWork(workspace string) ([]map[string]any, error) {
 
 	// Check boulder state
 	boulderPath := filepath.Join(workspace, ".lazygrok", "boulder.json")
-	if data, err := os.ReadFile(boulderPath); err == nil {
+	if data, err := safestate.ReadFile(boulderPath); err == nil {
 		var b map[string]any
 		if json.Unmarshal(data, &b) == nil {
 			items = append(items, map[string]any{

@@ -12,7 +12,12 @@ import {
 	steer,
 } from "./cli-subcommands.js";
 import { lightQualityGateCmd } from "./light-quality-gate.js";
-import { resolveUlwLoopSessionIdFromEnv, type UlwLoopScope } from "./paths.js";
+import {
+	normalizeUlwLoopSessionId,
+	resolveUlwLoopSessionIdFromBinding,
+	resolveUlwLoopSessionIdFromEnv,
+	type UlwLoopScope,
+} from "./paths.js";
 import { UlwLoopError } from "./types.js";
 
 export const ULW_LOOP_SUBCOMMANDS = [
@@ -42,7 +47,7 @@ export async function ulwLoopCommand(argv: readonly string[]): Promise<number> {
 	const repoRoot = process.cwd();
 	const json = hasFlag(rest, "--json");
 	try {
-		const scope = commandScope(rest);
+		const scope = commandScope(rest, repoRoot);
 		if (!isUlwLoopSubcommand(command)) {
 			if (json) {
 				printJsonError(
@@ -104,16 +109,26 @@ function sessionIdFlagPresent(argv: readonly string[]): boolean {
 	return hasFlag(argv, SESSION_ID_FLAG) || argv.some((arg) => arg.startsWith(`${SESSION_ID_FLAG}=`));
 }
 
-function commandScope(argv: readonly string[]): UlwLoopScope | undefined {
+function commandScope(argv: readonly string[], repoRoot: string): UlwLoopScope | undefined {
+	const boundSessionId = resolveUlwLoopSessionIdFromBinding(repoRoot);
 	if (sessionIdFlagPresent(argv)) {
-		const sessionId = readValue(argv, SESSION_ID_FLAG)?.trim();
-		if (!sessionId) {
+		const sessionId = readValue(argv, SESSION_ID_FLAG);
+		if (sessionId === undefined || sessionId.length === 0) {
 			throw new UlwLoopError(`${SESSION_ID_FLAG} requires a non-empty value.`, "ULW_LOOP_SESSION_ID_REQUIRED", {
 				details: { flag: SESSION_ID_FLAG },
 			});
 		}
+		if (normalizeUlwLoopSessionId(sessionId) === null) {
+			throw new UlwLoopError(`${SESSION_ID_FLAG} requires an exact safe session ID.`, "ULW_LOOP_SESSION_ID_INVALID");
+		}
+		if (boundSessionId !== null && sessionId !== boundSessionId) {
+			throw new UlwLoopError(
+				`The requested session ID does not match the current Grok session ${boundSessionId}.`,
+				"ULW_LOOP_SESSION_MISMATCH",
+			);
+		}
 		return { sessionId };
 	}
-	const sessionId = resolveUlwLoopSessionIdFromEnv();
+	const sessionId = resolveUlwLoopSessionIdFromEnv() ?? boundSessionId;
 	return sessionId === null ? undefined : { sessionId };
 }

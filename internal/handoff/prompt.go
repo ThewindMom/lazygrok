@@ -43,7 +43,7 @@ func Collect(ev hookenv.Event) string {
 	}
 	sid := ev.SessionID
 	if sid == "" {
-		sid = "unknown"
+		return injectTemplate("unavailable")
 	}
 	_ = skillgate.MarkSkillLoaded(sid, "handoff")
 	return injectTemplate(sid)

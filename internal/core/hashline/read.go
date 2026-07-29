@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -25,11 +24,11 @@ const (
 
 // FileIdentity contains metadata for stale detection.
 type FileIdentity struct {
-	Size       int64  `json:"size"`
-	LineCount  int    `json:"lineCount"`
-	SHA256     string `json:"sha256"`
+	Size       int64        `json:"size"`
+	LineCount  int          `json:"lineCount"`
+	SHA256     string       `json:"sha256"`
 	Newline    NewlineStyle `json:"newline"`
-	HasFinalNL bool   `json:"hasFinalNewline"`
+	HasFinalNL bool         `json:"hasFinalNewline"`
 }
 
 // Line represents a single line with its anchor.
@@ -41,42 +40,68 @@ type Line struct {
 
 // ReadResult is the output of hashline_read.
 type ReadResult struct {
-	Path           string       `json:"path"`
-	CanonicalPath  string       `json:"canonicalPath"`
-	Identity       FileIdentity `json:"identity"`
-	TotalLines     int          `json:"totalLines"`
-	Offset         int          `json:"offset"`
-	Limit          int          `json:"limit"`
-	Lines          []Line       `json:"lines"`
-	Truncated      bool         `json:"truncated"`
+	Path          string       `json:"path"`
+	CanonicalPath string       `json:"canonicalPath"`
+	Identity      FileIdentity `json:"identity"`
+	TotalLines    int          `json:"totalLines"`
+	Offset        int          `json:"offset"`
+	Limit         int          `json:"limit"`
+	Lines         []Line       `json:"lines"`
+	Truncated     bool         `json:"truncated"`
+}
+
+// ReadOptions selects the line window returned by a workspace read.
+type ReadOptions struct {
+	Offset int
+	Limit  int
 }
 
 // ReadFile reads a file and returns its lines with anchors.
 // offset is 1-based; limit is the max number of lines (0 = all).
 func ReadFile(path string, offset, limit int) (*ReadResult, error) {
-	info, err := os.Stat(path)
+	absolute, err := filepath.Abs(path)
 	if err != nil {
-		return nil, fmt.Errorf("stat: %w", err)
+		return nil, fmt.Errorf("resolve: %w", err)
 	}
-	if info.IsDir() {
-		return nil, fmt.Errorf("path is a directory")
-	}
-	if info.Size() > MaxFileSize {
-		return nil, fmt.Errorf("file size %d exceeds limit %d", info.Size(), MaxFileSize)
-	}
+	return ReadFileInWorkspace(absolute, filepath.Dir(absolute), ReadOptions{Offset: offset, Limit: limit})
+}
 
-	data, err := os.ReadFile(path)
+// ReadFileInWorkspace reads a unique regular file through an anchored workspace descriptor.
+func ReadFileInWorkspace(path, workspaceRoot string, options ReadOptions) (*ReadResult, error) {
+	target, err := openWorkspaceTarget(workspaceRoot, path)
 	if err != nil {
-		return nil, fmt.Errorf("read: %w", err)
+		return nil, err
 	}
+	defer target.close()
+	snapshot, err := target.readBounded(MaxFileSize)
+	if err != nil {
+		return nil, err
+	}
+	return readResult(path, snapshot, options)
+}
 
+// ReadWorkspaceFileBytes returns bounded content for non-hashline workspace consumers.
+func ReadWorkspaceFileBytes(path, workspaceRoot string) ([]byte, error) {
+	target, err := openWorkspaceTarget(workspaceRoot, path)
+	if err != nil {
+		return nil, err
+	}
+	defer target.close()
+	snapshot, err := target.readBounded(MaxFileSize)
+	return snapshot.data, err
+}
+
+func readResult(path string, snapshot workspaceSnapshot, options ReadOptions) (*ReadResult, error) {
+	data := snapshot.data
 	if isBinary(data) {
 		return nil, fmt.Errorf("binary file not supported")
 	}
 
-	identity := computeIdentity(data, info.Size())
+	identity := computeIdentity(data, snapshot.size)
 	lines := splitLines(data, identity.Newline)
 
+	offset := options.Offset
+	limit := options.Limit
 	if offset < 1 {
 		offset = 1
 	}

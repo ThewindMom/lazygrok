@@ -30,6 +30,6 @@ Delegate implementation/QA with `spawn_subagent` and:
 
 ## Cancel / related
 
-- `/cancel-ralph` stops Ralph/ultrawork promise loops.
+- `/cancel-ralph` stops Ralph-family promise loops, including the explicit `/ulw-ralph-loop` variant; it does not cancel this ULW goal ledger.
 - `/stop-continuation` stops broader continuations.
 - Ralph-only verifier loop: skill `ulw-ralph-loop`.

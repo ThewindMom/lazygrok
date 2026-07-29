@@ -37,7 +37,7 @@ Spawn all three in parallel.
 ## The three prompts
 
 ```
-spawn_subagent(subagent_type="oracle", background=true,
+task(subagent_type="oracle", load_skills=[], run_in_background=true,
      prompt="[CONTEXT: bug description + evidence captured so far, verbatim, with file:line refs]
 
      Framing A — OBVIOUS-BUT-MISSED.
@@ -51,7 +51,7 @@ spawn_subagent(subagent_type="oracle", background=true,
 
      Give me exactly three candidate causes ranked by likelihood, with one sentence each explaining why our evidence is consistent with each.")
 
-spawn_subagent(subagent_type="oracle", background=true,
+task(subagent_type="oracle", load_skills=[], run_in_background=true,
      prompt="[CONTEXT: bug description + evidence captured so far]
 
      Framing B — SYSTEM-BOUNDARY.
@@ -67,7 +67,7 @@ spawn_subagent(subagent_type="oracle", background=true,
 
      Give me three candidate causes, each naming the specific boundary and the specific contract assumption that might be violated.")
 
-spawn_subagent(subagent_type="oracle", background=true,
+task(subagent_type="oracle", load_skills=[], run_in_background=true,
      prompt="[CONTEXT: bug description + evidence captured so far]
 
      Framing C — INVARIANT-VIOLATION.

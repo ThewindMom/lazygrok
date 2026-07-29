@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 const maxBlocks = 8
@@ -76,10 +77,9 @@ func EvaluateStop(ev hookenv.Event) (bool, string) {
 	}
 	grokHome := hookenv.GrokHome()
 	stateDir := filepath.Join(grokHome, "state", "stop-verify", sid)
-	_ = os.MkdirAll(stateDir, 0o755)
 	blocksFile := filepath.Join(stateDir, "blocks.json")
 	blocks := 0
-	if b, err := os.ReadFile(blocksFile); err == nil {
+	if b, err := safestate.ReadFileBelow(grokHome, blocksFile); err == nil {
 		var data struct {
 			Count int `json:"count"`
 		}
@@ -96,7 +96,7 @@ func EvaluateStop(ev hookenv.Event) (bool, string) {
 		return false, ""
 	}
 	blocks++
-	_ = os.WriteFile(blocksFile, mustJSON(map[string]int{"count": blocks}), 0o644)
+	_ = safestate.WriteFileBelow(grokHome, blocksFile, mustJSON(map[string]int{"count": blocks}), 0o600)
 	sample := strings.Join(planItems[:min(5, len(planItems))], "; ")
 	extra := ""
 	if len(planItems) > 5 {

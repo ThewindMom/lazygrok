@@ -1,20 +1,26 @@
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
 
+import { safeWriteWorkspaceTextFile } from "./file-safety.js";
 import { aggregateCodexObjectiveForScope, isUlwLoopDone } from "./goal-status.js";
 import {
 	type UlwLoopScope,
 	ulwLoopBriefPath,
 	ulwLoopBriefRelativePath,
-	ulwLoopDir,
 	ulwLoopGoalsPath,
 	ulwLoopGoalsRelativePath,
 	ulwLoopLedgerPath,
 	ulwLoopLedgerRelativePath,
 } from "./paths.js";
 import { appendGoalToPlan, deriveGoalCandidates, makeGoal } from "./plan-goal-factory.js";
-import { appendLedger, readUlwLoopPlan, withUlwLoopMutationLock, writePlan } from "./plan-io.js";
-import type { UlwLoopCodexGoalMode, UlwLoopItem, UlwLoopPlan, UlwLoopSuccessCriterion } from "./types.js";
+import { commitPlanAndLedgerEntries, readUlwLoopPlan, withUlwLoopMutationLock } from "./plan-io.js";
+import { grokUlwCli } from "./runtime-command.js";
+import type {
+	UlwLoopCodexGoalMode,
+	UlwLoopItem,
+	UlwLoopLedgerEntry,
+	UlwLoopPlan,
+	UlwLoopSuccessCriterion,
+} from "./types.js";
 import { iso, UlwLoopError } from "./types.js";
 import { parseValidationBatches } from "./validation-batch.js";
 
@@ -85,20 +91,19 @@ export async function createUlwLoopPlan(
 			codexGoalMode: args.codexGoalMode ?? "aggregate",
 			goals,
 		};
-		const validationBatches = await parseValidationBatches(args.validationBatchesJson, goals);
+		const validationBatches = await parseValidationBatches(args.validationBatchesJson, goals, repoRoot);
 		if (validationBatches !== undefined) plan.validationBatches = validationBatches;
 		if (plan.codexGoalMode === "aggregate") plan.codexObjective = aggregateCodexObjectiveForScope(scope);
-		await mkdir(ulwLoopDir(repoRoot, scope), { recursive: true });
-		await writeFile(
+		await safeWriteWorkspaceTextFile(
+			repoRoot,
 			ulwLoopBriefPath(repoRoot, scope),
 			args.brief.endsWith("\n") ? args.brief : `${args.brief}\n`,
-			"utf8",
 		);
-		await writePlan(repoRoot, plan, scope);
-		await writeFile(ulwLoopLedgerPath(repoRoot, scope), "", "utf8");
-		await appendLedger(
+		await safeWriteWorkspaceTextFile(repoRoot, ulwLoopLedgerPath(repoRoot, scope), "");
+		await commitPlanAndLedgerEntries(
 			repoRoot,
-			{ at: now, kind: "plan_created", message: `${goals.length} goal(s) created` },
+			plan,
+			[{ at: now, kind: "plan_created", message: `${goals.length} goal(s) created` }],
 			scope,
 		);
 		return plan;
@@ -109,7 +114,7 @@ function completedPlanExistsError(scope?: UlwLoopScope): UlwLoopError {
 	return new UlwLoopError(
 		[
 			`Existing ulw-loop aggregate is already complete at ${ulwLoopGoalsRelativePath(scope)}.`,
-			"Start a new run with `omo ulw-loop create-goals --session-id <new-id> ...` to isolate fresh state.",
+			`Start a new run with \`${grokUlwCli()} create-goals --session-id <new-id> ...\` to isolate fresh state.`,
 			"Use --force only when you intentionally want to overwrite the completed evidence.",
 		].join(" "),
 		"ULW_LOOP_PLAN_EXISTS_COMPLETE",
@@ -125,10 +130,10 @@ export async function addUlwLoopGoal(
 		const plan = await readUlwLoopPlan(repoRoot, scope);
 		const now = iso();
 		const goal = appendGoalToPlan(plan, args.title, args.objective, now);
-		await writePlan(repoRoot, plan, scope);
-		await appendLedger(
+		await commitPlanAndLedgerEntries(
 			repoRoot,
-			{ at: now, kind: "goal_added", goalId: goal.id, status: goal.status, message: goal.title },
+			plan,
+			[{ at: now, kind: "goal_added", goalId: goal.id, status: goal.status, message: goal.title }],
 			scope,
 		);
 		return { plan, goal };
@@ -146,21 +151,18 @@ export async function startNextUlwLoop(
 		if (plan.aggregateCompletion?.status === "complete") return { done: true, plan };
 		const existing = plan.goals.find((goal) => goal.status === "in_progress" && isScheduleEligible(goal));
 		if (existing) return { plan, goal: existing, resumed: true };
+		const ledgerEntries: UlwLoopLedgerEntry[] = [];
 		let next = plan.goals.find((goal) => goal.status === "pending" && isScheduleEligible(goal));
 		if (!next && args.retryFailed) {
 			next = plan.goals.find((goal) => goal.status === "failed" && !goal.nonRetriable && isScheduleEligible(goal));
 			if (next)
-				await appendLedger(
-					repoRoot,
-					{
-						at: now,
-						kind: "goal_retried",
-						goalId: next.id,
-						status: "pending",
-						...(next.failureReason ? { message: next.failureReason } : {}),
-					},
-					scope,
-				);
+				ledgerEntries.push({
+					at: now,
+					kind: "goal_retried",
+					goalId: next.id,
+					status: "pending",
+					...(next.failureReason ? { message: next.failureReason } : {}),
+				});
 		}
 		if (!next) return { done: true, plan };
 		next.status = "in_progress";
@@ -170,12 +172,14 @@ export async function startNextUlwLoop(
 		next.updatedAt = now;
 		plan.activeGoalId = next.id;
 		plan.updatedAt = now;
-		await writePlan(repoRoot, plan, scope);
-		await appendLedger(
-			repoRoot,
-			{ at: now, kind: "goal_started", goalId: next.id, status: next.status, message: `Attempt ${next.attempt}` },
-			scope,
-		);
+		ledgerEntries.push({
+			at: now,
+			kind: "goal_started",
+			goalId: next.id,
+			status: next.status,
+			message: `Attempt ${next.attempt}`,
+		});
+		await commitPlanAndLedgerEntries(repoRoot, plan, ledgerEntries, scope);
 		return { plan, goal: next, resumed: false };
 	});
 }

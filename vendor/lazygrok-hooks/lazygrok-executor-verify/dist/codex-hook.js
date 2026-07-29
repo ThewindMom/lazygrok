@@ -1,49 +1,51 @@
-import { lstatSync as nodeLstatSync, realpathSync as nodeRealpathSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { lstatSync as nodeLstatSync, readdirSync as nodeReaddirSync } from "node:fs";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { renderDirective } from "./directive.js";
-import { clearAttemptState, MAX_ATTEMPTS, readAttemptState, writeAttemptState } from "./state.js";
+import { clearAttemptState, isNonEmptyWorkspaceRegularFileInsideDirectory, MAX_ATTEMPTS, readAttemptState, readBoundedWorkspaceRegularFile, sanitizeKey, writeAttemptState, } from "./state.js";
 import { SUBAGENT_STOP_EVENT } from "./types.js";
 const RECEIPT_ENFORCED_AGENTS = new Set([
+    "lazycodex-executor",
+    "lazygrok-executor",
     "lazycodex-worker-low",
     "lazycodex-worker-medium",
     "lazycodex-worker-high",
+    "lazygrok-worker-low",
+    "lazygrok-worker-medium",
+    "lazygrok-worker-high",
 ]);
+const MAX_BOULDER_BYTES = 1024 * 1024;
+const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 export function runSubagentStopHook(input, fs) {
     if (!isSubagentStopInput(input))
         return "";
     if (!RECEIPT_ENFORCED_AGENTS.has(input.agent_type))
         return "";
-    if (transcriptHasContextPressureMarker(input.transcript_path, fs))
-        return "";
     if (hasValidEvidenceReceipt(input, fs)) {
-        clearAttemptState(input.cwd, input.session_id, input.agent_id, fs);
+        clearAttemptState(input.cwd, input.session_id, input.agent_id);
         return "";
     }
     const state = readAttemptState(input.cwd, input.session_id, input.agent_id, fs);
     if (state.attempts >= MAX_ATTEMPTS) {
-        clearAttemptState(input.cwd, input.session_id, input.agent_id, fs);
+        clearAttemptState(input.cwd, input.session_id, input.agent_id);
         return "";
     }
     const attempts = state.attempts + 1;
-    writeAttemptState(input.cwd, input.session_id, input.agent_id, { attempts }, fs);
+    writeAttemptState(input.cwd, input.session_id, input.agent_id, { attempts });
     return JSON.stringify({
         decision: "block",
-        reason: renderDirective(attempts, input.last_assistant_message),
+        reason: renderDirective(attempts, input.last_assistant_message, requiredEvidenceDirectory(input, fs)),
     });
 }
-const CONTEXT_PRESSURE_MARKERS = [
-    "context compacted",
-    "context_length_exceeded",
-    "skill descriptions were shortened",
-    "context_too_large",
-    "codex ran out of room in the model's context window",
-    "your input exceeds the context window",
-    "long threads and multiple compactions",
-];
-function transcriptHasContextPressureMarker(transcriptPath, fs) {
+function hasValidEvidenceReceipt(input, fs) {
+    const receiptPath = extractEvidencePath(input.last_assistant_message);
+    if (receiptPath === null)
+        return false;
+    const resolvedPath = isAbsolute(receiptPath) ? resolve(receiptPath) : resolve(input.cwd, receiptPath);
+    const evidenceRoot = resolve(input.cwd, requiredEvidenceDirectory(input, fs));
+    if (!isPathInsideDirectory(resolvedPath, evidenceRoot))
+        return false;
     try {
-        const transcript = fs.readFileSync(transcriptPath, "utf8").toLowerCase();
-        return CONTEXT_PRESSURE_MARKERS.some((marker) => transcript.includes(marker));
+        return isNonEmptyFileInsideEvidenceRoot(resolvedPath, evidenceRoot, input.cwd, fs);
     }
     catch (error) {
         if (error instanceof Error)
@@ -51,16 +53,62 @@ function transcriptHasContextPressureMarker(transcriptPath, fs) {
         throw error;
     }
 }
-function hasValidEvidenceReceipt(input, fs) {
-    const receiptPath = extractEvidencePath(input.last_assistant_message);
-    if (receiptPath === null)
-        return false;
-    const evidenceRoot = resolve(input.cwd, ".omo", "evidence");
-    const resolvedPath = isAbsolute(receiptPath) ? resolve(receiptPath) : resolve(input.cwd, receiptPath);
-    if (!isPathInsideDirectory(resolvedPath, evidenceRoot))
+function requiredEvidenceDirectory(input, fs) {
+    return join(activeStateRoot(input.cwd, input.session_id, fs), "evidence", "executors", sanitizeKey(input.session_id), sanitizeKey(input.agent_id));
+}
+function activeStateRoot(cwd, sessionId, fs) {
+    const canonicalOwnsSession = hasSessionRunState(cwd, ".lazygrok", sessionId, fs);
+    const legacyOwnsSession = hasSessionRunState(cwd, ".omo", sessionId, fs);
+    if (canonicalOwnsSession)
+        return ".lazygrok";
+    if (legacyOwnsSession)
+        return ".omo";
+    if (hasRunState(cwd, ".lazygrok", fs))
+        return ".lazygrok";
+    if (hasRunState(cwd, ".omo", fs))
+        return ".omo";
+    return ".lazygrok";
+}
+function hasSessionRunState(cwd, root, sessionId, fs) {
+    const scopedGoals = join(cwd, root, "ulw-loop", sanitizeKey(sessionId), "goals.json");
+    if (isNonEmptyFile(scopedGoals, fs))
+        return true;
+    const boulderPath = join(cwd, root, "boulder.json");
+    if (!isNonEmptyFile(boulderPath, fs))
         return false;
     try {
-        return isNonEmptyFileInsideEvidenceRoot(resolvedPath, evidenceRoot, input.cwd, fs);
+        return boulderOwnsSession(JSON.parse(readBoundedWorkspaceRegularFile(cwd, boulderPath, MAX_BOULDER_BYTES)), sessionId);
+    }
+    catch (error) {
+        if (error instanceof Error)
+            return false;
+        throw error;
+    }
+}
+function boulderOwnsSession(value, sessionId) {
+    if (!isRecord(value))
+        return false;
+    const candidates = [value];
+    if (isRecord(value["works"]))
+        candidates.push(...Object.values(value["works"]));
+    return candidates.some((candidate) => {
+        if (!isRecord(candidate) || !Array.isArray(candidate["session_ids"]))
+            return false;
+        return candidate["session_ids"].some((item) => typeof item === "string" && stripSessionPrefix(item) === stripSessionPrefix(sessionId));
+    });
+}
+function stripSessionPrefix(value) {
+    return value.replace(/^(?:grok|codex|opencode):/u, "");
+}
+function hasRunState(cwd, root, fs) {
+    try {
+        if (isNonEmptyFile(join(cwd, root, "boulder.json"), fs))
+            return true;
+        if (isNonEmptyFile(join(cwd, root, "start-work", "ledger.jsonl"), fs))
+            return true;
+        const ulwLoopRoot = join(cwd, root, "ulw-loop");
+        const runDirectories = fs.readdirSync?.(ulwLoopRoot) ?? nodeReaddirSync(ulwLoopRoot);
+        return runDirectories.some((runDirectory) => isNonEmptyFile(join(ulwLoopRoot, runDirectory, "goals.json"), fs));
     }
     catch (error) {
         if (error instanceof Error)
@@ -75,14 +123,8 @@ function isPathInsideDirectory(filePath, directoryPath) {
 function isNonEmptyFileInsideEvidenceRoot(filePath, evidenceRoot, cwd, fs) {
     if (!fs.existsSync(filePath))
         return false;
-    const realCwd = realPath(cwd, fs);
-    const realEvidenceRoot = realPath(evidenceRoot, fs);
-    const realFilePath = realPath(filePath, fs);
-    if (!isPathInsideDirectory(realEvidenceRoot, realCwd))
-        return false;
-    if (!isPathInsideDirectory(realFilePath, realEvidenceRoot))
-        return false;
-    return isNonEmptyFile(filePath, fs);
+    const initial = fs.statSync(filePath);
+    return isNonEmptyWorkspaceRegularFileInsideDirectory(cwd, filePath, evidenceRoot, MAX_RECEIPT_BYTES, initial);
 }
 function isNonEmptyFile(filePath, fs) {
     if (!fs.existsSync(filePath))
@@ -91,12 +133,9 @@ function isNonEmptyFile(filePath, fs) {
     if (linkStat.isSymbolicLink?.() === true)
         return false;
     const stat = fs.statSync(filePath);
-    if (stat.size <= 0)
+    if (stat.size <= 0 || (stat.nlink !== undefined && stat.nlink !== 1))
         return false;
     return stat.isFile?.() ?? true;
-}
-function realPath(path, fs) {
-    return fs.realpathSync?.(path) ?? nodeRealpathSync(path);
 }
 function extractEvidencePath(message) {
     if (message === undefined)

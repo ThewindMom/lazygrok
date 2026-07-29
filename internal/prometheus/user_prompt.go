@@ -2,13 +2,13 @@ package prometheus
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 var (
@@ -20,24 +20,32 @@ var (
 
 func planModeFlag(sessionID string) string {
 	if sessionID == "" {
-		sessionID = "unknown"
+		return ""
+	}
+	if _, err := hookenv.ParseSessionID(sessionID); err != nil {
+		return ""
 	}
 	return filepath.Join(hookenv.GrokHome(), "state", "plan-mode", sessionID, "enabled")
 }
 
 func planModeOn(sessionID string) {
 	f := planModeFlag(sessionID)
-	_ = os.MkdirAll(filepath.Dir(f), 0o755)
-	_ = os.WriteFile(f, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o644)
+	if f == "" {
+		return
+	}
+	_ = safestate.WriteFileBelow(hookenv.GrokHome(), f, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o600)
 }
 
 func planModeOff(sessionID string) {
-	_ = os.Remove(planModeFlag(sessionID))
+	f := planModeFlag(sessionID)
+	if f != "" {
+		_ = safestate.RemoveBelow(hookenv.GrokHome(), f)
+	}
 }
 
 const planModeBanner = "<PROMETHEUS_PLAN_MODE>\n" +
 	"You are in planning mode. ONLY create or edit files under `.lazygrok/` (plans, drafts).\n" +
-	`Interview the user, then Task(subagent_type="metis-consultant") for gaps, write plan to ` + "`.lazygrok/plans/<name>.md`" + `, optional Task(subagent_type="momus-reviewer").` + "\n" +
+	`Interview the user, then spawn_subagent({subagent_type: "lazygrok:metis", prompt: "TASK: identify planning gaps", background: true}) and wait with get_command_or_subagent_output; write the plan to ` + "`.lazygrok/plans/<name>.md`" + `; optionally review it with spawn_subagent using "lazygrok:momus".` + "\n" +
 	"Implementation starts only after `/start-work <plan-file>`.\n" +
 	"</PROMETHEUS_PLAN_MODE>"
 
@@ -83,9 +91,9 @@ func handleStartWork(workspace, sessionID, prompt string) string {
 	if !filepath.IsAbs(planPath) {
 		planPath = filepath.Join(base, raw)
 	}
-	if _, err := os.Stat(planPath); err != nil {
+	if _, err := safestate.ReadFile(planPath); err != nil {
 		alt := filepath.Join(base, ".lazygrok", "plans", filepath.Base(raw))
-		if _, err2 := os.Stat(alt); err2 == nil {
+		if _, err2 := safestate.ReadFile(alt); err2 == nil {
 			planPath = alt
 		} else {
 			return "<PROMETHEUS_PLAN_MODE>Start-work failed: plan not found: " + raw + "</PROMETHEUS_PLAN_MODE>"
@@ -119,21 +127,22 @@ func handleStartWork(workspace, sessionID, prompt string) string {
 		"session_ids":    []any{sessionID},
 		"works": map[string]any{
 			workID: map[string]any{
-				"work_id":        workID,
-				"active_plan":    activePlan,
-				"plan_name":      planName,
-				"status":         "active",
-				"started_at":     now,
-				"updated_at":     now,
-				"session_ids":    []any{sessionID},
-				"task_sessions":  map[string]any{},
+				"work_id":       workID,
+				"active_plan":   activePlan,
+				"plan_name":     planName,
+				"status":        "active",
+				"started_at":    now,
+				"updated_at":    now,
+				"session_ids":   []any{sessionID},
+				"task_sessions": map[string]any{},
 			},
 		},
 	}
 	boulderFile := filepath.Join(base, ".lazygrok", "boulder.json")
-	_ = os.MkdirAll(filepath.Dir(boulderFile), 0o755)
 	b, _ := json.MarshalIndent(state, "", "  ")
-	_ = os.WriteFile(boulderFile, append(b, '\n'), 0o644)
+	if err := safestate.WriteFile(boulderFile, append(b, '\n'), 0o600); err != nil {
+		return "<PROMETHEUS_PLAN_MODE>Start-work failed: unsafe workspace state path.</PROMETHEUS_PLAN_MODE>"
+	}
 
 	return "<PROMETHEUS_PLAN_MODE>Start-work: boulder.json activated. Execute the plan.</PROMETHEUS_PLAN_MODE>"
 }

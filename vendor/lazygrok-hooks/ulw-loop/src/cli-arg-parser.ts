@@ -1,6 +1,7 @@
 // biome-ignore-all format: keep this module under the mandated pure LOC budget.
-import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
+import { safeReadWorkspaceTextFile } from "./file-safety.js";
 import { UlwLoopError } from "./types.js";
 
 type RecordEvidenceCliArgs = { readonly goalId: string; readonly criterionId: string; readonly status: "pass" | "fail" | "blocked"; readonly evidence: string; readonly notes?: string };
@@ -36,7 +37,15 @@ export function parseGoalArg(argv: readonly string[]): string | undefined { retu
 
 export async function readStdin(): Promise<string> {
 	const chunks: Buffer[] = [];
-	for await (const chunk of process.stdin) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+	let totalBytes = 0;
+	for await (const chunk of process.stdin) {
+		const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+		totalBytes += bytes.length;
+		if (totalBytes > 10 * 1024 * 1024) {
+			throw new UlwLoopError("Standard input exceeds 10 MiB.", "ULW_LOOP_INPUT_TOO_LARGE");
+		}
+		chunks.push(bytes);
+	}
 	return Buffer.concat(chunks).toString("utf8");
 }
 
@@ -54,18 +63,28 @@ export function positionalText(argv: readonly string[]): string {
 
 function looksLikeJson(value: string): boolean { const trimmed = value.trim(); return trimmed.startsWith("{") || trimmed.startsWith("["); }
 
-export async function readJsonInput(value: string | undefined): Promise<unknown | undefined> {
+export async function readJsonInput(
+	value: string | undefined,
+	repoRoot = process.cwd(),
+): Promise<unknown | undefined> {
 	if (value === undefined) return undefined;
-	try { return JSON.parse(looksLikeJson(value) ? value : await readFile(value, "utf8")); }
+	try {
+		return JSON.parse(
+			looksLikeJson(value) ? value : safeReadWorkspaceTextFile(repoRoot, resolve(repoRoot, value)),
+		);
+	}
 	catch (error) {
 		const message = error instanceof Error ? error.message : "unknown error";
 		throw new UlwLoopError(`Invalid JSON input: ${message}`, "ULW_LOOP_JSON_INPUT_INVALID", { cause: error });
 	}
 }
 
-export async function parseCodexGoalJson(value: string | undefined): Promise<string | undefined> {
+export async function parseCodexGoalJson(
+	value: string | undefined,
+	repoRoot = process.cwd(),
+): Promise<string | undefined> {
 	if (value === undefined) return undefined;
-	const raw = looksLikeJson(value) ? value : await readFile(value, "utf8");
+	const raw = looksLikeJson(value) ? value : safeReadWorkspaceTextFile(repoRoot, resolve(repoRoot, value));
 	try { JSON.parse(raw); return raw; }
 	catch (error) {
 		const message = error instanceof Error ? error.message : "unknown error";

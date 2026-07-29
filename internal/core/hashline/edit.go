@@ -1,11 +1,7 @@
 package hashline
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -15,31 +11,31 @@ import (
 type OpType string
 
 const (
-	OpReplaceLine   OpType = "replace_line"
-	OpReplaceRange  OpType = "replace_range"
-	OpInsertBefore  OpType = "insert_before"
-	OpInsertAfter   OpType = "insert_after"
-	OpDeleteLine    OpType = "delete_line"
-	OpDeleteRange   OpType = "delete_range"
-	OpPrepend       OpType = "prepend"
-	OpAppend        OpType = "append"
+	OpReplaceLine  OpType = "replace_line"
+	OpReplaceRange OpType = "replace_range"
+	OpInsertBefore OpType = "insert_before"
+	OpInsertAfter  OpType = "insert_after"
+	OpDeleteLine   OpType = "delete_line"
+	OpDeleteRange  OpType = "delete_range"
+	OpPrepend      OpType = "prepend"
+	OpAppend       OpType = "append"
 )
 
 // EditOp represents a single edit operation.
 type EditOp struct {
-	Type     OpType  `json:"type"`
-	Anchor   string  `json:"anchor,omitempty"`   // "N#XX" for anchored ops
+	Type      OpType `json:"type"`
+	Anchor    string `json:"anchor,omitempty"`    // "N#XX" for anchored ops
 	EndAnchor string `json:"endAnchor,omitempty"` // for range ops
-	Content  string  `json:"content,omitempty"`  // new content (lines separated by \n)
+	Content   string `json:"content,omitempty"`   // new content (lines separated by \n)
 }
 
 // EditRequest is the input for hashline_edit.
 type EditRequest struct {
-	Path             string   `json:"path"`
-	Edits            []EditOp `json:"edits"`
-	DryRun           bool     `json:"dryRun,omitempty"`
+	Path             string        `json:"path"`
+	Edits            []EditOp      `json:"edits"`
+	DryRun           bool          `json:"dryRun,omitempty"`
 	ExpectedIdentity *FileIdentity `json:"expectedIdentity,omitempty"`
-	DiffContext      int      `json:"diffContext,omitempty"`
+	DiffContext      int           `json:"diffContext,omitempty"`
 }
 
 // EditResult is the output of hashline_edit.
@@ -97,27 +93,21 @@ func ApplyEdits(req EditRequest, workspaceRoot string) (*EditResult, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	// Read file once
-	info, err := os.Stat(absPath)
+	target, err := openWorkspaceTarget(workspaceRoot, absPath)
 	if err != nil {
-		return nil, fmt.Errorf("stat: %w", err)
+		return nil, err
 	}
-	if info.IsDir() {
-		return nil, fmt.Errorf("path is a directory")
-	}
-	if info.Size() > MaxFileSize {
-		return nil, fmt.Errorf("file size %d exceeds limit %d", info.Size(), MaxFileSize)
-	}
-
-	data, err := os.ReadFile(absPath)
+	defer target.close()
+	snapshot, err := target.readBounded(MaxFileSize)
 	if err != nil {
-		return nil, fmt.Errorf("read: %w", err)
+		return nil, err
 	}
+	data := snapshot.data
 	if isBinary(data) {
 		return nil, fmt.Errorf("binary file not supported")
 	}
 
-	oldIdentity := computeIdentity(data, info.Size())
+	oldIdentity := computeIdentity(data, snapshot.size)
 
 	// Verify expected identity if provided
 	if req.ExpectedIdentity != nil {
@@ -146,13 +136,11 @@ func ApplyEdits(req EditRequest, workspaceRoot string) (*EditResult, error) {
 	// Reconstruct file content
 	newContent := joinLines(newLines, oldIdentity.Newline, oldIdentity.HasFinalNL)
 
-	// Verify the file hasn't changed since we read it (race detection)
-	currentData, err := os.ReadFile(absPath)
+	currentSnapshot, err := target.readBounded(MaxFileSize)
 	if err != nil {
 		return nil, fmt.Errorf("race check read: %w", err)
 	}
-	currentSum := sha256.Sum256(currentData)
-	if hex.EncodeToString(currentSum[:]) != oldIdentity.SHA256 {
+	if computeIdentity(currentSnapshot.data, currentSnapshot.size).SHA256 != oldIdentity.SHA256 {
 		return nil, fmt.Errorf("file changed between validation and write (race detected)")
 	}
 
@@ -180,7 +168,7 @@ func ApplyEdits(req EditRequest, workspaceRoot string) (*EditResult, error) {
 	}
 
 	// Atomic write
-	if err := atomicWrite(absPath, []byte(newContent), info.Mode()); err != nil {
+	if err := target.replace([]byte(newContent), snapshot.mode, oldIdentity.SHA256); err != nil {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
@@ -490,31 +478,6 @@ func joinLines(lines []string, newline NewlineStyle, hasFinalNL bool) string {
 		result += sep
 	}
 	return result
-}
-
-// atomicWrite writes data to a temp file in the same directory, then renames.
-func atomicWrite(path string, data []byte, mode os.FileMode) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".lazygrok-mcp-tmp-*")
-	if err != nil {
-		return fmt.Errorf("create temp: %w", err)
-	}
-	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
-
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return fmt.Errorf("write temp: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-
-	if err := os.Chmod(tmpPath, mode); err != nil {
-		return fmt.Errorf("chmod: %w", err)
-	}
-
-	return os.Rename(tmpPath, path)
 }
 
 // generateUnifiedDiff produces a unified diff between old and new lines.

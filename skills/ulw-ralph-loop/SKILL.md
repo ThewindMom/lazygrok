@@ -26,9 +26,6 @@ Or use `/ralph-loop` for the non-ultrawork Ralph defaults (lower max iterations)
 
 1. Work until fully done → output `<promise>DONE</promise>` (not final).
 2. Stop hook enters **verification** — spawn `lazygrok:lazygrok-code-reviewer` (or oracle).
-   Parent (or the continuing turn) must pass a **full diff path**, evidence
-   paths, and absolute skill paths under `GROK_PLUGIN_ROOT` (never workspace
-   `skills/…`). Reviewer has `run_terminal_command` for read-only git fallback.
 3. Verifier must end with:
    ```text
    Agent: oracle

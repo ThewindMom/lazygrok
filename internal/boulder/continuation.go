@@ -2,11 +2,11 @@ package boulder
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"time"
 
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 const continuationMarkerDir = ".lazygrok/run-continuation"
@@ -16,12 +16,13 @@ func AutoContinuePaused(workspace, sessionID string) bool {
 	if workspace == "" || sessionID == "" {
 		return false
 	}
-	flag := filepath.Join(hookenv.GrokHome(), "state", "stop-continuation", sessionID, "stopped")
-	if _, err := os.Stat(flag); err == nil {
+	root := hookenv.GrokHome()
+	flag := filepath.Join(root, "state", "stop-continuation", sessionID, "stopped")
+	if _, err := safestate.ReadFileBelow(root, flag); err == nil {
 		return true
 	}
 	mp := filepath.Join(workspace, continuationMarkerDir, sessionID+".json")
-	b, err := os.ReadFile(mp)
+	b, err := safestate.ReadFile(mp)
 	if err != nil {
 		return false
 	}

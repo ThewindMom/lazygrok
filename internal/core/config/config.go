@@ -16,8 +16,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
+	"strconv"
 	"strings"
+
+	"lazygrok/internal/safestate"
 )
 
 // SchemaVersion is the current configuration schema version.
@@ -38,7 +40,7 @@ type CommentPolicy string
 const (
 	CommentAllow CommentPolicy = "allow"
 	CommentWarn  CommentPolicy = "warn"
-	CommentDeny   CommentPolicy = "deny"
+	CommentDeny  CommentPolicy = "deny"
 )
 
 // LogLevel controls diagnostic log verbosity.
@@ -54,7 +56,7 @@ const (
 // ContextLimits controls per-section and combined byte limits for injected context.
 type ContextLimits struct {
 	SectionBytes int `json:"sectionBytes"`
-	MaxBytes      int `json:"maxBytes"`
+	MaxBytes     int `json:"maxBytes"`
 }
 
 // Config is the fully resolved, typed configuration.
@@ -62,31 +64,31 @@ type Config struct {
 	SchemaVersion int `json:"schemaVersion"`
 
 	// Feature toggles
-	DisabledHooks     []string `json:"disabledHooks"`
-	DisabledAgents    []string `json:"disabledAgents"`
-	DisabledCommands  []string `json:"disabledCommands"`
-	DisabledSkills    []string `json:"disabledSkills"`
-	ContinuationEnabled bool  `json:"continuationEnabled"`
-	MaxContinuations   int  `json:"maxContinuations"`
-	CooldownSeconds    int  `json:"cooldownSeconds"`
-	RepeatedStateThreshold int `json:"repeatedStateThreshold"`
-	RalphEnabled       bool `json:"ralphEnabled"`
-	UltraworkEnabled   bool `json:"ultraworkEnabled"`
-	TodoEnforcement    bool `json:"todoEnforcement"`
-	BoulderEnforcement bool `json:"boulderEnforcement"`
-	PlanEnforcement    bool `json:"planEnforcement"`
-	SkillGateEnabled   bool `json:"skillGateEnabled"`
-	IntentGateEnabled  bool `json:"intentGateEnabled"`
-	LSPEnabled         bool `json:"lspEnabled"`
-	LSPStopEnforcement bool `json:"lspStopEnforcement"`
+	DisabledHooks          []string `json:"disabledHooks"`
+	DisabledAgents         []string `json:"disabledAgents"`
+	DisabledCommands       []string `json:"disabledCommands"`
+	DisabledSkills         []string `json:"disabledSkills"`
+	ContinuationEnabled    bool     `json:"continuationEnabled"`
+	MaxContinuations       int      `json:"maxContinuations"`
+	CooldownSeconds        int      `json:"cooldownSeconds"`
+	RepeatedStateThreshold int      `json:"repeatedStateThreshold"`
+	RalphEnabled           bool     `json:"ralphEnabled"`
+	UltraworkEnabled       bool     `json:"ultraworkEnabled"`
+	TodoEnforcement        bool     `json:"todoEnforcement"`
+	BoulderEnforcement     bool     `json:"boulderEnforcement"`
+	PlanEnforcement        bool     `json:"planEnforcement"`
+	SkillGateEnabled       bool     `json:"skillGateEnabled"`
+	IntentGateEnabled      bool     `json:"intentGateEnabled"`
+	LSPEnabled             bool     `json:"lspEnabled"`
+	LSPStopEnforcement     bool     `json:"lspStopEnforcement"`
 
 	// Hashline
-	HashlineMode          HashlineMode `json:"hashlineMode"`
-	NativeMutationStrict  bool         `json:"nativeMutationStrict"`
+	HashlineMode         HashlineMode `json:"hashlineMode"`
+	NativeMutationStrict bool         `json:"nativeMutationStrict"`
 
 	// Policies
-	CommentPolicy      CommentPolicy `json:"commentPolicy"`
-	ProjectRuleInjection bool        `json:"projectRuleInjection"`
+	CommentPolicy        CommentPolicy `json:"commentPolicy"`
+	ProjectRuleInjection bool          `json:"projectRuleInjection"`
 
 	// Context limits
 	Context ContextLimits `json:"context"`
@@ -97,8 +99,8 @@ type Config struct {
 
 	// State and logging
 	StateRetention string   `json:"stateRetention"`
-	LogLevel        LogLevel `json:"logLevel"`
-	LogPath         string   `json:"logPath"`
+	LogLevel       LogLevel `json:"logLevel"`
+	LogPath        string   `json:"logPath"`
 
 	// Diagnostics
 	UnknownKeys []string `json:"-"`
@@ -108,24 +110,24 @@ type Config struct {
 // Defaults returns the built-in default configuration.
 func Defaults() *Config {
 	return &Config{
-		SchemaVersion:           SchemaVersion,
-		ContinuationEnabled:     true,
-		MaxContinuations:        25,
-		CooldownSeconds:         10,
+		SchemaVersion:          SchemaVersion,
+		ContinuationEnabled:    true,
+		MaxContinuations:       25,
+		CooldownSeconds:        10,
 		RepeatedStateThreshold: 3,
-		RalphEnabled:            true,
-		UltraworkEnabled:        true,
-		TodoEnforcement:         true,
-		BoulderEnforcement:      true,
-		PlanEnforcement:         true,
-		SkillGateEnabled:        true,
-		IntentGateEnabled:       true,
-		LSPEnabled:              true,
-		LSPStopEnforcement:      false,
-		HashlineMode:            HashlinePrefer,
-		NativeMutationStrict:    false,
-		CommentPolicy:           CommentAllow,
-		ProjectRuleInjection:    true,
+		RalphEnabled:           true,
+		UltraworkEnabled:       true,
+		TodoEnforcement:        true,
+		BoulderEnforcement:     true,
+		PlanEnforcement:        true,
+		SkillGateEnabled:       true,
+		IntentGateEnabled:      true,
+		LSPEnabled:             true,
+		LSPStopEnforcement:     true,
+		HashlineMode:           HashlinePrefer,
+		NativeMutationStrict:   false,
+		CommentPolicy:          CommentAllow,
+		ProjectRuleInjection:   true,
 		Context: ContextLimits{
 			SectionBytes: 4096,
 			MaxBytes:     32768,
@@ -163,8 +165,13 @@ func Load(workspaceRoot, grokHome string) (*Config, error) {
 	}
 
 	// 1. Environment overrides
-	applyEnvOverrides(cfg)
+	if err := applyEnvOverrides(cfg); err != nil {
+		return nil, err
+	}
 
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("validation error: %w", err)
+	}
 	return cfg, nil
 }
 
@@ -191,7 +198,13 @@ func defaultGrokHome() string {
 // loadJSONCInto parses a JSONC file (JSON with comments and trailing commas)
 // and merges known fields into cfg. Unknown keys are collected into cfg.UnknownKeys.
 func loadJSONCInto(cfg *Config, path, source string) error {
-	data, err := os.ReadFile(path)
+	var data []byte
+	var err error
+	if safestate.IsPath(path) {
+		data, err = safestate.ReadFile(path)
+	} else {
+		data, err = os.ReadFile(path)
+	}
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -215,13 +228,9 @@ func loadJSONCInto(cfg *Config, path, source string) error {
 		}
 	}
 
-	var typed Config
-	if err := json.Unmarshal([]byte(cleaned), &typed); err != nil {
+	if err := json.Unmarshal([]byte(cleaned), cfg); err != nil {
 		return fmt.Errorf("field error: %w", err)
 	}
-
-	// Merge non-zero fields from typed into cfg
-	mergeNonZero(cfg, &typed)
 	cfg.Source = source
 	return nil
 }
@@ -229,228 +238,224 @@ func loadJSONCInto(cfg *Config, path, source string) error {
 // knownKeys returns the set of valid configuration keys.
 func knownKeys() map[string]bool {
 	return map[string]bool{
-		"schemaVersion":            true,
-		"disabledHooks":            true,
-		"disabledAgents":           true,
-		"disabledCommands":         true,
-		"disabledSkills":           true,
-		"continuationEnabled":      true,
-		"maxContinuations":         true,
-		"cooldownSeconds":          true,
-		"repeatedStateThreshold":   true,
-		"ralphEnabled":             true,
-		"ultraworkEnabled":         true,
-		"todoEnforcement":          true,
-		"boulderEnforcement":       true,
-		"planEnforcement":          true,
-		"skillGateEnabled":         true,
-		"intentGateEnabled":        true,
-		"lspEnabled":               true,
-		"lspStopEnforcement":       true,
-		"hashlineMode":             true,
-		"nativeMutationStrict":     true,
-		"commentPolicy":            true,
-		"projectRuleInjection":     true,
-		"context":                  true,
-		"subagentConcurrency":      true,
-		"worktreeIsolation":        true,
-		"stateRetention":           true,
-		"logLevel":                 true,
-		"logPath":                  true,
-	}
-}
-
-// mergeNonZero copies non-zero fields from src into dst.
-func mergeNonZero(dst, src *Config) {
-	if src.SchemaVersion != 0 {
-		dst.SchemaVersion = src.SchemaVersion
-	}
-	if len(src.DisabledHooks) > 0 {
-		dst.DisabledHooks = src.DisabledHooks
-	}
-	if len(src.DisabledAgents) > 0 {
-		dst.DisabledAgents = src.DisabledAgents
-	}
-	if len(src.DisabledCommands) > 0 {
-		dst.DisabledCommands = src.DisabledCommands
-	}
-	if len(src.DisabledSkills) > 0 {
-		dst.DisabledSkills = src.DisabledSkills
-	}
-	if src.ContinuationEnabled {
-		dst.ContinuationEnabled = true
-	}
-	if src.MaxContinuations != 0 {
-		dst.MaxContinuations = src.MaxContinuations
-	}
-	if src.CooldownSeconds != 0 {
-		dst.CooldownSeconds = src.CooldownSeconds
-	}
-	if src.RepeatedStateThreshold != 0 {
-		dst.RepeatedStateThreshold = src.RepeatedStateThreshold
-	}
-	if src.RalphEnabled {
-		dst.RalphEnabled = true
-	}
-	if src.UltraworkEnabled {
-		dst.UltraworkEnabled = true
-	}
-	if src.TodoEnforcement {
-		dst.TodoEnforcement = true
-	}
-	if src.BoulderEnforcement {
-		dst.BoulderEnforcement = true
-	}
-	if src.PlanEnforcement {
-		dst.PlanEnforcement = true
-	}
-	if src.SkillGateEnabled {
-		dst.SkillGateEnabled = true
-	}
-	if src.IntentGateEnabled {
-		dst.IntentGateEnabled = true
-	}
-	if src.LSPEnabled {
-		dst.LSPEnabled = true
-	}
-	if src.LSPStopEnforcement {
-		dst.LSPStopEnforcement = true
-	}
-	if src.HashlineMode != "" {
-		dst.HashlineMode = src.HashlineMode
-	}
-	if src.NativeMutationStrict {
-		dst.NativeMutationStrict = true
-	}
-	if src.CommentPolicy != "" {
-		dst.CommentPolicy = src.CommentPolicy
-	}
-	if src.ProjectRuleInjection {
-		dst.ProjectRuleInjection = true
-	}
-	if src.Context.SectionBytes != 0 {
-		dst.Context.SectionBytes = src.Context.SectionBytes
-	}
-	if src.Context.MaxBytes != 0 {
-		dst.Context.MaxBytes = src.Context.MaxBytes
-	}
-	if src.SubagentConcurrency != 0 {
-		dst.SubagentConcurrency = src.SubagentConcurrency
-	}
-	if src.WorktreeIsolation {
-		dst.WorktreeIsolation = true
-	}
-	if src.StateRetention != "" {
-		dst.StateRetention = src.StateRetention
-	}
-	if src.LogLevel != "" {
-		dst.LogLevel = src.LogLevel
-	}
-	if src.LogPath != "" {
-		dst.LogPath = src.LogPath
+		"schemaVersion":          true,
+		"disabledHooks":          true,
+		"disabledAgents":         true,
+		"disabledCommands":       true,
+		"disabledSkills":         true,
+		"continuationEnabled":    true,
+		"maxContinuations":       true,
+		"cooldownSeconds":        true,
+		"repeatedStateThreshold": true,
+		"ralphEnabled":           true,
+		"ultraworkEnabled":       true,
+		"todoEnforcement":        true,
+		"boulderEnforcement":     true,
+		"planEnforcement":        true,
+		"skillGateEnabled":       true,
+		"intentGateEnabled":      true,
+		"lspEnabled":             true,
+		"lspStopEnforcement":     true,
+		"hashlineMode":           true,
+		"nativeMutationStrict":   true,
+		"commentPolicy":          true,
+		"projectRuleInjection":   true,
+		"context":                true,
+		"subagentConcurrency":    true,
+		"worktreeIsolation":      true,
+		"stateRetention":         true,
+		"logLevel":               true,
+		"logPath":                true,
 	}
 }
 
 // --- Environment overrides ---
 
-func applyEnvOverrides(cfg *Config) {
+func applyEnvOverrides(cfg *Config) error {
+	applied := false
 	if v := os.Getenv("LAZYGROK_HASHLINE"); v != "" {
 		cfg.HashlineMode = parseHashlineMode(v)
+		applied = true
 	}
 	if v := os.Getenv("LAZYGROK_INTENT_GATE"); v != "" {
-		cfg.IntentGateEnabled = envTruthy(v, true)
+		value, err := parseEnvBool("LAZYGROK_INTENT_GATE", v)
+		if err != nil {
+			return err
+		}
+		cfg.IntentGateEnabled = value
+		applied = true
 	}
 	if v := os.Getenv("LAZYGROK_LSP_ENFORCE"); v != "" {
-		cfg.LSPStopEnforcement = envTruthy(v, false)
-		cfg.LSPEnabled = envTruthy(v, true)
+		value, err := parseEnvBool("LAZYGROK_LSP_ENFORCE", v)
+		if err != nil {
+			return err
+		}
+		cfg.LSPStopEnforcement = value
+		cfg.LSPEnabled = value
+		applied = true
 	}
 	if v := os.Getenv("LAZYGROK_PLAN_MODE"); v != "" {
-		// Deprecated: plan mode is now controlled by config; env forces on.
 		_ = v
 	}
 	if v := os.Getenv("LAZYGROK_MAX_CONTINUATIONS"); v != "" {
-		if n := parseInt(v); n > 0 {
-			cfg.MaxContinuations = n
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil || n <= 0 {
+			return fmt.Errorf("invalid LAZYGROK_MAX_CONTINUATIONS %q: must be a positive integer", v)
 		}
+		cfg.MaxContinuations = n
+		applied = true
 	}
 	if v := os.Getenv("LAZYGROK_COOLDOWN_SECONDS"); v != "" {
-		if n := parseInt(v); n >= 0 {
-			cfg.CooldownSeconds = n
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil || n < 0 {
+			return fmt.Errorf("invalid LAZYGROK_COOLDOWN_SECONDS %q: must be a non-negative integer", v)
 		}
+		cfg.CooldownSeconds = n
+		applied = true
 	}
 	if v := os.Getenv("LAZYGROK_RALPH"); v != "" {
-		cfg.RalphEnabled = envTruthy(v, true)
+		value, err := parseEnvBool("LAZYGROK_RALPH", v)
+		if err != nil {
+			return err
+		}
+		cfg.RalphEnabled = value
+		applied = true
 	}
 	if v := os.Getenv("LAZYGROK_ULTRAWORK"); v != "" {
-		cfg.UltraworkEnabled = envTruthy(v, true)
+		value, err := parseEnvBool("LAZYGROK_ULTRAWORK", v)
+		if err != nil {
+			return err
+		}
+		cfg.UltraworkEnabled = value
+		applied = true
 	}
 	if v := os.Getenv("LAZYGROK_CONTINUATION"); v != "" {
-		cfg.ContinuationEnabled = envTruthy(v, true)
+		value, err := parseEnvBool("LAZYGROK_CONTINUATION", v)
+		if err != nil {
+			return err
+		}
+		cfg.ContinuationEnabled = value
+		applied = true
 	}
-	cfg.Source = "env"
+	if applied {
+		cfg.Source = "env"
+	}
+	return nil
 }
 
 func parseHashlineMode(v string) HashlineMode {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "off", "0", "false", "no":
 		return HashlineOff
-	case "strict", "1", "true", "yes":
+	case "strict":
 		return HashlineStrict
-	default:
+	case "prefer", "1", "true", "yes", "on":
 		return HashlinePrefer
+	default:
+		return HashlineMode(strings.ToLower(strings.TrimSpace(v)))
 	}
 }
 
-func envTruthy(key string, defaultOn bool) bool {
-	v := strings.ToLower(strings.TrimSpace(key))
-	if v == "" {
-		return defaultOn
-	}
+func parseEnvBool(name, raw string) (bool, error) {
+	v := strings.ToLower(strings.TrimSpace(raw))
 	switch v {
 	case "0", "false", "no", "off":
-		return false
+		return false, nil
 	case "1", "true", "yes", "on":
-		return true
+		return true, nil
 	default:
-		return defaultOn
+		return false, fmt.Errorf("invalid %s %q: must be true/on/1 or false/off/0", name, raw)
 	}
-}
-
-func parseInt(s string) int {
-	n := 0
-	negative := false
-	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "-") {
-		negative = true
-		s = s[1:]
-	}
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0
-		}
-		n = n*10 + int(c-'0')
-	}
-	if negative {
-		return -n
-	}
-	return n
 }
 
 // --- JSONC parsing ---
 
-var (
-	jsoncLineComment = regexp.MustCompile(`(?m)//.*$`)
-	jsoncBlockComment = regexp.MustCompile(`(?s)/\*.*?\*/`)
-	jsoncTrailingComma = regexp.MustCompile(`,(\s*[}\]])`)
-)
-
 // stripJSONC removes // line comments, /* block */ comments, and trailing commas
 // from JSONC text, producing valid JSON.
 func stripJSONC(s string) string {
-	s = jsoncBlockComment.ReplaceAllString(s, "")
-	s = jsoncLineComment.ReplaceAllString(s, "")
-	s = jsoncTrailingComma.ReplaceAllString(s, "$1")
-	return s
+	var withoutComments strings.Builder
+	withoutComments.Grow(len(s))
+	inString := false
+	escaped := false
+	for index := 0; index < len(s); index++ {
+		current := s[index]
+		if inString {
+			withoutComments.WriteByte(current)
+			if escaped {
+				escaped = false
+			} else if current == '\\' {
+				escaped = true
+			} else if current == '"' {
+				inString = false
+			}
+			continue
+		}
+		if current == '"' {
+			inString = true
+			withoutComments.WriteByte(current)
+			continue
+		}
+		if current == '/' && index+1 < len(s) && s[index+1] == '/' {
+			index += 2
+			for index < len(s) && s[index] != '\n' {
+				index++
+			}
+			if index < len(s) {
+				withoutComments.WriteByte('\n')
+			}
+			continue
+		}
+		if current == '/' && index+1 < len(s) && s[index+1] == '*' {
+			index += 2
+			for index+1 < len(s) && !(s[index] == '*' && s[index+1] == '/') {
+				if s[index] == '\n' {
+					withoutComments.WriteByte('\n')
+				}
+				index++
+			}
+			if index+1 < len(s) {
+				index++
+			}
+			continue
+		}
+		withoutComments.WriteByte(current)
+	}
+
+	cleaned := withoutComments.String()
+	var withoutTrailingCommas strings.Builder
+	withoutTrailingCommas.Grow(len(cleaned))
+	inString = false
+	escaped = false
+	for index := 0; index < len(cleaned); index++ {
+		current := cleaned[index]
+		if inString {
+			withoutTrailingCommas.WriteByte(current)
+			if escaped {
+				escaped = false
+			} else if current == '\\' {
+				escaped = true
+			} else if current == '"' {
+				inString = false
+			}
+			continue
+		}
+		if current == '"' {
+			inString = true
+			withoutTrailingCommas.WriteByte(current)
+			continue
+		}
+		if current == ',' {
+			next := index + 1
+			for next < len(cleaned) && strings.ContainsRune(" \t\r\n", rune(cleaned[next])) {
+				next++
+			}
+			if next < len(cleaned) && (cleaned[next] == '}' || cleaned[next] == ']') {
+				continue
+			}
+		}
+		withoutTrailingCommas.WriteByte(current)
+	}
+	return withoutTrailingCommas.String()
 }
 
 // Validate checks the config for invalid values and returns an error with

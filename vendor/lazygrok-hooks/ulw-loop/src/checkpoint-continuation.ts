@@ -37,6 +37,7 @@ export async function checkpoint(
 	const evidence = required(argv, "--evidence");
 	const codexGoalJson = await parseCodexGoalJson(
 		statusValue === "complete" ? required(argv, "--codex-goal-json") : readValue(argv, "--codex-goal-json"),
+		repoRoot,
 	);
 	if (statusValue === "complete" && codexGoalJson === undefined) {
 		throw new UlwLoopError("Missing --codex-goal-json.", "ULW_LOOP_CODEX_GOAL_JSON_REQUIRED");

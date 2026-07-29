@@ -43,23 +43,12 @@ using `GROK_SESSION_ID` / `GROK_WORKSPACE_ROOT`, with short retries for history-
 
 ## Hook diagnostics
 
-**Do not use** `~/.grok/logs/hooks.log` because it can be stale.
-
-After any live `ulw` turn, check:
-
-| File | Meaning |
-|------|---------|
-| `~/.grok/state/lazygrok/ups-probe-latest.json` | Live stdin shape, env, stdout bytes, `injectOk` (proves only that the hook **ran**) |
-| `~/.grok/state/lazygrok/last-ups-result.json` | Shim result: `inject_ok` / `empty_ultrawork_stdout`, `promptSource`, recovery attempts |
-| Session `chat_history.jsonl` | Model response and tool calls; use this to confirm native skill selection and full `read_file` |
-
-Green hook diagnostic:
-
-1. `ups-probe-latest.json` `at` is seconds old for the session you just ran.
-2. `injectOk: true` and `stdoutBytes` ≳ 500.
-3. Prefer `classification.shape: "full_envelope"` with `hasPrompt: true`. Event-only + recovery also counts for hook compatibility.
-
-Green activation requires a real Grok turn whose first visible line is exactly `ULTRAWORK MODE ENABLED!` and whose tool history shows the complete Ultrawork skill was read.
+The active prompt path does not persist prompt envelopes, previews, or diagnostic
+artifacts. It stores only a sanitized, short-lived workspace/session binding
+through the Go state writer. Validate forwarding with the offline proof below.
+Validate activation with a real Grok turn whose first visible line is exactly
+`ULTRAWORK MODE ENABLED!` and whose tool history shows the complete Ultrawork
+skill was read.
 
 ## Offline proof
 
@@ -67,7 +56,8 @@ Green activation requires a real Grok turn whose first visible line is exactly `
 node "${GROK_PLUGIN_ROOT}/scripts/verify-ups-inject.mjs"
 ```
 
-Cases: full envelope, event-only + history, race delayed history, non-ulw empty, probe artifact write. These verify hook behavior, not model activation.
+Cases: full envelope, event-only + history, race-delayed history, non-ulw empty,
+and probe forwarding. These verify hook behavior, not model activation.
 
 ## Registration (critical on Grok 0.2.x)
 
@@ -102,7 +92,10 @@ node "${GROK_PLUGIN_ROOT}/scripts/install-user-hooks.mjs"
 # writes ~/.grok/hooks/lazygrok.json
 ```
 
-v4 bridge is a **full mirror** of plugin `hooks/hooks.json` (all events), via `lazygrok-run.sh` resolving `installed-plugins/lazygrok-*` at runtime. After `grok plugin update`, no re-install. Probe self-heals missing/stale bridges. Audit: `python3 scripts/audit-hooks.py full`.
+v4 bridge is a **full mirror** of plugin `hooks/hooks.json` (all events), via
+`lazygrok-run.sh` resolving `installed-plugins/lazygrok-*` at runtime. After
+`grok plugin update`, no re-install. Bridge installation is explicit rather than
+an automatic prompt-time mutation. Audit: `python3 scripts/audit-hooks.py full`.
 
 ### Plugin UPS chain (`hooks/hooks.json` + user bridge)
 
@@ -111,4 +104,6 @@ v4 bridge is a **full mirror** of plugin `hooks/hooks.json` (all events), via `l
 2. `lazygrok-shim.mjs ulw-loop user-prompt-submit`
 3. `lazygrok-shim.mjs rules user-prompt-submit`
 
-Offline hook proof: `node scripts/verify-ups-inject.mjs` (full envelope, event-only+history, race retry, non-ulw empty, probe artifact). Real activation proof still comes from Grok selecting and reading the Ultrawork skill.
+Offline hook proof: `node scripts/verify-ups-inject.mjs` (full envelope,
+event-only+history, race retry, non-ulw empty, probe forwarding). Real activation
+proof still comes from Grok selecting and reading the Ultrawork skill.

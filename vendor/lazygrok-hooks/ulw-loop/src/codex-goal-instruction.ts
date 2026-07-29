@@ -5,6 +5,7 @@ import {
 	isEssentialCriterion,
 	isFinalRunCompletionCandidate,
 } from "./goal-status.js";
+import { grokUlwCli } from "./runtime-command.js";
 import type { UlwLoopCodexGoalMode, UlwLoopItem, UlwLoopPlan, UlwLoopSuccessCriterion } from "./types.js";
 
 export interface CodexCreateGoalPayload {
@@ -108,7 +109,7 @@ function formatCriterionLine(criterion: UlwLoopSuccessCriterion): string {
 function evidenceLayoutLines(plan: UlwLoopPlan): string[] {
 	if (plan.evidenceLayoutVersion !== 2) return [];
 	return [
-		"- Evidence layout v2: write every artifact for the active goal (QA matrix, review reports, receipts) under the current attempt directory — read currentAttemptDir from `omo ulw-loop status --json` (.omo/evidence/ulw/<session>/<goalId>/a<attempt>). The final checkpoint rejects quality-gate artifacts outside that directory.",
+		"- Evidence layout v2: write every artifact for the active goal (QA matrix, review reports, receipts) under the current attempt directory — read currentAttemptDir from `ulw-loop status --json` (.lazygrok/evidence/ulw/<session>/<goalId>/a<attempt>, or .omo/evidence for a legacy run). The final checkpoint rejects quality-gate artifacts outside that directory.",
 	];
 }
 
@@ -116,8 +117,8 @@ function finalSection(plan: UlwLoopPlan, goal: UlwLoopItem, isFinal: boolean, ag
 	if (!isFinal)
 		return "- This is not the final ulw-loop story; do not run the final reviewer/manual-QA/gate-review quality gate yet.";
 	const option = sessionOption(plan);
-	const blockerCommand = `omo ulw-loop record-review-blockers${option} --goal-id ${goal.id} --title "Resolve final code-review blockers" --objective "<blocker-resolution objective>" --evidence "<review findings>" --codex-goal-json "<active get_goal JSON or path>"`;
-	const checkpointCommand = `omo ulw-loop checkpoint${option} --goal-id ${goal.id} --status complete --evidence "<targeted verification/manualQa/gateReview evidence>" --codex-goal-json "<fresh complete get_goal JSON or path>" --quality-gate-json "<quality gate JSON or path>"`;
+	const blockerCommand = `${grokUlwCli()} record-review-blockers${option} --goal-id ${goal.id} --title "Resolve final code-review blockers" --objective "<blocker-resolution objective>" --evidence "<review findings>" --codex-goal-json "<active get_goal JSON or path>"`;
+	const checkpointCommand = `${grokUlwCli()} checkpoint${option} --goal-id ${goal.id} --status complete --evidence "<targeted verification/manualQa/gateReview evidence>" --codex-goal-json "<fresh complete get_goal JSON or path>" --quality-gate-json "<quality gate JSON or path>"`;
 	return joinLines([
 		"Final story — run mandatory quality gate before update_goal:",
 		"- Run targeted verification for changed behavior.",
@@ -137,11 +138,14 @@ function finalSection(plan: UlwLoopPlan, goal: UlwLoopItem, isFinal: boolean, ag
 }
 
 function sessionOption(plan: UlwLoopPlan): string {
-	const prefix = ".omo/ulw-loop/";
 	const suffix = "/goals.json";
-	if (!plan.goalsPath.startsWith(prefix) || !plan.goalsPath.endsWith(suffix)) return "";
-	const sessionId = plan.goalsPath.slice(prefix.length, -suffix.length);
-	return sessionId.length === 0 ? "" : ` --session-id ${sessionId}`;
+	if (!plan.goalsPath.endsWith(suffix)) return "";
+	for (const prefix of [".lazygrok/ulw-loop/", ".omo/ulw-loop/"]) {
+		if (!plan.goalsPath.startsWith(prefix)) continue;
+		const sessionId = plan.goalsPath.slice(prefix.length, -suffix.length);
+		return sessionId.length === 0 ? "" : ` --session-id ${sessionId}`;
+	}
+	return "";
 }
 
 function joinLines(lines: readonly string[]): string {

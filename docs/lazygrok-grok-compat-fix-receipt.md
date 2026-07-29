@@ -1,5 +1,7 @@
 # Grok-compat fix receipt
 
+> **2026-07-29 follow-up:** the earlier medium residuals for the ULW-plan scaffold, registered ULW skill-copy drift, `.omo` defaults, and unsupported local image-view tools are resolved by the 4.19.3 runtime parity pass. New work uses `.lazygrok`, legacy `.omo` runs remain resumable, and `scripts/test_runtime_parity.py` enforces the active catalog/runtime contract. The inventory below is retained as the historical result of the earlier audit.
+
 **Plugin:** `lazygrok-85b8f856`  
 **Status:** complete — required gates clean (`verify.clean: true`)
 

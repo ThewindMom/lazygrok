@@ -1,29 +1,51 @@
-import { createReadStream } from "node:fs";
-import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { closeSync, createReadStream, fstatSync } from "node:fs";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 
-import { aggregateCodexObjectiveForScope } from "./goal-status.js";
 import {
+	safeAppendWorkspaceTextFile,
+	safeAtomicWriteWorkspaceTextFile,
+	safeOpenWorkspaceReadFile,
+	safeReadWorkspaceTextFile,
+} from "./file-safety.js";
+import { aggregateCodexObjectiveForScope } from "./goal-status.js";
+import { withInterprocessLock } from "./interprocess-lock.js";
+import { commitPlanMutation, recoverPlanMutation } from "./mutation-transaction.js";
+import {
+	assertSafeUlwLoopPathSegment,
 	repoRelative,
 	type UlwLoopScope,
 	ulwLoopDir,
 	ulwLoopGoalsPath,
 	ulwLoopLedgerPath,
-	ulwLoopRelativeDir,
 } from "./paths.js";
 import type { UlwLoopLedgerEntry, UlwLoopPlan } from "./types.js";
-import { iso, ULW_LOOP_DIR, ULW_LOOP_GOALS, ULW_LOOP_LEDGER, UlwLoopError } from "./types.js";
+import { iso, ULW_LOOP_DIR, ULW_LOOP_GOALS, ULW_LOOP_LEDGER, ULW_LOOP_LEGACY_DIR, UlwLoopError } from "./types.js";
 
-const LEGACY_OBJECTIVE_PREFIX = `Complete all ulw-loop stories in ${ULW_LOOP_DIR}/${ULW_LOOP_GOALS}: `;
-const LEGACY_OBJECTIVE = `Complete all ulw-loop stories listed in ${ULW_LOOP_DIR}/${ULW_LOOP_GOALS}. Use ${ULW_LOOP_DIR}/${ULW_LOOP_LEDGER} as the durable audit trail.`;
+const LEGACY_OBJECTIVE_PREFIXES = [ULW_LOOP_DIR, ULW_LOOP_LEGACY_DIR].map(
+	(dir) => `Complete all ulw-loop stories in ${dir}/${ULW_LOOP_GOALS}: `,
+);
+const LEGACY_OBJECTIVES = [ULW_LOOP_DIR, ULW_LOOP_LEGACY_DIR].map(
+	(dir) =>
+		`Complete all ulw-loop stories listed in ${dir}/${ULW_LOOP_GOALS}. Use ${dir}/${ULW_LOOP_LEDGER} as the durable audit trail.`,
+);
 const locks = new Map<string, Promise<undefined>>();
+const heldMutationLocks = new AsyncLocalStorage<ReadonlySet<string>>();
+const MAX_LEDGER_BYTES = 64 * 1024 * 1024;
+const MAX_LEDGER_LINE_BYTES = 1024 * 1024;
+const MAX_STEERING_ENTRIES = 100_000;
 
 function hasCode(error: unknown, code: string): boolean {
 	return error instanceof Error && "code" in error && error.code === code;
 }
 
 function isLegacyEnumeratedAggregateObjective(objective: string | undefined): objective is string {
-	return objective === LEGACY_OBJECTIVE || Boolean(objective?.startsWith(LEGACY_OBJECTIVE_PREFIX));
+	return (
+		objective !== undefined &&
+		(LEGACY_OBJECTIVES.includes(objective) ||
+			LEGACY_OBJECTIVE_PREFIXES.some((prefix) => objective.startsWith(prefix)))
+	);
 }
 
 function isSteeringKind(value: unknown): value is UlwLoopLedgerEntry["kind"] {
@@ -33,6 +55,10 @@ function isSteeringKind(value: unknown): value is UlwLoopLedgerEntry["kind"] {
 		value === "criteria_revised" ||
 		value === "batch_updated"
 	);
+}
+
+function mutationLockKey(repoRoot: string, scope?: UlwLoopScope): string {
+	return `${repoRoot}\0${repoRelative(ulwLoopDir(repoRoot, scope), repoRoot)}`;
 }
 
 export async function withUlwLoopMutationLock<T>(repoRoot: string, fn: () => Promise<T>): Promise<T>;
@@ -49,9 +75,16 @@ export async function withUlwLoopMutationLock<T>(
 	const scope = typeof scopeOrFn === "function" ? undefined : scopeOrFn;
 	const fn = typeof scopeOrFn === "function" ? scopeOrFn : maybeFn;
 	if (fn === undefined) throw new UlwLoopError("Missing ulw-loop mutation body.", "ULW_LOOP_LOCK_BODY_MISSING");
-	const lockKey = `${repoRoot}\0${ulwLoopRelativeDir(scope)}`;
+	const lockKey = mutationLockKey(repoRoot, scope);
+	const held = heldMutationLocks.getStore();
+	if (held?.has(lockKey) === true) return fn();
 	const prior = locks.get(lockKey) ?? Promise.resolve(undefined);
-	const run = prior.then(fn, fn);
+	const runLocked = (): Promise<T> =>
+		withInterprocessLock(repoRoot, join(ulwLoopDir(repoRoot, scope), ".mutation.lock"), async () => {
+			await recoverPlanMutation(repoRoot, writePlan, scope);
+			return heldMutationLocks.run(new Set([...(held ?? []), lockKey]), fn);
+		});
+	const run = prior.then(runLocked, runLocked);
 	// The stored gate resolves to undefined so the map never retains fn's result
 	// (plans/audits), and it removes itself once no newer waiter replaced it —
 	// otherwise a long-lived host leaks one entry per (repo, scope) forever.
@@ -70,11 +103,11 @@ export async function readUlwLoopPlan(repoRoot: string, scope?: UlwLoopScope): P
 	const path = ulwLoopGoalsPath(repoRoot, scope);
 	let raw: string;
 	try {
-		raw = await readFile(path, "utf8");
+		raw = safeReadWorkspaceTextFile(repoRoot, path);
 	} catch (error) {
 		if (!hasCode(error, "ENOENT")) throw error;
 		throw new UlwLoopError(
-			`No ulw-loop plan found at ${repoRelative(path, repoRoot)}. Run \`omo ulw-loop create-goals ...\` first.`,
+			`No ulw-loop plan found at ${repoRelative(path, repoRoot)}. Run \`ulw-loop create-goals ...\` first.`,
 			"ULW_LOOP_PLAN_MISSING",
 			{ cause: error },
 		);
@@ -83,25 +116,32 @@ export async function readUlwLoopPlan(repoRoot: string, scope?: UlwLoopScope): P
 	if (parsed.version !== 1 || !Array.isArray(parsed.goals)) {
 		throw new UlwLoopError(`Invalid ulw-loop plan at ${repoRelative(path, repoRoot)}.`, "ULW_LOOP_PLAN_INVALID");
 	}
+	for (const goal of parsed.goals) assertSafeUlwLoopPathSegment(goal.id, "goal id");
+	if (parsed.activeGoalId !== undefined) assertSafeUlwLoopPathSegment(parsed.activeGoalId, "active goal id");
 	const previousObjective = parsed.codexObjective;
 	if (
 		(parsed.codexGoalMode ?? "per_story") === "aggregate" &&
 		isLegacyEnumeratedAggregateObjective(previousObjective)
 	) {
+		if (heldMutationLocks.getStore()?.has(mutationLockKey(repoRoot, scope)) !== true) {
+			return withUlwLoopMutationLock(repoRoot, scope, () => readUlwLoopPlan(repoRoot, scope));
+		}
 		const now = iso();
 		parsed.codexObjective = aggregateCodexObjectiveForScope(scope);
 		parsed.codexObjectiveAliases = [...new Set([...(parsed.codexObjectiveAliases ?? []), previousObjective])];
 		parsed.updatedAt = now;
-		await writePlan(repoRoot, parsed, scope);
-		await appendLedger(
+		await commitPlanAndLedgerEntries(
 			repoRoot,
-			{
-				at: now,
-				kind: "aggregate_objective_migrated",
-				message: "Migrated legacy enumerated aggregate Codex objective to the stable pointer objective.",
-				before: { codexObjective: previousObjective },
-				after: { codexObjective: parsed.codexObjective },
-			},
+			parsed,
+			[
+				{
+					at: now,
+					kind: "aggregate_objective_migrated",
+					message: "Migrated legacy enumerated aggregate Codex objective to the stable pointer objective.",
+					before: { codexObjective: previousObjective },
+					after: { codexObjective: parsed.codexObjective },
+				},
+			],
 			scope,
 		);
 	}
@@ -109,11 +149,10 @@ export async function readUlwLoopPlan(repoRoot: string, scope?: UlwLoopScope): P
 }
 
 export async function writePlan(repoRoot: string, plan: UlwLoopPlan, scope?: UlwLoopScope): Promise<void> {
-	await mkdir(ulwLoopDir(repoRoot, scope), { recursive: true });
+	for (const goal of plan.goals) assertSafeUlwLoopPathSegment(goal.id, "goal id");
+	if (plan.activeGoalId !== undefined) assertSafeUlwLoopPathSegment(plan.activeGoalId, "active goal id");
 	const path = ulwLoopGoalsPath(repoRoot, scope);
-	const tmpPath = `${path}.${process.pid}.${Date.now()}.tmp`;
-	await writeFile(tmpPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
-	await rename(tmpPath, path);
+	await safeAtomicWriteWorkspaceTextFile(repoRoot, path, `${JSON.stringify(plan, null, 2)}\n`);
 }
 
 export async function appendLedger(repoRoot: string, entry: UlwLoopLedgerEntry, scope?: UlwLoopScope): Promise<void> {
@@ -126,12 +165,23 @@ export async function appendLedgerEntries(
 	scope?: UlwLoopScope,
 ): Promise<void> {
 	if (entries.length === 0) return;
-	await mkdir(ulwLoopDir(repoRoot, scope), { recursive: true });
-	await appendFile(
+	await safeAppendWorkspaceTextFile(
+		repoRoot,
 		ulwLoopLedgerPath(repoRoot, scope),
 		`${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`,
-		"utf8",
 	);
+}
+
+export async function commitPlanAndLedgerEntries(
+	repoRoot: string,
+	plan: UlwLoopPlan,
+	entries: readonly UlwLoopLedgerEntry[],
+	scope?: UlwLoopScope,
+): Promise<void> {
+	if (entries.length === 0) {
+		throw new UlwLoopError("Plan mutations require an audit entry.", "ULW_LOOP_TRANSACTION_AUDIT_REQUIRED");
+	}
+	await commitPlanMutation(repoRoot, plan, entries, writePlan, scope);
 }
 
 /**
@@ -140,14 +190,34 @@ export async function appendLedgerEntries(
  * ballooned every steer/dedup path; line-at-a-time keeps memory O(longest line).
  */
 async function* ledgerLines(repoRoot: string, scope?: UlwLoopScope): AsyncGenerator<string> {
-	const stream = createReadStream(ulwLoopLedgerPath(repoRoot, scope), { encoding: "utf8" });
+	const ledgerPath = ulwLoopLedgerPath(repoRoot, scope);
+	let fileDescriptor: number;
+	try {
+		fileDescriptor = safeOpenWorkspaceReadFile(repoRoot, ledgerPath, MAX_LEDGER_BYTES);
+	} catch (error) {
+		if (hasCode(error, "ENOENT")) return;
+		throw error;
+	}
+	const ledgerBytes = fstatSync(fileDescriptor).size;
+	if (ledgerBytes === 0) {
+		closeSync(fileDescriptor);
+		return;
+	}
+	const stream = createReadStream(ledgerPath, {
+		encoding: "utf8",
+		fd: fileDescriptor,
+		autoClose: true,
+		start: 0,
+		end: ledgerBytes - 1,
+	});
 	const lines = createInterface({ input: stream, crlfDelay: Number.POSITIVE_INFINITY });
 	try {
 		for await (const line of lines) {
+			if (Buffer.byteLength(line, "utf8") > MAX_LEDGER_LINE_BYTES) {
+				throw new UlwLoopError("ULW ledger line exceeds the bounded input limit.", "ULW_LOOP_LEDGER_TOO_LARGE");
+			}
 			if (line.trim().length > 0) yield line;
 		}
-	} catch (error) {
-		if (!hasCode(error, "ENOENT")) throw error;
 	} finally {
 		lines.close();
 		stream.destroy();
@@ -158,7 +228,11 @@ export async function readSteeringLedgerEntries(repoRoot: string, scope?: UlwLoo
 	const entries: UlwLoopLedgerEntry[] = [];
 	for await (const line of ledgerLines(repoRoot, scope)) {
 		const entry: UlwLoopLedgerEntry = JSON.parse(line);
-		if (isSteeringKind(entry.kind)) entries.push(entry);
+		if (!isSteeringKind(entry.kind)) continue;
+		if (entries.length >= MAX_STEERING_ENTRIES) {
+			throw new UlwLoopError("ULW steering ledger exceeds the bounded entry limit.", "ULW_LOOP_LEDGER_TOO_LARGE");
+		}
+		entries.push(entry);
 	}
 	return entries;
 }

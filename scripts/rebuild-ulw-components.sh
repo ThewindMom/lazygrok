@@ -22,11 +22,17 @@ PY
 }
 
 echo "Building ultrawork..."
-( cd "$UW" && bun build src/cli.ts --target node --format esm --outfile dist/cli.js && chmod +x dist/cli.js )
+( cd "$UW" && npm run build && chmod +x dist/cli.js )
 dedupe_shebang "$UW/dist/cli.js"
+cp "$UW/directive.md" "$UL/directive.md"
 echo "Building ulw-loop..."
-( cd "$UL" && bun build src/cli.ts --target node --format esm --outfile dist/cli.js && chmod +x dist/cli.js )
+( cd "$UL" && npm run build && chmod +x dist/cli.js )
 dedupe_shebang "$UL/dist/cli.js"
-grep -q 'normal Grok path' "$UW/dist/cli.js"
-grep -q 'normal Grok path' "$UL/dist/cli.js"
+grep -q 'ULTRAWORK MODE ENABLED!' "$UW/dist/cli.js"
+grep -q '.lazygrok/ulw-loop' "$UL/dist/cli.js"
+grep -q 'denied oversized hook input' "$UL/dist/cli.js"
+if find "$UL/dist" -mindepth 1 -maxdepth 1 ! -name cli.js -print -quit | grep -q .; then
+  echo "ulw-loop build produced non-canonical modular output" >&2
+  exit 1
+fi
 echo "OK ultrawork=$(wc -c <"$UW/dist/cli.js") ulw-loop=$(wc -c <"$UL/dist/cli.js")"

@@ -1,8 +1,14 @@
 package hashline
 
-import "lazygrok/internal/config"
+import coreconfig "lazygrok/internal/core/config"
 
-// Enabled reports whether hashline guards are active (LAZYGROK_HASHLINE, default on).
-func Enabled() bool {
-	return config.HashlineEnabled()
+func resolveMode(workspace, grokHome string) (coreconfig.HashlineMode, error) {
+	cfg, err := coreconfig.Load(workspace, grokHome)
+	if err != nil {
+		return coreconfig.HashlineOff, err
+	}
+	if cfg.NativeMutationStrict && cfg.HashlineMode != coreconfig.HashlineOff {
+		return coreconfig.HashlineStrict, nil
+	}
+	return cfg.HashlineMode, nil
 }

@@ -21,7 +21,6 @@ from .file_scanners import (
 )
 from .kiro_scanner import scan_kiro
 from .opencode import scan_opencode
-from .grok import scan_grok
 from .pi_family import scan_gajae_code, scan_oh_my_pi, scan_senpi
 from .sqlite_optional_scanners import scan_crush, scan_goose, scan_hermes, scan_kilo_cli, scan_zed
 from .sqlite_scanners import scan_cursor_cli, scan_kodu
@@ -55,7 +54,6 @@ PLATFORM_SCANNERS: dict[str, Scanner] = {
     "crush": scan_crush,
     "zed": scan_zed,
     "kiro": scan_kiro,
-    "grok": scan_grok,
 }
 DEFAULT_PLATFORMS = frozenset(PLATFORM_SCANNERS)
 PLATFORM_ALIASES = {

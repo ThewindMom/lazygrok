@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-
 import {
 	hasFlag,
 	parseCodexGoalJson,
@@ -12,6 +10,7 @@ import { blockedDecisionHandoff, normalizeCodexGoalMode, printJson, printStatus 
 import { parseSteeringProposals, printSteerBatchResult, printSteerResult } from "./cli-steering.js";
 import { buildCodexGoalInstruction } from "./codex-goal-instruction.js";
 import { recordEvidence } from "./evidence.js";
+import { safeReadWorkspaceTextFile } from "./file-safety.js";
 import { isEssentialCriterion } from "./goal-status.js";
 import { type UlwLoopScope, ulwLoopAttemptEvidenceDir } from "./paths.js";
 import { addUlwLoopGoal, createUlwLoopPlan, startNextUlwLoop, summarizeUlwLoopPlan } from "./plan-crud.js";
@@ -31,7 +30,7 @@ export async function createGoals(
 	const briefFile = readValue(argv, "--brief-file");
 	const brief =
 		readValue(argv, "--brief") ??
-		(briefFile === undefined ? undefined : await readFile(briefFile, "utf8")) ??
+		(briefFile === undefined ? undefined : safeReadWorkspaceTextFile(repoRoot, resolve(repoRoot, briefFile))) ??
 		(hasFlag(argv, "--from-stdin") ? await readStdin() : undefined) ??
 		positionalText(argv);
 	if (!brief.trim()) {
@@ -66,7 +65,7 @@ export async function status(repoRoot: string, json: boolean, scope?: UlwLoopSco
 		const active = plan.goals.find((goal) => goal.id === plan.activeGoalId);
 		const currentAttemptDir =
 			plan.evidenceLayoutVersion === 2 && active
-				? ulwLoopAttemptEvidenceDir(active.id, active.attempt, scope)
+				? ulwLoopAttemptEvidenceDir(repoRoot, active.id, active.attempt, scope)
 				: undefined;
 		printJson({
 			ok: true,
@@ -111,7 +110,7 @@ export async function steer(
 	json: boolean,
 	scope?: UlwLoopScope,
 ): Promise<number> {
-	const proposals = await parseSteeringProposals(argv);
+	const proposals = await parseSteeringProposals(argv, repoRoot);
 	const single = proposals[0];
 	if (single !== undefined && proposals.length === 1 && readValue(argv, "--proposals-json") === undefined) {
 		const result = await steerUlwLoop(repoRoot, single, scope);
@@ -179,7 +178,7 @@ export async function reviewBlockers(
 	json: boolean,
 	scope?: UlwLoopScope,
 ): Promise<number> {
-	const codexGoalJson = await parseCodexGoalJson(required(argv, "--codex-goal-json"));
+	const codexGoalJson = await parseCodexGoalJson(required(argv, "--codex-goal-json"), repoRoot);
 	if (codexGoalJson === undefined) {
 		throw new UlwLoopError("Missing --codex-goal-json.", "ULW_LOOP_CODEX_GOAL_JSON_REQUIRED");
 	}
@@ -227,3 +226,5 @@ function findGoal(plan: { readonly goals: readonly UlwLoopItem[] }, goalId: stri
 	if (goal !== undefined) return goal;
 	throw new UlwLoopError(`Unknown ulw-loop id: ${goalId}.`, "ULW_LOOP_GOAL_NOT_FOUND", { details: { goalId } });
 }
+
+import { resolve } from "node:path";

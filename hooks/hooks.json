@@ -34,16 +34,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" telemetry session-start",
-            "timeout": 15,
-            "statusMessage": "(OmO) Recording Session Telemetry"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" codegraph session-start",
             "timeout": 15,
             "statusMessage": "(OmO) Checking CodeGraph Bootstrap"
@@ -100,17 +90,6 @@
             "type": "command",
             "command": "bash \"${GROK_PLUGIN_ROOT}/hooks/run-hook.sh\" pre-tool-use",
             "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "^run_terminal_command$|^Bash$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" git-bash pre-tool-use",
-            "timeout": 5,
-            "statusMessage": "(OmO) Recommending Git Bash MCP"
           }
         ]
       },
@@ -208,17 +187,6 @@
             "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" rules post-tool-use",
             "timeout": 10,
             "statusMessage": "(OmO) Matching Project Rules"
-          }
-        ]
-      },
-      {
-        "matcher": "create_thread|codex_app\\.create_thread",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" teammode post-tool-use",
-            "timeout": 10,
-            "statusMessage": "(OmO) Checking Thread Title Hygiene"
           }
         ]
       },
@@ -392,17 +360,6 @@
             "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" lsp post-compact",
             "timeout": 5,
             "statusMessage": "(OmO) Resetting LSP Diagnostics Cache"
-          }
-        ]
-      },
-      {
-        "matcher": "manual|auto",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" git-bash post-compact",
-            "timeout": 5,
-            "statusMessage": "(OmO) Resetting Git Bash MCP Reminder"
           }
         ]
       }

@@ -34,15 +34,18 @@ Or invoke this skill and state the task in the same message.
 - Each iteration must make real progress.
 - Do not ask the user to continue or start the "next phase" — the Stop hook auto-continues until the promise tag or `/cancel-ralph`.
 
-## Ultrawork variant
+## Verified Ralph variant
 
-For verified completion (Oracle subagent required), use **`ulw-loop`** instead:
+For verified completion (Oracle subagent required), use
+**`ulw-ralph-loop`** instead:
 
 ```text
-/ulw-loop "same task" [--max-iterations=500]
+/ulw-ralph-loop "same task" [--max-iterations=500]
 ```
 
-See the lazygrok `ulw-loop` skill (`grok inspect` for path).
+See the LazyGrok `ulw-ralph-loop` skill (`grok inspect` for path). The
+separate `/ulw-loop` command owns the durable goal ledger and is not a Ralph
+promise loop.
 
 ## Cancel
 
@@ -50,7 +53,8 @@ See the lazygrok `ulw-loop` skill (`grok inspect` for path).
 /cancel-ralph
 ```
 
-Or use the `cancel-ralph` skill. Also cancels an active ultrawork loop.
+Or use the `cancel-ralph` skill. It cancels either Ralph-family loop, not the
+ULW goal ledger.
 
 ## State file
 

@@ -16,17 +16,17 @@ description: "Escalation skill for blocked or hard-to-reach web access — load 
 | Edit files | `search_replace` / `write` |
 | Shell | `run_terminal_command` |
 | Read files | `read_file` |
-| Binding goal | `# Goal` + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
+| Binding goal | `# Goal` block + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
 | Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
 | Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
-| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
+| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` or `lazygrok-plan` |
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
-
-If an example uses a foreign tool name, use the Grok tools table above instead.
 
 
+Escalation web access for tasks a normal browse or fetch cannot complete. Reach for this skill the moment a page is blocked (WAF / 403 / Cloudflare), needs JS rendering, hides behind a login, or lives on a platform a generic fetcher cannot read. Escalate only when the cheaper tier cannot do the job:
+
+**Tier 1 — insane-search** (headless extraction + WAF bypass) -> **Tier 1.5 — agent-reach** (platform-native APIs, esp. Chinese platforms) -> **Tier 2 — Chrome stealth** (real interaction via CloakBrowser + agent-browser).
 
 ## PHASE 0 — ROUTE FIRST (MANDATORY)
 

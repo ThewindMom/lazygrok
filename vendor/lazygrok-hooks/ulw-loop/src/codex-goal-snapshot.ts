@@ -1,6 +1,6 @@
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+
+import { safeReadWorkspaceTextFile } from "./file-safety.js";
 
 export type CodexGoalSnapshotStatus = "active" | "complete" | "cancelled" | "failed" | "unknown";
 
@@ -76,12 +76,8 @@ export async function readCodexGoalSnapshotInput(
 	try {
 		return parseCodexGoalSnapshot(JSON.parse(trimmed));
 	} catch {
-		const path = resolve(cwd, trimmed);
-		if (!existsSync(path)) {
-			throw new CodexGoalSnapshotError(`Codex goal snapshot is neither valid JSON nor a readable path: ${trimmed}`);
-		}
 		try {
-			return parseCodexGoalSnapshot(JSON.parse(await readFile(path, "utf-8")));
+			return parseCodexGoalSnapshot(JSON.parse(safeReadWorkspaceTextFile(cwd, resolve(cwd, trimmed))));
 		} catch (error) {
 			throw new CodexGoalSnapshotError(
 				`Codex goal snapshot path does not contain valid JSON: ${trimmed}${error instanceof Error ? ` (${error.message})` : ""}`,

@@ -14,7 +14,7 @@ import (
 
 var cancelRE = regexp.MustCompile(`(?i)^/?cancel-ralph\b`)
 
-// CollectUserPrompt handles ralph/ultrawork slash commands on UserPromptSubmit.
+// CollectUserPrompt handles legacy Ralph commands on UserPromptSubmit.
 func CollectUserPrompt(ev hookenv.Event) string {
 	ws := hookenv.Workspace(ev)
 	if ws == "" {
@@ -29,16 +29,14 @@ func CollectUserPrompt(ev hookenv.Event) string {
 
 	if cancelRE.MatchString(prompt) {
 		clearState(path)
-		return "<RALPH_LOOP>Canceled active loop (ralph or ultrawork). Cleared " + stateRelPath + ".</RALPH_LOOP>"
+		return "<RALPH_LOOP>Canceled active Ralph loop. Cleared " + stateRelPath + ".</RALPH_LOOP>"
 	}
 
 	args := parseLoopArgs(prompt)
 	if args == nil || args.Task == "" {
 		if matchedLoopCommand(prompt) {
 			return `<RALPH_LOOP>Provide a task. Examples:
-/ralph-loop "fix bug"
-/ulw-loop "fix bug" --max-iterations=200
-ultrawork refactor auth module</RALPH_LOOP>`
+/ralph-loop "fix bug"</RALPH_LOOP>`
 		}
 		return ""
 	}
@@ -58,16 +56,16 @@ ultrawork refactor auth module</RALPH_LOOP>`
 	if err := writeState(path, st); err != nil {
 		return ""
 	}
+	skillName := "ralph-loop"
 	if args.Ultrawork {
-		_ = skillgate.MarkSkillLoaded(sid, "ulw-loop")
-	} else {
-		_ = skillgate.MarkSkillLoaded(sid, "ralph-loop")
+		skillName = "ulw-ralph-loop"
 	}
-	tmpl := ralphLoopTemplate(st.MaxIterations, st.CompletionPromise)
+	_ = skillgate.MarkSkillLoaded(sid, skillName)
+	context := ralphLoopTemplate(st.MaxIterations, st.CompletionPromise)
 	if args.Ultrawork {
-		tmpl = ulwLoopTemplate(st.MaxIterations, st.CompletionPromise, oracleSubagent())
+		context += "\nThis explicit Ultrawork Ralph variant requires verified completion before the promise is accepted.\n"
 	}
-	return strings.TrimSpace(tmpl + "\n" + args.Task)
+	return strings.TrimSpace(context + "\n" + args.Task)
 }
 
 type loopArgs struct {
@@ -79,32 +77,18 @@ type loopArgs struct {
 }
 
 func matchedLoopCommand(prompt string) bool {
-	re := regexp.MustCompile(`(?i)^/?(?:ralph-loop|ulw-loop|ultrawork|ulw)(?:\s|$)`)
+	re := regexp.MustCompile(`(?i)^/?(?:ralph-loop|ulw-ralph-loop)(?:\s|$)`)
 	return re.MatchString(prompt)
 }
 
 func parseLoopArgs(text string) *loopArgs {
 	text = strings.TrimSpace(text)
-	ultrawork := false
-	rest := ""
-
-	m := regexp.MustCompile(`(?is)^/?(?:ralph-loop)(?:\s+|$)(.*)$`).FindStringSubmatch(text)
-	if m != nil {
-		rest = strings.TrimSpace(m[1])
-	} else {
-		m2 := regexp.MustCompile(`(?is)^/?(?:ulw-loop|ultrawork|ulw)(?:\s+|$)(.*)$`).FindStringSubmatch(text)
-		if m2 != nil {
-			ultrawork = true
-			rest = strings.TrimSpace(m2[1])
-		} else {
-			m3 := regexp.MustCompile(`(?is)^(?:ultrawork|ulw)\s+(.+)$`).FindStringSubmatch(text)
-			if m3 == nil {
-				return nil
-			}
-			ultrawork = true
-			rest = strings.TrimSpace(m3[1])
-		}
+	m := regexp.MustCompile(`(?is)^/?(ralph-loop|ulw-ralph-loop)(?:\s+|$)(.*)$`).FindStringSubmatch(text)
+	if m == nil {
+		return nil
 	}
+	ultrawork := strings.EqualFold(m[1], "ulw-ralph-loop")
+	rest := strings.TrimSpace(m[2])
 
 	cp := os.Getenv("RALPH_DEFAULT_COMPLETION_PROMISE")
 	if cp == "" {
@@ -174,32 +158,4 @@ func ralphLoopTemplate(maxIt int, promise string) string {
 ## Your task
 
 `, promise, maxIt)
-}
-
-func ulwLoopTemplate(maxIt int, promise, oracle string) string {
-	verified := ulwVerificationPromise()
-	return fmt.Sprintf(`You are in an **ULTRAWORK Loop** — Ralph loop with mandatory verification before exit.
-
-## How it works
-
-1. Work continuously until the task is **fully** complete.
-2. When done, output: <promise>%s</promise> — this does **not** end the loop.
-3. The Stop hook will require **Oracle verification** via task(subagent_type="%s", ...).
-4. The loop ends only after verification emits <promise>%s</promise> (Agent: oracle in the verification report).
-5. Maximum iterations: %d.
-
-## Rules
-
-- Do not treat <promise>%s</promise> as final completion until Oracle verifies.
-- After emitting DONE, run the verification subagent when the hook instructs you.
-- Ask Oracle to review skeptically; include the original task and evidence of what changed.
-- Use todos for multi-step work.
-
-## Cancel
-
-/cancel-ralph
-
-## Your task
-
-`, promise, oracle, verified, maxIt, promise)
 }

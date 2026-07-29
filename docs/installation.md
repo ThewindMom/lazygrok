@@ -3,21 +3,31 @@
 ## Requirements
 
 - [Grok Build CLI](https://github.com/xai-org/grok) with plugin support (`grok plugin install`, `grok plugin enable`)
-- Network access to GitHub for `github:ThewindMom/lazygrok`
+- Network access to GitHub for `ThewindMom/lazygrok`
 
-Hooks ship as prebuilt **`bin/lazygrok-hook-*`** binaries (no Python required). **superpowers** skills are bundled under `vendor/superpowers/skills/` — no separate superpowers install required. Optional: **`grok`** for skill catalog refresh (`grok inspect --json`); **`node`** for LSP post-edit diagnostics when using the bundled LSP MCP.
+Hooks ship as prebuilt **`bin/lazygrok-hook-*`** binaries (no Python required).
+The inactive upstream superpowers source tree is not registered in
+`plugin.json`. Node is required for the bundled LazyCodex hook components and
+LSP MCP servers.
+
+Full ULW state/evidence persistence and LSP workspace mutation are supported on
+Linux. macOS and Windows builds fail those sensitive mutations closed until
+equivalent descriptor/handle anchoring is available.
 
 ## Install from GitHub
 
+The current plugin release is **0.4.4**. Grok's verified GitHub shorthand is
+`owner/repository[@ref]`:
+
 ```bash
-grok plugin install github:ThewindMom/lazygrok --trust
+grok plugin install ThewindMom/lazygrok@v0.4.4 --trust
 grok plugin enable lazygrok
 ```
 
-Pinned to a release (see [Releases](https://github.com/ThewindMom/lazygrok/releases)):
+To follow the repository default branch instead:
 
 ```bash
-grok plugin install github:ThewindMom/lazygrok@v0.1.0 --trust
+grok plugin install ThewindMom/lazygrok --trust
 grok plugin enable lazygrok
 ```
 
@@ -29,6 +39,24 @@ cd lazygrok
 grok plugin install "$(pwd)" --trust
 grok plugin enable lazygrok
 ```
+
+## First-install bootstrap
+
+Run this once after the first install. It creates the user-hook bridge needed
+by Grok 0.2.x load ordering and copies the two ULW workflow panels:
+
+```bash
+PLUGIN="$(find "$HOME/.grok/installed-plugins" -maxdepth 1 -type d -name 'lazygrok-*' -print | sort | tail -1)"
+test -n "$PLUGIN"
+node "$PLUGIN/scripts/install-user-hooks.mjs"
+mkdir -p "$HOME/.grok/workflows"
+cp -f "$PLUGIN/docs/examples/ulw-discover.rhai" "$HOME/.grok/workflows/"
+cp -f "$PLUGIN/docs/examples/ulw-review.rhai" "$HOME/.grok/workflows/"
+```
+
+The bridge resolves the current installed snapshot dynamically, so routine
+`grok plugin update lazygrok` does not require reinstalling it. Re-copy the
+workflow files after an update when their shipped contents change.
 
 After hook or skill changes:
 
@@ -42,12 +70,13 @@ Start a **new Grok session** or reload hooks in the TUI (`Ctrl+L` → Hooks). Ho
 
 ## Migrate from global copies
 
-If you previously copied hooks or skills into `~/.grok/hooks/` or `~/.grok/rules/`:
+If you need to replace LazyGrok's user-hook bridge:
 
 ```bash
 bash scripts/remove-global-overlays.sh
-grok plugin install github:ThewindMom/lazygrok --trust
+grok plugin install ThewindMom/lazygrok@v0.4.4 --trust
 grok plugin enable lazygrok
+node scripts/install-user-hooks.mjs
 ```
 
 Removed files are archived under `~/.grok/archive/removed-global-lazygrok-<date>/`.
@@ -56,7 +85,9 @@ Removed files are archived under `~/.grok/archive/removed-global-lazygrok-<date>
 
 ```bash
 grok plugin validate .
-grok inspect   # should list lazygrok skills
+grok plugin details lazygrok
+grok inspect
+python3 scripts/audit-hooks.py full
 ```
 
 Hook smoke tests (from a clone):

@@ -26,7 +26,7 @@ export function isLspDaemonUnreachableDiagnostics(diagnostics) {
     return diagnostics.includes("LSP daemon unreachable");
 }
 function sessionStatePath(sessionId) {
-    const root = process.env["PLUGIN_DATA"] ?? join(homedir(), ".codex", "codex-lsp");
+    const root = process.env["PLUGIN_DATA"] ?? join(homedir(), ".grok", "lazygrok-lsp");
     return join(root, "sessions", `${safePathSegment(sessionId)}.json`);
 }
 function readSessionState(path) {

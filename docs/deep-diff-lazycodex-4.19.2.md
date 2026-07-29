@@ -75,8 +75,8 @@
 ## Skill file-level churn (paired, sorted by content-diff)
 
 ### `frontend` — churn=102, SKILL.md=NO, bodyΔ=+8496B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/frontend`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/frontend`
+- LG: `<plugin-root>/vendor/lazygrok-skills/frontend`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/frontend`
 - **LCX-only files (5):** `references/design/aside.md`, `references/design/clone-from-url.md`, `references/design/layout-skill.md`, `references/design/lazyweb.md`, `references/design/stitch-design-example.md`
 - **Changed files (97):**
   - `ATTRIBUTION.md`: LG 6355B → LCX 12144B (Δ+5789)
@@ -104,8 +104,8 @@
 - desc LCX: MUST USE for frontend/web UI/UX/visual work: building, styling, redesigning pages/components, React setup, performance a…
 
 ### `ultimate-browsing` — churn=45, SKILL.md=NO, bodyΔ=-190B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/ultimate-browsing`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ultimate-browsing`
+- LG: `<plugin-root>/skills/ultimate-browsing`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ultimate-browsing`
 - **LCX-only files (44):** `agents/openai.yaml`, `engine/__init__.py`, `engine/__main__.py`, `engine/bias_check.py`, `engine/curl_probe.py`, `engine/executor.py`, `engine/fetch_chain.py`, `engine/referers.py`, `engine/result_schema.py`, `engine/summary.py`, `engine/templates/package.json`, `engine/templates/playwright_mobile_chrome.js`, `engine/templates/playwright_real_chrome.js`, `engine/tests/test_fetch_chain.py`, `engine/tests/test_playwright_templates.py` …
 - **Changed files (1):**
   - `SKILL.md`: LG 10321B → LCX 10251B (Δ-70)
@@ -113,8 +113,8 @@
 - desc LCX: Escalation skill for blocked or hard-to-reach web access — load it when a normal browse/fetch is blocked (WAF, 403, Clou…
 
 ### `systematic-debugging→debugging` — churn=21, SKILL.md=NO, bodyΔ=+10176B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/systematic-debugging`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/debugging`
+- LG: `<plugin-root>/skills/systematic-debugging`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/debugging`
 - **LCX-only files (20):** `agents/openai.yaml`, `references/methodology/00-setup.md`, `references/methodology/02-investigate.md`, `references/methodology/03-flaky-triage.md`, `references/methodology/04-oracle-triple.md`, `references/methodology/05-escalate.md`, `references/methodology/06-fix.md`, `references/methodology/08-qa.md`, `references/methodology/09-cleanup.md`, `references/methodology/partial-runtime-evidence.md`, `references/runtimes/bundled-js-binary.md`, `references/runtimes/go.md`, `references/runtimes/native-binary.md`, `references/runtimes/node.md`, `references/runtimes/python.md` …
 - **Changed files (1):**
   - `SKILL.md`: LG 1455B → LCX 12453B (Δ+10998)
@@ -122,8 +122,8 @@
 - desc LCX: MUST USE for any real runtime debugging across ANY language or binary — crashes, silent failures, wrong responses, stuck…
 
 ### `coding-agent-sessions` — churn=8, SKILL.md=NO, bodyΔ=+388B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/coding-agent-sessions`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/coding-agent-sessions`
+- LG: `<plugin-root>/skills/coding-agent-sessions`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/coding-agent-sessions`
 - **LCX-only files (1):** `scripts/agent_sessions/pi_family.py`
 - **LG-only files (2):** `references/grok.md`, `scripts/agent_sessions/grok.py`
 - **Changed files (5):**
@@ -136,8 +136,8 @@
 - desc LCX: MUST USE when asked to find, read, list, search, inspect, fetch, export, or reconstruct coding-agent sessions across Cod…
 
 ### `debugging` — churn=6, SKILL.md=NO, bodyΔ=+297B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/debugging`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/debugging`
+- LG: `<plugin-root>/vendor/lazygrok-skills/debugging`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/debugging`
 - **LCX-only files (1):** `references/methodology/03-flaky-triage.md`
 - **Changed files (5):**
   - `SKILL.md`: LG 12133B → LCX 12453B (Δ+320)
@@ -147,8 +147,8 @@
   - `references/methodology/partial-runtime-evidence.md`: LG 10775B → LCX 10697B (Δ-78)
 
 ### `prometheus-plan→ulw-plan` — churn=6, SKILL.md=NO, bodyΔ=+11439B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/prometheus-plan`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ulw-plan`
+- LG: `<plugin-root>/skills/prometheus-plan`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ulw-plan`
 - **LCX-only files (5):** `agents/openai.yaml`, `references/full-workflow.md`, `references/intent-clear.md`, `references/intent-unclear.md`, `scripts/scaffold-plan.mjs`
 - **Changed files (1):**
   - `SKILL.md`: LG 2211B → LCX 14356B (Δ+12145)
@@ -156,8 +156,8 @@
 - desc LCX: MUST USE for planning before coding when design uncertainty remains after discovery: ambiguous scope, competing decompos…
 
 ### `teammode` — churn=5, SKILL.md=NO, bodyΔ=+10788B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/teammode`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/teammode`
+- LG: `<plugin-root>/vendor/lazygrok-skills/teammode`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/teammode`
 - **LCX-only files (1):** `scripts/team-worktree.mjs`
 - **Changed files (4):**
   - `SKILL.md`: LG 9694B → LCX 21054B (Δ+11360)
@@ -168,8 +168,8 @@
 - desc LCX: Codex-only team orchestration: run a named team of cooperating Codex workers with durable, script-managed state. MUST US…
 
 ### `ulw-plan` — churn=5, SKILL.md=NO, bodyΔ=+10925B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/ulw-plan`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ulw-plan`
+- LG: `<plugin-root>/skills/ulw-plan`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ulw-plan`
 - **LCX-only files (1):** `agents/openai.yaml`
 - **Changed files (4):**
   - `SKILL.md`: LG 2748B → LCX 14356B (Δ+11608)
@@ -180,8 +180,8 @@
 - desc LCX: MUST USE for planning before coding when design uncertainty remains after discovery: ambiguous scope, competing decompos…
 
 ### `ulw-loop` — churn=4, SKILL.md=NO, bodyΔ=+4032B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/ulw-loop`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ulw-loop`
+- LG: `<plugin-root>/skills/ulw-loop`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ulw-loop`
 - **LCX-only files (2):** `.gitkeep`, `agents/openai.yaml`
 - **Changed files (2):**
   - `SKILL.md`: LG 1444B → LCX 5389B (Δ+3945)
@@ -190,16 +190,16 @@
 - desc LCX: Goal-like loop that uses ultrawork mode to decompose work into systematic, evidence-bound steps.…
 
 ### `programming` — churn=3, SKILL.md=NO, bodyΔ=+5702B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/programming`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/programming`
+- LG: `<plugin-root>/vendor/lazygrok-skills/programming`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/programming`
 - **LCX-only files (1):** `references/logging.md`
 - **Changed files (2):**
   - `SKILL.md`: LG 33457B → LCX 39264B (Δ+5807)
   - `scripts/typescript/check-no-excuse-rules.ts`: LG 10231B → LCX 12813B (Δ+2582)
 
 ### `ultrawork` — churn=3, SKILL.md=NO, bodyΔ=+763B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/ultrawork`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ultrawork`
+- LG: `<plugin-root>/skills/ultrawork`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ultrawork`
 - **LG-only files (1):** `directive.md`
 - **Changed files (2):**
   - `SKILL.md`: LG 26114B → LCX 26868B (Δ+754)
@@ -208,8 +208,8 @@
 - desc LCX: Binding ultrawork mode directive for omo on Codex. When a prompt contains ultrawork or ulw, the omo UserPromptSubmit hoo…
 
 ### `git-master` — churn=2, SKILL.md=NO, bodyΔ=+3337B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/git-master`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/git-master`
+- LG: `<plugin-root>/skills/git-master`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/git-master`
 - **LCX-only files (1):** `agents/openai.yaml`
 - **Changed files (1):**
   - `SKILL.md`: LG 2113B → LCX 5570B (Δ+3457)
@@ -217,8 +217,8 @@
 - desc LCX: MUST USE whenever a task needs a commit or git-history investigation. Covers atomic commits, staging, commit-message sty…
 
 ### `init-deep` — churn=2, SKILL.md=NO, bodyΔ=+13758B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/init-deep`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/init-deep`
+- LG: `<plugin-root>/skills/init-deep`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/init-deep`
 - **LCX-only files (1):** `agents/openai.yaml`
 - **Changed files (1):**
   - `SKILL.md`: LG 2063B → LCX 15624B (Δ+13561)
@@ -226,29 +226,29 @@
 - desc LCX: (builtin) Initialize hierarchical AGENTS.md knowledge base…
 
 ### `lcx-contribute-bug-fix` — churn=2, SKILL.md=NO, bodyΔ=+1366B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/lcx-contribute-bug-fix`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/lcx-contribute-bug-fix`
+- LG: `<plugin-root>/vendor/lazygrok-skills/lcx-contribute-bug-fix`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/lcx-contribute-bug-fix`
 - **Changed files (2):**
   - `SKILL.md`: LG 9963B → LCX 11329B (Δ+1366)
   - `agents/openai.yaml`: LG 656B → LCX 667B (Δ+11)
 
 ### `lcx-doctor` — churn=2, SKILL.md=NO, bodyΔ=+2910B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/lcx-doctor`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/lcx-doctor`
+- LG: `<plugin-root>/vendor/lazygrok-skills/lcx-doctor`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/lcx-doctor`
 - **Changed files (2):**
   - `SKILL.md`: LG 6098B → LCX 9008B (Δ+2910)
   - `agents/openai.yaml`: LG 588B → LCX 643B (Δ+55)
 
 ### `lcx-report-bug` — churn=2, SKILL.md=NO, bodyΔ=+1597B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/lcx-report-bug`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/lcx-report-bug`
+- LG: `<plugin-root>/vendor/lazygrok-skills/lcx-report-bug`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/lcx-report-bug`
 - **Changed files (2):**
   - `SKILL.md`: LG 10471B → LCX 12068B (Δ+1597)
   - `agents/openai.yaml`: LG 643B → LCX 691B (Δ+48)
 
 ### `lsp` — churn=2, SKILL.md=NO, bodyΔ=-633B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/lsp`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/lsp`
+- LG: `<plugin-root>/skills/lsp`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/lsp`
 - **LCX-only files (1):** `agents/openai.yaml`
 - **Changed files (1):**
   - `SKILL.md`: LG 1902B → LCX 1213B (Δ-689)
@@ -256,8 +256,8 @@
 - desc LCX: Use when Codex needs language-server diagnostics, definitions, references, symbols, or rename safety checks in the curre…
 
 ### `refactoring→refactor` — churn=2, SKILL.md=NO, bodyΔ=+28226B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/refactoring`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/refactor`
+- LG: `<plugin-root>/skills/refactoring`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/refactor`
 - **LCX-only files (1):** `agents/openai.yaml`
 - **Changed files (1):**
   - `SKILL.md`: LG 1167B → LCX 29331B (Δ+28164)
@@ -265,8 +265,8 @@
 - desc LCX: Intelligent refactor command. Triggers: refactor, refactoring, cleanup, restructure, extract, simplify, modernize.…
 
 ### `remove-ai-slops` — churn=2, SKILL.md=NO, bodyΔ=+23878B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/remove-ai-slops`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/remove-ai-slops`
+- LG: `<plugin-root>/skills/remove-ai-slops`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/remove-ai-slops`
 - **LCX-only files (1):** `agents/openai.yaml`
 - **Changed files (1):**
   - `SKILL.md`: LG 1819B → LCX 26284B (Δ+24465)
@@ -274,8 +274,8 @@
 - desc LCX: Remove AI-generated code smells (slop) from branch changes or an explicit file list. Locks behavior with regression test…
 
 ### `review-work` — churn=2, SKILL.md=NO, bodyΔ=+29360B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/review-work`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/review-work`
+- LG: `<plugin-root>/skills/review-work`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/review-work`
 - **LCX-only files (1):** `agents/openai.yaml`
 - **Changed files (1):**
   - `SKILL.md`: LG 1370B → LCX 31087B (Δ+29717)
@@ -283,8 +283,8 @@
 - desc LCX: Post-implementation review orchestrator. Launches 5 parallel background sub-agents: Oracle (goal/constraint verification…
 
 ### `start-work-execution→start-work` — churn=2, SKILL.md=NO, bodyΔ=+21344B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/start-work-execution`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/start-work`
+- LG: `<plugin-root>/skills/start-work-execution`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/start-work`
 - **LCX-only files (1):** `agents/openai.yaml`
 - **Changed files (1):**
   - `SKILL.md`: LG 1471B → LCX 22917B (Δ+21446)
@@ -292,15 +292,15 @@
 - desc LCX: Execute a Prometheus work plan in Codex with Boulder state, evidence ledger updates, worktree discipline, parallel subag…
 
 ### `ultraresearch→ulw-research` — churn=2, SKILL.md=NO, bodyΔ=+4337B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/ultraresearch`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ulw-research`
+- LG: `<plugin-root>/vendor/lazygrok-skills/ultraresearch`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ulw-research`
 - **Changed files (2):**
   - `SKILL.md`: LG 25029B → LCX 29391B (Δ+4362)
   - `agents/openai.yaml`: LG 48B → LCX 47B (Δ-1)
 
 ### `visual-qa` — churn=2, SKILL.md=NO, bodyΔ=+13773B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/visual-qa`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/visual-qa`
+- LG: `<plugin-root>/vendor/lazygrok-skills/visual-qa`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/visual-qa`
 - **Changed files (2):**
   - `SKILL.md`: LG 17248B → LCX 30651B (Δ+13403)
   - `references/agent-browser-setup.md`: LG 1647B → LCX 1760B (Δ+113)
@@ -308,41 +308,41 @@
 - desc LCX: MUST USE after building/changing any UI or when asked whether a page, component, or TUI looks right. Rigorous visual QA …
 
 ### `ast-grep` — churn=1, SKILL.md=YES, bodyΔ=+0B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/ast-grep`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ast-grep`
+- LG: `<plugin-root>/vendor/lazygrok-skills/ast-grep`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ast-grep`
 - **LG-only files (1):** `.gitignore`
 
 ### `comment-checker` — churn=1, SKILL.md=NO, bodyΔ=-9B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/comment-checker`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/comment-checker`
+- LG: `<plugin-root>/vendor/lazygrok-skills/comment-checker`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/comment-checker`
 - **Changed files (1):**
   - `SKILL.md`: LG 648B → LCX 640B (Δ-8)
 - desc LG: Use when Grok needs to understand or respond to automatic comment-checker feedback emitted after an edit-like PostToolUs…
 - desc LCX: Use when Codex needs to understand or respond to automatic comment-checker feedback emitted after an edit-like PostToolU…
 
 ### `lsp-setup` — churn=1, SKILL.md=NO, bodyΔ=-361B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/lsp-setup`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/lsp-setup`
+- LG: `<plugin-root>/vendor/lazygrok-skills/lsp-setup`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/lsp-setup`
 - **Changed files (1):**
   - `SKILL.md`: LG 6694B → LCX 6317B (Δ-377)
 
 ### `refactor` — churn=1, SKILL.md=NO, bodyΔ=+3112B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/refactor`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/refactor`
+- LG: `<plugin-root>/vendor/lazygrok-skills/refactor`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/refactor`
 - **Changed files (1):**
   - `SKILL.md`: LG 26219B → LCX 29331B (Δ+3112)
 
 ### `rules` — churn=1, SKILL.md=NO, bodyΔ=-176B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/rules`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/rules`
+- LG: `<plugin-root>/vendor/lazygrok-skills/rules`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/rules`
 - **Changed files (1):**
   - `SKILL.md`: LG 1251B → LCX 1076B (Δ-175)
 - desc LG: Use when the user asks about Grok Rules behavior, injected project rules, supported rule file locations, matching, or en…
 - desc LCX: Use when the user asks about Codex Rules behavior, injected project rules, supported rule file locations, matching, or e…
 
 ### `start-work` — churn=1, SKILL.md=NO, bodyΔ=+5783B
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/start-work`
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/start-work`
+- LG: `<plugin-root>/vendor/lazygrok-skills/start-work`
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/start-work`
 - **Changed files (1):**
   - `SKILL.md`: LG 17138B → LCX 22917B (Δ+5779)
 - desc LG: Execute a Prometheus work plan in Grok with Boulder state, evidence ledger updates, worktree discipline, parallel subage…
@@ -521,8 +521,8 @@
 ### Agent TOML content diffs (paired)
 
 #### `clone-fidelity-reviewer` DIFF
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-agents/lazygrok-clone-fidelity-reviewer.toml` (2122B)
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/components/ultrawork/agents/lazycodex-clone-fidelity-reviewer.toml` (2128B)
+- LG: `<plugin-root>/vendor/lazygrok-agents/lazygrok-clone-fidelity-reviewer.toml` (2122B)
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/components/ultrawork/agents/lazycodex-clone-fidelity-reviewer.toml` (2128B)
 - **name:**
   - LG: `lazygrok-clone-fidelity-reviewer`
   - LCX: `lazycodex-clone-fidelity-reviewer`
@@ -534,8 +534,8 @@
   - LCX: `high`
 
 #### `code-reviewer` DIFF
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-agents/lazygrok-code-reviewer.toml` (2446B)
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/components/ultrawork/agents/lazycodex-code-reviewer.toml` (2788B)
+- LG: `<plugin-root>/vendor/lazygrok-agents/lazygrok-code-reviewer.toml` (2446B)
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/components/ultrawork/agents/lazycodex-code-reviewer.toml` (2788B)
 - **name:**
   - LG: `lazygrok-code-reviewer`
   - LCX: `lazycodex-code-reviewer`
@@ -547,15 +547,15 @@
   - LCX: `medium`
 
 #### `explorer` DIFF
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-agents/explorer.toml` (3883B)
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/components/ultrawork/agents/explorer.toml` (3104B)
+- LG: `<plugin-root>/vendor/lazygrok-agents/explorer.toml` (3883B)
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/components/ultrawork/agents/explorer.toml` (3104B)
 - **model:**
   - LG: `gpt-5.4-mini`
   - LCX: `gpt-5.6-luna`
 
 #### `gate-reviewer` DIFF
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-agents/lazygrok-gate-reviewer.toml` (2440B)
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/components/ultrawork/agents/lazycodex-gate-reviewer.toml` (3289B)
+- LG: `<plugin-root>/vendor/lazygrok-agents/lazygrok-gate-reviewer.toml` (2440B)
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/components/ultrawork/agents/lazycodex-gate-reviewer.toml` (3289B)
 - **name:**
   - LG: `lazygrok-gate-reviewer`
   - LCX: `lazycodex-gate-reviewer`
@@ -567,22 +567,22 @@
   - LCX: `low`
 
 #### `librarian` DIFF
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-agents/librarian.toml` (7362B)
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/components/ultrawork/agents/librarian.toml` (6460B)
+- LG: `<plugin-root>/vendor/lazygrok-agents/librarian.toml` (7362B)
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/components/ultrawork/agents/librarian.toml` (6460B)
 - **model:**
   - LG: `gpt-5.4-mini`
   - LCX: `gpt-5.6-luna`
 
 #### `metis` DIFF
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-agents/metis.toml` (3407B)
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/components/ultrawork/agents/metis.toml` (2774B)
+- LG: `<plugin-root>/vendor/lazygrok-agents/metis.toml` (3407B)
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/components/ultrawork/agents/metis.toml` (2774B)
 - **model:**
   - LG: `gpt-5.5`
   - LCX: `gpt-5.6-sol`
 
 #### `momus` DIFF
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-agents/momus.toml` (4185B)
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/components/ultrawork/agents/momus.toml` (3140B)
+- LG: `<plugin-root>/vendor/lazygrok-agents/momus.toml` (4185B)
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/components/ultrawork/agents/momus.toml` (3140B)
 - **description:**
   - LG: `Plan reviewer. Verifies a work plan is executable: references exist, tasks are startable, QA scenarios are concrete. Issues OKAY, ITERATE, or REJECT. Read-only.`
   - LCX: `Deep plan reviewer. Verifies a work plan is executable: references exist, tasks are startable, QA scenarios are concrete. Runs at High and may take a long time; callers must wait for its terminal resu`
@@ -594,8 +594,8 @@
   - LCX: `high`
 
 #### `plan` DIFF
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-agents/plan.toml` (8955B)
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/components/ultrawork/agents/plan.toml` (8761B)
+- LG: `<plugin-root>/vendor/lazygrok-agents/plan.toml` (8955B)
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/components/ultrawork/agents/plan.toml` (8761B)
 - **description:**
   - LG: `Strategic planning consultant. Produces a single executable work plan from a vague or large request. Planner only - never implements. Writes the plan to .omo/plans/<slug>.md.`
   - LCX: `Strategic planning consultant for work with unresolved design uncertainty after discovery. Produces one executable plan; never implements. Writes the plan to .omo/plans/<slug>.md.`
@@ -607,8 +607,8 @@
   - LCX: `high`
 
 #### `qa-executor` DIFF
-- LG: `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-agents/lazygrok-qa-executor.toml` (1515B)
-- LCX: `/tmp/lcx-cmp/package/packages/omo-codex/plugin/components/ultrawork/agents/lazycodex-qa-executor.toml` (1897B)
+- LG: `<plugin-root>/vendor/lazygrok-agents/lazygrok-qa-executor.toml` (1515B)
+- LCX: `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/components/ultrawork/agents/lazycodex-qa-executor.toml` (1897B)
 - **name:**
   - LG: `lazygrok-qa-executor`
   - LCX: `lazycodex-qa-executor`
@@ -673,8 +673,8 @@ LazyCodex does **not** ship Grok Rhai workflows. Its 'workflows' are skill+hook+
 ## ULW workflow document diffs (full-workflow.md / directive / skill-pointer)
 
 ### ulw-loop full-workflow
-- LG `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/ulw-loop/references/full-workflow.md` 14167 chars / 14197B hash=8d8b948a3fe6008b
-- LCX `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ulw-loop/references/full-workflow.md` 32637 chars / 32739B hash=0d094ce88f4fb2f9
+- LG `<plugin-root>/skills/ulw-loop/references/full-workflow.md` 14167 chars / 14197B hash=8d8b948a3fe6008b
+- LCX `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ulw-loop/references/full-workflow.md` 32637 chars / 32739B hash=0d094ce88f4fb2f9
 - identical: **NO**
 - `create_goal`: LG=4 LCX=3
 - `update_goal`: LG=5 LCX=2
@@ -694,8 +694,8 @@ LazyCodex does **not** ship Grok Rhai workflows. Its 'workflows' are skill+hook+
 - headings only LCX: ['### 2. Refine success criteria + a Prometheus-grade QA and parallelism plan per goal', '## Dynamic Steering']
 
 ### ulw-plan full-workflow
-- LG `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/ulw-plan/references/full-workflow.md` 11423 chars / 11423B hash=bc9911fd762bac96
-- LCX `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ulw-plan/references/full-workflow.md` 25165 chars / 25177B hash=b4499c364a41b2e9
+- LG `<plugin-root>/vendor/lazygrok-skills/ulw-plan/references/full-workflow.md` 11423 chars / 11423B hash=bc9911fd762bac96
+- LCX `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ulw-plan/references/full-workflow.md` 25165 chars / 25177B hash=b4499c364a41b2e9
 - identical: **NO**
 - `spawn_agent`: LG=1 LCX=2
 - `.omo/`: LG=5 LCX=16
@@ -703,8 +703,8 @@ LazyCodex does **not** ship Grok Rhai workflows. Its 'workflows' are skill+hook+
 - headings only LCX: ['## Plan artifact producer contract', '### Handoff explanation (the mandatory shape of every plan summary)', '### High-accuracy review (dual review)']
 
 ### ultrawork directive.md
-- LG `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-hooks/ultrawork/directive.md` 19631 chars / 19747B hash=9e4f7922c882b59a
-- LCX `/tmp/lcx-cmp/package/packages/omo-codex/plugin/components/ultrawork/directive.md` 26376 chars / 26518B hash=e00b53308651435b
+- LG `<plugin-root>/vendor/lazygrok-hooks/ultrawork/directive.md` 19631 chars / 19747B hash=9e4f7922c882b59a
+- LCX `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/components/ultrawork/directive.md` 26376 chars / 26518B hash=e00b53308651435b
 - identical: **NO**
 - `create_goal`: LG=1 LCX=2
 - `update_goal`: LG=2 LCX=0
@@ -721,8 +721,8 @@ LazyCodex does **not** ship Grok Rhai workflows. Its 'workflows' are skill+hook+
 - headings only LCX: ['## 0. Survey the skills, gather context, then size the work', '## 1. Create the goal with binding success criteria', '## 3. Register obsessive todos via `update_plan`', '# Finding things (lead with these, code-mode the first wave)', '# Waiting discipline (a poll costs a full model round)']
 
 ### ultrawork SKILL.md
-- LG `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/ultrawork/SKILL.md` 25970 chars / 26114B hash=01ecf64fd0bf9add
-- LCX `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ultrawork/SKILL.md` 26726 chars / 26868B hash=b34d334c37ba4ebe
+- LG `<plugin-root>/skills/ultrawork/SKILL.md` 25970 chars / 26114B hash=01ecf64fd0bf9add
+- LCX `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ultrawork/SKILL.md` 26726 chars / 26868B hash=b34d334c37ba4ebe
 - identical: **NO**
 - `create_goal`: LG=1 LCX=2
 - `update_goal`: LG=2 LCX=0
@@ -739,8 +739,8 @@ LazyCodex does **not** ship Grok Rhai workflows. Its 'workflows' are skill+hook+
 - headings only LCX: ['## 1. Create the goal with binding success criteria', '## 3. Register obsessive todos via `update_plan`', '# Codex subagent reliability', '# TOML-backed subagent routing compatibility']
 
 ### ulw-loop SKILL.md (top)
-- LG `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/skills/ulw-loop/SKILL.md` 1436 chars / 1444B hash=655d2e52e2d6a347
-- LCX `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ulw-loop/SKILL.md` 5375 chars / 5389B hash=d5701f4826eae8ed
+- LG `<plugin-root>/skills/ulw-loop/SKILL.md` 1436 chars / 1444B hash=655d2e52e2d6a347
+- LCX `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ulw-loop/SKILL.md` 5375 chars / 5389B hash=d5701f4826eae8ed
 - identical: **NO**
 - `create_goal`: LG=0 LCX=1
 - `update_plan`: LG=0 LCX=1
@@ -755,8 +755,8 @@ LazyCodex does **not** ship Grok Rhai workflows. Its 'workflows' are skill+hook+
 - headings only LCX: ['# ulw-loop', '## Required First Steps', '## Non-Negotiables', '## Codex Tool Mapping']
 
 ### ulw-loop vendor SKILL
-- LG `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/ulw-loop/SKILL.md` 4273 chars / 4273B hash=250003b46cae5109
-- LCX `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ulw-loop/SKILL.md` 5375 chars / 5389B hash=d5701f4826eae8ed
+- LG `<plugin-root>/vendor/lazygrok-skills/ulw-loop/SKILL.md` 4273 chars / 4273B hash=250003b46cae5109
+- LCX `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ulw-loop/SKILL.md` 5375 chars / 5389B hash=d5701f4826eae8ed
 - identical: **NO**
 - `create_goal`: LG=0 LCX=1
 - `update_plan`: LG=0 LCX=1
@@ -766,8 +766,8 @@ LazyCodex does **not** ship Grok Rhai workflows. Its 'workflows' are skill+hook+
 - `.omo/`: LG=2 LCX=1
 
 ### start-work SKILL
-- LG `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/start-work/SKILL.md` 17102 chars / 17138B hash=a29c0f534dbbb634
-- LCX `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/start-work/SKILL.md` 22877 chars / 22917B hash=adcdbe2eb45981b1
+- LG `<plugin-root>/vendor/lazygrok-skills/start-work/SKILL.md` 17102 chars / 17138B hash=a29c0f534dbbb634
+- LCX `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/start-work/SKILL.md` 22877 chars / 22917B hash=adcdbe2eb45981b1
 - identical: **NO**
 - `create_goal`: LG=0 LCX=1
 - `# Goal`: LG=0 LCX=1
@@ -780,8 +780,8 @@ LazyCodex does **not** ship Grok Rhai workflows. Its 'workflows' are skill+hook+
 - headings only LCX: ['## Codex Harness Tool Compatibility', '### Delegation by difficulty (Codex tier workers)', '## Codex Subagent Reliability', '## Goal and todo discipline (MANDATORY)']
 
 ### ulw-research / ultraresearch
-- LG `/home/thewind/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-skills/ultraresearch/SKILL.md` 24839 chars / 25029B hash=0e8d7b51e10aae61
-- LCX `/tmp/lcx-cmp/package/packages/omo-codex/plugin/skills/ulw-research/SKILL.md` 29182 chars / 29391B hash=f2c4a590c161a2dd
+- LG `<plugin-root>/vendor/lazygrok-skills/ultraresearch/SKILL.md` 24839 chars / 25029B hash=0e8d7b51e10aae61
+- LCX `<lazycodex-4.19.2-extract>/package/packages/omo-codex/plugin/skills/ulw-research/SKILL.md` 29182 chars / 29391B hash=f2c4a590c161a2dd
 - identical: **NO**
 - `spawn_subagent`: LG=15 LCX=0
 - `spawn_agent`: LG=0 LCX=9
@@ -835,8 +835,8 @@ LG commands: ['handoff.md', 'plan.md', 'ralph-loop.md', 'resume-continuation.md'
 LCX: no commands/ dir — skills are entrypoints; CLI: `omo ulw-loop`, install agents
 
 ## LCX CLI surfaces vs LG
-- exists /tmp/lcx-cmp/package/dist/cli/codex-ulw-loop.d.ts: True
-- exists /tmp/lcx-cmp/package/dist/cli/boulder: True
+- exists <lazycodex-4.19.2-extract>/package/dist/cli/codex-ulw-loop.d.ts: True
+- exists <lazycodex-4.19.2-extract>/package/dist/cli/boulder: True
 - ulw-loop cli.js same: False (LG 153435 vs LCX 153333)
   - LG mentions `create-goals`: 7
   - LG mentions `checkpoint`: 37

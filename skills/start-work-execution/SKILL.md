@@ -85,6 +85,26 @@ $start-work [plan-name] [--worktree <absolute-path>] [--make-pr] [--ship]
 - `--make-pr` (optional): deliver the work as a pull request. IMPLIES worktree mode: when `--worktree` is absent, create a task-owned worktree (`git worktree add <absolute-path> <base-branch>`) before implementation and record it as `worktree_path`. On completion, push the branch and open a reviewer-readable PR, then hand off with the PR URL - merge only if the user asks.
 - `--ship` (optional): full delivery lifecycle; implies `--make-pr`. After the PR opens, stay on the job until it is MERGED: watch CI and review gates, fix failures and address feedback from the worktree (fresh QA evidence for behavior changes), merge per the repository's merge policy, then remove the worktree and sync `.lazygrok/` (or `.omo/` if that run already started there) state back.
 
+### Grok host boundary
+
+Whole-session isolation must be chosen before Grok starts; a plugin hook cannot
+change the cwd of the running host process. Interactive Grok documents
+`grok --worktree=<name> "<prompt>"`, but Grok Build `0.2.114` does not
+materialize `--worktree` in the headless `-p` path. Use this reliable headless
+sequence:
+
+```bash
+git worktree add --detach /absolute/task-worktree HEAD
+grok --cwd /absolute/task-worktree -p "ulw $start-work <plan-name> --worktree /absolute/task-worktree"
+```
+
+Never infer isolation from the launch flag. Before implementation, prove the
+effective cwd appears in `git worktree list --porcelain`, record the same
+absolute path as `worktree_path`, and prove the source checkout remains
+unchanged. When start-work begins inside a non-worktree checkout and the task
+requires PR/branch or conflict isolation, create the task-owned worktree before
+dispatching any implementation and scope every worker command to it.
+
 ## Goal and todo discipline (MANDATORY)
 
 Do ALL of this immediately after the plan is selected, BEFORE the first implementation dispatch. Skipping any step is a defect.
@@ -95,7 +115,7 @@ Do ALL of this immediately after the plan is selected, BEFORE the first implemen
 
 ## Phase 1: Select the plan
 
-1. Read `.omo/boulder.json` if it exists.
+1. Read `.lazygrok/boulder.json` if it exists. Fall back to `.omo/boulder.json` only for a legacy run.
 2. List Prometheus plan files under `.lazygrok/plans/`.
 3. If `plan-name` was provided, select the matching plan.
 4. If exactly one active or paused Boulder work exists for this session, resume it.
@@ -115,7 +135,7 @@ When the user explicitly said `start work` / `$start-work` and no selectable pla
 
 ## Phase 2: Create or update Boulder state
 
-Write `.omo/boulder.json` before implementation starts. Prefix session ids with `codex:` so the continuation hook can identify its own session.
+Write `.lazygrok/boulder.json` before implementation starts. Prefix session ids with `grok:` so the continuation hook can identify its own session.
 
 ```json
 {
@@ -126,7 +146,7 @@ Write `.omo/boulder.json` before implementation starts. Prefix session ids with 
       "work_id": "<work-id>",
       "active_plan": ".lazygrok/plans/<plan-name>.md",
       "plan_name": "<plan-name>",
-      "session_ids": ["codex:<session_id>"],
+      "session_ids": ["grok:<session_id>"],
       "status": "active",
       "worktree_path": null
     }
@@ -172,7 +192,7 @@ For each checkbox, complete all five gates before marking it done:
 4. Adversarial QA: exercise every class the Phase 3 trigger map marks applicable and capture the observable result for each.
 5. Cleanup: register every QA resource teardown as its own todo when spawned (QA scripts, tmux assets, browser sessions, PIDs, ports, containers, temp dirs), execute each, and capture the receipt. No QA asset is left running.
 
-Append evidence to `.omo/start-work/ledger.jsonl`, one JSON object per line. Include at least `event`, `plan`, `task`, `session_id`, `commands`, `artifact`, `adversarial_classes`, and `cleanup` fields. `adversarial_classes` lists each probed class with its observable result and each ruled-out class with a one-line reason.
+Append evidence to `.lazygrok/start-work/ledger.jsonl`, one JSON object per line. Include at least `event`, `plan`, `task`, `session_id`, `commands`, `artifact`, `adversarial_classes`, and `cleanup` fields. `adversarial_classes` lists each probed class with its observable result and each ruled-out class with a one-line reason.
 
 ### Sisyphus-style completion contract
 
@@ -220,10 +240,10 @@ When all top-level checkboxes in `## TODOs` and `## Final Verification Wave` are
 1. Run the plan's final verification commands.
 2. Complete the **Global Review and Debugging Gate** before any completion claim, PR creation, PR handoff, branch handoff, or merge:
    - Invoke the `review-work` skill with the final diff, changed files, user goal, constraints, run command, and verification evidence. All five review lanes must return PASS. A timeout, missing deliverable, ack-only child, `BLOCKED:`, or inconclusive lane is a gate failure, not approval.
-   - Each passing review lane binds to the exact full commit SHA it reviewed. Immediately append a durable record to `.omo/start-work/ledger.jsonl` with the lane name, full SHA, PASS verdict, and report artifact/source. Before same-SHA reuse after any continuation or compaction, re-read the ledger record and require the exact lane/SHA pair; memory, chat history, or an unstamped report is not coverage. New commits require fresh applicable lane coverage.
-   - Run a debugging-oriented runtime audit even when the review passes: name at least three plausible failure hypotheses for the changed surface, run the distinguishing checks against the actual artifact, and append a separate durable record with the audit name, exact full SHA, verdict, and evidence artifact/source to `.omo/start-work/ledger.jsonl`. Reuse it only after re-reading an exact audit/SHA match.
+   - Each passing review lane binds to the exact full commit SHA it reviewed. Immediately append a durable record to `.lazygrok/start-work/ledger.jsonl` with the lane name, full SHA, PASS verdict, and report artifact/source. Before same-SHA reuse after any continuation or compaction, re-read the ledger record and require the exact lane/SHA pair; memory, chat history, or an unstamped report is not coverage. New commits require fresh applicable lane coverage.
+   - Run a debugging-oriented runtime audit even when the review passes: name at least three plausible failure hypotheses for the changed surface, run the distinguishing checks against the actual artifact, and append a separate durable record with the audit name, exact full SHA, verdict, and evidence artifact/source to `.lazygrok/start-work/ledger.jsonl`. Reuse it only after re-reading an exact audit/SHA match.
    - If any review lane or debugging hypothesis fails, invoke the `debugging` skill, confirm root cause with runtime evidence, add the minimal failing test or reproduction, fix it, rerun the affected verification, then rerun the Global Review and Debugging Gate.
-   - Evidence hygiene is mandatory: redact or mask secrets and sensitive user data before writing `.omo/start-work/ledger.jsonl`, a PR body, or a handoff. Never include raw tokens, credentials, auth headers, cookies, API keys, env dumps, private logs, or PII; use concise summaries, lengths, hashes, or short non-sensitive prefixes instead.
+   - Evidence hygiene is mandatory: redact or mask secrets and sensitive user data before writing `.lazygrok/start-work/ledger.jsonl`, a PR body, or a handoff. Never include raw tokens, credentials, auth headers, cookies, API keys, env dumps, private logs, or PII; use concise summaries, lengths, hashes, or short non-sensitive prefixes instead.
    - If the work includes creating, updating, or handing off a PR, refresh `git status` and the PR/branch state from the task-owned worktree after the gate, and include only redacted review/debugging evidence in the PR body or handoff.
 3. Finish the PR/branch lifecycle from its task-owned worktree: sync `.lazygrok/` (or `.omo/` if that run already started there) state back to the main repo, create or update the PR when requested, wait for CI/review/Cubic gates, merge by default unless explicitly opted out, and remove the worktree only after successful merge or explicit handoff.
 4. Remove or mark the Boulder work as completed.
@@ -238,5 +258,5 @@ When all top-level checkboxes in `## TODOs` and `## Final Verification Wave` are
 - No completion claim while an applicable ultraqa adversarial class was never probed. Each applicable class needs a captured observable result; each skipped class needs a one-line not-applicable reason in the ledger.
 - No `ORCHESTRATION COMPLETE`, final response, PR creation, PR handoff, or merge before the Global Review and Debugging Gate passes with recorded evidence.
 - No PR/branch implementation or review in the main worktree; create or use a task-owned git worktree first.
-- No unprefixed session ids in Boulder state. Grok sessions are always `codex:<session_id>`.
+- No unprefixed session ids in Boulder state. Grok sessions are always `grok:<session_id>`.
 - No stale-memory execution. The plan and ledger are the durable source of truth.

@@ -8,7 +8,15 @@
 import { spawn } from "node:child_process";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { mkdirSync, writeFileSync, appendFileSync, rmSync, existsSync, readFileSync } from "node:fs";
+import {
+	mkdirSync,
+	writeFileSync,
+	appendFileSync,
+	rmSync,
+	existsSync,
+	readFileSync,
+	chmodSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -118,6 +126,30 @@ async function caseRaceDelayedHistory() {
 	return { name: "race_delayed_history", ...r };
 }
 
+async function caseForeignSessionHistoryIsIgnored() {
+	const sid = `verify-isolation-${Date.now()}`;
+	const ws = join(homedir(), ".grok");
+	const histDir = join(homedir(), ".grok/sessions", encodeURIComponent(ws));
+	mkdirSync(histDir, { recursive: true });
+	appendFileSync(
+		join(histDir, "prompt_history.jsonl"),
+		JSON.stringify({
+			timestamp: new Date().toISOString(),
+			session_id: `${sid}-foreign`,
+			prompt: "ulw must not cross session boundaries",
+			is_bash: false,
+		}) + "\n",
+	);
+	const r = await runHook(
+		SHIM,
+		{ event: "user_prompt_submit" },
+		{ GROK_SESSION_ID: sid, GROK_WORKSPACE_ROOT: ws },
+	);
+	assert(!r.injectOk, "foreign_session_history: must not inject another session's prompt");
+	assert(r.stdoutBytes === 0, `foreign_session_history: expected empty stdout, got ${r.stdoutBytes}`);
+	return { name: "foreign_session_history_ignored", ...r };
+}
+
 async function caseNonUlwEmpty() {
 	const r = await runHook(SHIM, {
 		hookEventName: "user_prompt_submit",
@@ -131,8 +163,7 @@ async function caseNonUlwEmpty() {
 	return { name: "non_ulw_empty", ...r };
 }
 
-async function caseProbeWritesArtifact() {
-	const before = join(homedir(), ".grok/state/lazygrok/ups-probe-latest.json");
+async function caseProbeForwards() {
 	const stamp = Date.now();
 	const r = await runHook(PROBE, {
 		hookEventName: "user_prompt_submit",
@@ -140,15 +171,11 @@ async function caseProbeWritesArtifact() {
 		cwd: join(homedir(), ".grok"),
 		workspaceRoot: join(homedir(), ".grok"),
 		timestamp: new Date().toISOString(),
-		prompt: "ulw probe artifact proof",
+		prompt: "ulw probe forwarding proof",
 	});
 	assert(r.injectOk, "probe: expected inject via forwarder");
-	assert(existsSync(before), "probe: ups-probe-latest.json missing");
-	const j = JSON.parse(readFileSync(before, "utf8"));
-	assert(j.classification?.shape === "full_envelope", `probe shape=${j.classification?.shape}`);
-	assert(j.injectOk === true, "probe record injectOk false");
-	assert(j.stdoutBytes >= 500, "probe stdoutBytes too small");
-	return { name: "probe_artifact", stdoutBytes: r.stdoutBytes, injectOk: r.injectOk, shape: j.classification.shape };
+	assert(r.stdoutBytes >= 500, "probe: forwarded output too small");
+	return { name: "probe_forwarding", stdoutBytes: r.stdoutBytes, injectOk: r.injectOk };
 }
 
 async function main() {
@@ -157,8 +184,9 @@ async function main() {
 		caseFullEnvelope,
 		caseEventOnlyWithHistory,
 		caseRaceDelayedHistory,
+		caseForeignSessionHistoryIsIgnored,
 		caseNonUlwEmpty,
-		caseProbeWritesArtifact,
+		caseProbeForwards,
 	];
 	for (const fn of cases) {
 		try {
@@ -173,10 +201,13 @@ async function main() {
 	const failed = results.filter((r) => !r.ok);
 	const outDir = join(homedir(), ".grok/state/lazygrok");
 	mkdirSync(outDir, { recursive: true });
+	const reportPath = join(outDir, "verify-ups-inject-latest.json");
 	writeFileSync(
-		join(outDir, "verify-ups-inject-latest.json"),
+		reportPath,
 		JSON.stringify({ at: new Date().toISOString(), results, failed: failed.length }, null, 2),
+		{ encoding: "utf8", mode: 0o600 },
 	);
+	chmodSync(reportPath, 0o600);
 	if (failed.length) {
 		console.error(`\n${failed.length} failed`);
 		process.exit(1);

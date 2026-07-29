@@ -16,7 +16,7 @@ const STEERING_KIND_HELP = [
 	"  revise_criterion: --goal-id, --criterion-id, one of --scenario/--expected-evidence/--user-model, --evidence, --rationale",
 	"  annotate_ledger: --evidence, --rationale",
 	"  mark_blocked_superseded: --goal-id, optional --replacements, --evidence, --rationale",
-	"Example: omo ulw-loop steer --kind annotate_ledger --evidence \"observed behavior\" --rationale \"why this changes the plan\" --json",
+	"Example: ulw-loop steer --kind annotate_ledger --evidence \"observed behavior\" --rationale \"why this changes the plan\" --json",
 ].join("\n");
 
 export type CliSteeringProposal = UlwLoopSteeringProposal & { readonly goalId?: string; readonly scenario?: string; readonly expectedEvidence?: string; readonly userModel?: UlwLoopSuccessCriterionUserModel };
@@ -56,18 +56,23 @@ function child(value: unknown): UlwLoopSteeringChildGoal | null {
 	return { title, objective };
 }
 
-async function children(argv: readonly string[], flag: string, needed: boolean): Promise<UlwLoopSteeringChildGoal[]> {
+async function children(
+	argv: readonly string[],
+	flag: string,
+	needed: boolean,
+	repoRoot: string,
+): Promise<UlwLoopSteeringChildGoal[]> {
 	const input = needed ? required(argv, flag) : text(readValue(argv, flag), flag);
 	if (input === undefined) return [];
-	const raw = await readJsonInput(input);
+	const raw = await readJsonInput(input, repoRoot);
 	if (!Array.isArray(raw)) return fail(`${flag} must be a JSON array.`, "ULW_LOOP_STEERING_JSON_ARRAY_REQUIRED", { flag });
 	const parsed: UlwLoopSteeringChildGoal[] = [];
 	for (const item of raw) { const next = child(item); if (next === null) return fail(`${flag} entries require title/objective.`, "ULW_LOOP_STEERING_CHILD_INVALID", { flag }); parsed.push(next); }
 	return parsed;
 }
 
-async function stringArray(argv: readonly string[], flag: string): Promise<string[]> {
-	const raw = await readJsonInput(required(argv, flag));
+async function stringArray(argv: readonly string[], flag: string, repoRoot: string): Promise<string[]> {
+	const raw = await readJsonInput(required(argv, flag), repoRoot);
 	if (!Array.isArray(raw)) return fail(`${flag} must be a JSON array.`, "ULW_LOOP_STEERING_JSON_ARRAY_REQUIRED", { flag });
 	const values: string[] = [];
 	for (const item of raw) { if (typeof item !== "string") return fail(`${flag} entries must be strings.`, "ULW_LOOP_STEERING_STRING_ARRAY_REQUIRED", { flag }); values.push(text(item, flag) ?? ""); }
@@ -77,17 +82,20 @@ async function stringArray(argv: readonly string[], flag: string): Promise<strin
 function model(value: string | undefined): UlwLoopSuccessCriterionUserModel | undefined { const trimmed = text(value, "--user-model"); if (trimmed === undefined) return undefined; return isModel(trimmed) ? trimmed : fail(`Invalid --user-model: ${trimmed}.`, "ULW_LOOP_STEERING_USER_MODEL_INVALID", { value: trimmed, expected: ULW_LOOP_SUCCESS_CRITERION_USER_MODELS }); }
 function neverKind(kind: never): never { return fail(`Unsupported steering kind: ${String(kind)}.`, "ULW_LOOP_STEERING_KIND_UNSUPPORTED", { kind }); }
 
-export async function parseSteeringProposal(argv: readonly string[]): Promise<CliSteeringProposal> {
+export async function parseSteeringProposal(
+	argv: readonly string[],
+	repoRoot = process.cwd(),
+): Promise<CliSteeringProposal> {
 	const kind = parseSteeringKind(argv); const source = parseSteeringSource(argv); const idempotencyKey = text(readValue(argv, "--idempotency-key"), "--idempotency-key");
 	const base = { kind, source, evidence: required(argv, "--evidence"), rationale: required(argv, "--rationale"), ...(idempotencyKey === undefined ? {} : { idempotencyKey }) };
 	switch (kind) {
 		case "add_subgoal": return normalizeSteeringProposal({ ...base, title: required(argv, "--title"), objective: required(argv, "--objective") });
-		case "split_subgoal": { const goalId = requiredGoal(argv); return normalizeSteeringProposal({ ...base, goalId, targetGoalId: goalId, childGoals: await children(argv, "--children", true) }); }
-		case "reorder_pending": return normalizeSteeringProposal({ ...base, pendingOrder: await stringArray(argv, "--order") });
+		case "split_subgoal": { const goalId = requiredGoal(argv); return normalizeSteeringProposal({ ...base, goalId, targetGoalId: goalId, childGoals: await children(argv, "--children", true, repoRoot) }); }
+		case "reorder_pending": return normalizeSteeringProposal({ ...base, pendingOrder: await stringArray(argv, "--order", repoRoot) });
 		case "revise_pending_wording": { const goalId = requiredGoal(argv); const revisedTitle = readValue(argv, "--title"); const revisedObjective = readValue(argv, "--objective"); if (revisedTitle === undefined && revisedObjective === undefined) return fail("revise_pending_wording requires --title or --objective.", "ULW_LOOP_STEERING_UPDATE_REQUIRED", { kind }); return normalizeSteeringProposal({ ...base, goalId, targetGoalId: goalId, ...(revisedTitle === undefined ? {} : { revisedTitle }), ...(revisedObjective === undefined ? {} : { revisedObjective }) }); }
 		case "revise_criterion": { const goalId = requiredGoal(argv); const criterionId = required(argv, "--criterion-id"); const scenario = readValue(argv, "--scenario"); const expectedEvidence = readValue(argv, "--expected-evidence"); const userModel = model(readValue(argv, "--user-model")); if (scenario === undefined && expectedEvidence === undefined && userModel === undefined) return fail("revise_criterion requires scenario, expected-evidence, or user-model.", "ULW_LOOP_STEERING_UPDATE_REQUIRED", { kind }); return normalizeSteeringProposal({ ...base, goalId, targetGoalId: goalId, criterionId, ...(scenario === undefined ? {} : { scenario }), ...(expectedEvidence === undefined ? {} : { expectedEvidence }), ...(userModel === undefined ? {} : { userModel }) }); }
 		case "annotate_ledger": return normalizeSteeringProposal(base);
-		case "mark_blocked_superseded": { const goalId = requiredGoal(argv); const childGoals = await children(argv, "--replacements", false); return normalizeSteeringProposal({ ...base, goalId, targetGoalId: goalId, ...(childGoals.length === 0 ? {} : { childGoals }) }); }
+		case "mark_blocked_superseded": { const goalId = requiredGoal(argv); const childGoals = await children(argv, "--replacements", false, repoRoot); return normalizeSteeringProposal({ ...base, goalId, targetGoalId: goalId, ...(childGoals.length === 0 ? {} : { childGoals }) }); }
 		default: return neverKind(kind);
 	}
 }
@@ -103,11 +111,14 @@ export function normalizeSteeringProposal(proposal: CliSteeringProposal): CliSte
 	return { kind: proposal.kind, source: proposal.source, evidence, rationale, ...(goalId === undefined ? {} : { goalId }), ...(targetGoalId === undefined ? {} : { targetGoalId }), ...(targetGoalIds === undefined ? {} : { targetGoalIds }), ...(criterionId === undefined ? {} : { criterionId }), ...(title === undefined ? {} : { title }), ...(objective === undefined ? {} : { objective }), ...(childGoals === undefined ? {} : { childGoals }), ...(revisedTitle === undefined ? {} : { revisedTitle }), ...(revisedObjective === undefined ? {} : { revisedObjective }), ...(pendingOrder === undefined ? {} : { pendingOrder }), ...(blockedReason === undefined ? {} : { blockedReason }), ...(proposal.after === undefined ? {} : { after: proposal.after }), ...(directiveText === undefined ? {} : { directiveText }), ...(promptSignature === undefined ? {} : { promptSignature }), ...(idempotencyKey === undefined ? {} : { idempotencyKey }), ...(proposal.now === undefined ? {} : { now: proposal.now }), ...(scenario === undefined ? {} : { scenario }), ...(expectedEvidence === undefined ? {} : { expectedEvidence }), ...(proposal.userModel === undefined ? {} : { userModel: proposal.userModel }) };
 }
 
-export async function parseSteeringProposals(argv: readonly string[]): Promise<readonly CliSteeringProposal[]> {
+export async function parseSteeringProposals(
+	argv: readonly string[],
+	repoRoot = process.cwd(),
+): Promise<readonly CliSteeringProposal[]> {
 	const input = text(readValue(argv, "--proposals-json"), "--proposals-json");
-	if (input === undefined) return [await parseSteeringProposal(argv)];
+	if (input === undefined) return [await parseSteeringProposal(argv, repoRoot)];
 	if (readValue(argv, "--kind") !== undefined) return fail("--kind and --proposals-json are mutually exclusive.", "ULW_LOOP_STEERING_BATCH_CONFLICT", { flags: ["--kind", "--proposals-json"] });
-	const raw = await readJsonInput(input);
+	const raw = await readJsonInput(input, repoRoot);
 	if (!Array.isArray(raw) || raw.length === 0) return fail("--proposals-json must be a non-empty JSON array.", "ULW_LOOP_STEERING_BATCH_ARRAY_REQUIRED", { flag: "--proposals-json" });
 	const proposals: CliSteeringProposal[] = [];
 	for (const item of raw) proposals.push(normalizeSteeringProposal(proposalFromObject(item)));

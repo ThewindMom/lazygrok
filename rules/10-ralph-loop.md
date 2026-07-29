@@ -1,28 +1,32 @@
-# Ralph + Ultrawork Loops (Grok)
+# Ralph Loop (Grok)
 
-Modeled on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) `ralph-loop` and `ulw-loop`.
+The legacy Ralph Stop loop is separate from the ULW goal-ledger contract.
 
 ## Commands
 
 | Command | Effect |
 |---------|--------|
 | `/ralph-loop "task" [--max-iterations=100]` | Work-until-done; exit on `<promise>DONE</promise>` |
-| `/ulw-loop` / `/ultrawork` / `ultrawork <task>` | Same + mandatory verifier; exit on `<promise>VERIFIED</promise>` |
 | `/cancel-ralph` | Clear `.lazygrok/ralph-loop.local.md` |
 
-## Ultrawork verification
+`/ulw`, `ultrawork`, and `/ulw-loop` activate the separate ULW skill and
+goal ledger. They never create Ralph state and never use Ralph `VERIFIED`
+completion.
 
-After `<promise>DONE</promise>`, run `spawn_subagent(subagent_type="lazygrok:lazygrok-code-reviewer", ...)` (override via `RALPH_ORACLE_SUBAGENT`). Verifier output must include `Agent: oracle` and `<promise>VERIFIED</promise>`.
+The explicitly separate `/ulw-ralph-loop` skill retains the Ralph-family
+promise plus verifier contract and may use `VERIFIED`. It is not an alias for
+any ULW goal-ledger trigger. `/cancel-ralph` can clear either explicit
+Ralph-family promise loop.
 
-## While active
+## While Ralph is active
 
-- Keep working until the completion promise tag (default `<promise>DONE</promise>`; ultrawork adds Oracle `<promise>VERIFIED</promise>`).
+- Keep working until the completion promise tag (default `<promise>DONE</promise>`).
 - Do not ask the user to continue each turn — the Stop hook injects continuation.
 - Do not pause with "can we start the next phase?" — proceed autonomously until done or `/cancel-ralph`.
 
 ## Hooks
 
-- `user-prompt` — start/cancel (merged UserPromptSubmit)
+- `user-prompt` — start/cancel Ralph (merged UserPromptSubmit)
 - `stop` — continuation chain (Ralph first; see `hooks/README.md`)
 
-Skills: `ralph-loop`, `ulw-loop`, `cancel-ralph` (lazygrok plugin; see `grok inspect`).
+Skills: `ralph-loop`, `ulw-ralph-loop`, `cancel-ralph` (lazygrok plugin; see `grok inspect`).

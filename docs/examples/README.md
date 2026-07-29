@@ -10,14 +10,17 @@ The hook writes `.lazygrok/ralph-loop.local.md`. If you try to stop without the 
 
 Cancel: `/cancel-ralph`
 
-## Ultrawork — Ralph + verification
+## Ultrawork — goal ledger and evidence
 
 ```text
 /ulw-loop "implement docs/ and README discoverability overhaul"
 ultrawork add GitHub issue templates
 ```
 
-Same loop file as Ralph, but Stop requires a verifier subagent to emit `<promise>VERIFIED</promise>` before the loop clears. Default max iterations: 500.
+Both forms activate the ULW contract: create durable goals and criteria, capture
+evidence, run the tier-appropriate quality gate, and checkpoint completion.
+They do not create `.lazygrok/ralph-loop.local.md` and do not use a
+`<promise>VERIFIED</promise>` exit.
 
 ## ULW multi-agent panels (Grok `workflow` — agent-internal)
 

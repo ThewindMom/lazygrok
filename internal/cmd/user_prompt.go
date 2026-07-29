@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"lazygrok/internal/boulder"
 	"lazygrok/internal/core/config"
 	"lazygrok/internal/core/continuation"
@@ -18,7 +19,6 @@ import (
 	"lazygrok/internal/skillgate"
 	"lazygrok/internal/usingpowers"
 	wsrules "lazygrok/internal/workspace"
-	"github.com/spf13/cobra"
 )
 
 func userPromptCmd() *cobra.Command {
@@ -44,7 +44,7 @@ func userPromptCmd() *cobra.Command {
 				boulder.CollectStopContinuation(ev),
 				boulder.CollectPromptContext(ws, sid),
 				lsp.CollectContext(sid),
-				hashline.CollectContext(sid),
+				hashline.CollectContext(sid, ws),
 				skillgate.BuildReminder(sid),
 				collectContinuation(ws, sid),
 			}

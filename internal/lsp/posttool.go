@@ -3,6 +3,8 @@ package lsp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 var (
@@ -18,6 +21,7 @@ var (
 		"apply_patch": {}, "write": {}, "strreplace": {}, "str_replace": {},
 		"edit": {}, "multiedit": {}, "multi_edit": {}, "editnotebook": {},
 	}
+	collectDiagnostics = runDiagnostics
 )
 
 // UpdateStashFromEvent runs diagnostics for mutated paths in a PostToolUse event.
@@ -32,10 +36,12 @@ func UpdateStashFromEvent(ev hookenv.Event) {
 	}
 	sid := ev.SessionID
 	if sid == "" {
-		sid = "unknown"
+		return
 	}
 	stashPath := StashPath(sid)
-	_ = os.MkdirAll(filepath.Dir(stashPath), 0o755)
+	if stashPath == "" {
+		return
+	}
 	for _, rel := range paths {
 		abs := rel
 		if !filepath.IsAbs(abs) && ws != "" {
@@ -44,7 +50,11 @@ func UpdateStashFromEvent(ev hookenv.Event) {
 		if _, err := os.Stat(abs); err != nil {
 			continue
 		}
-		diag, err := runDiagnostics(abs)
+		diagnosticRoot := ws
+		if diagnosticRoot == "" {
+			diagnosticRoot = filepath.Dir(abs)
+		}
+		diag, err := collectDiagnostics(abs, diagnosticRoot)
 		if err != nil {
 			continue
 		}
@@ -131,17 +141,14 @@ func toolsModule() string {
 	if err != nil {
 		return ""
 	}
-	mod := filepath.Join(root, "vendor", "lazygrok-hooks", "lsp-tools-mcp", "dist", "tools.js")
+	mod := filepath.Join(root, "vendor", "lazygrok-hooks", "lsp-tools-mcp", "dist", "cli.js")
 	if _, err := os.Stat(mod); err != nil {
 		return ""
 	}
 	return mod
 }
 
-func runDiagnostics(absPath string) (string, error) {
-	if mock := os.Getenv("LAZYGROK_LSP_MOCK_DIAG"); mock != "" {
-		return mock, nil
-	}
+func runDiagnostics(absPath, workspace string) (string, error) {
 	mod := toolsModule()
 	if mod == "" {
 		return "", os.ErrNotExist
@@ -149,28 +156,85 @@ func runDiagnostics(absPath string) (string, error) {
 	if _, err := exec.LookPath("node"); err != nil {
 		return "", err
 	}
-	script := `
-import { pathToFileURL } from "node:url";
-const mod = await import(pathToFileURL(process.argv[1]).href);
-const executeLspDiagnostics = mod.executeLspDiagnostics;
-const filePath = process.argv[2];
-try {
-  const result = await executeLspDiagnostics({ filePath, severity: "error" });
-  const text = result.content.map((block) => block.text).join("\n").trim();
-  process.stdout.write(text);
-} catch (error) {
-  const message = error instanceof Error ? (error.message || String(error)) : String(error);
-  process.stderr.write(message);
-  process.exit(1);
-}
-`
+	requests := []map[string]any{
+		{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"method":  "initialize",
+			"params": map[string]any{
+				"protocolVersion": "2024-11-05",
+				"capabilities":    map[string]any{},
+				"clientInfo":      map[string]string{"name": "lazygrok-hook", "version": "1"},
+			},
+		},
+		{
+			"jsonrpc": "2.0",
+			"id":      2,
+			"method":  "tools/call",
+			"params": map[string]any{
+				"name":      "diagnostics",
+				"arguments": map[string]any{"filePath": absPath, "severity": "error"},
+			},
+		},
+	}
+	var input strings.Builder
+	for _, request := range requests {
+		data, err := json.Marshal(request)
+		if err != nil {
+			return "", err
+		}
+		input.Write(data)
+		input.WriteByte('\n')
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "node", "--input-type=module", "-e", script, mod, absPath)
+	cmd := exec.CommandContext(ctx, "node", mod, "mcp")
+	cmd.Dir = workspace
 	cmd.Env = append(os.Environ(), "CODEX_HOME="+codexHome())
-	cmd.Stderr = nil
-	out, err := cmd.Output()
-	return string(out), err
+	cmd.Stdin = strings.NewReader(input.String())
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("run LSP diagnostics: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(out)))
+	for {
+		var response struct {
+			ID     int `json:"id"`
+			Result struct {
+				Content []struct {
+					Text string `json:"text"`
+				} `json:"content"`
+				IsError bool `json:"isError"`
+			} `json:"result"`
+			Error *struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := decoder.Decode(&response); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", fmt.Errorf("decode LSP response: %w", err)
+		}
+		if response.ID != 2 {
+			continue
+		}
+		if response.Error != nil {
+			return "", fmt.Errorf("LSP diagnostics request: %s", response.Error.Message)
+		}
+		var text []string
+		for _, block := range response.Result.Content {
+			if block.Text != "" {
+				text = append(text, block.Text)
+			}
+		}
+		diagnostics := strings.TrimSpace(strings.Join(text, "\n"))
+		if response.Result.IsError {
+			return "", fmt.Errorf("LSP diagnostics: %s", diagnostics)
+		}
+		return diagnostics, nil
+	}
+	return "", fmt.Errorf("LSP diagnostics response missing")
 }
 
 func codexHome() string {
@@ -228,7 +292,7 @@ func hasErrors(text string) bool {
 
 func mergeDiagnostics(stashPath, filePath, diagnostics string) {
 	var stash stashFile
-	b, err := os.ReadFile(stashPath)
+	b, err := safestate.ReadFileBelow(stashRoot(), stashPath)
 	if err == nil {
 		_ = json.Unmarshal(b, &stash)
 	}
@@ -248,10 +312,14 @@ func mergeDiagnostics(stashPath, filePath, diagnostics string) {
 		delete(stash.Files, filePath)
 	}
 	out, _ := json.MarshalIndent(stash, "", "  ")
-	_ = os.WriteFile(stashPath, append(out, '\n'), 0o644)
+	_ = safestate.WriteFileBelow(stashRoot(), stashPath, append(out, '\n'), 0o600)
 }
 
 // CleanupSession removes LSP stash for session-end.
 func CleanupSession(sessionID string) {
-	_ = os.Remove(StashPath(sessionID))
+	path := StashPath(sessionID)
+	if path == "" {
+		return
+	}
+	_ = safestate.RemoveBelow(stashRoot(), path)
 }

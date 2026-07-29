@@ -6,26 +6,27 @@
 2. **Reload** in TUI: `Ctrl+L` (opens Hooks & Plugins) → Plugins tab → `r` (reload all plugins); then Hooks tab → `l` (reload hooks). Or start a **new Grok session**.
 3. Reinstall from source or GitHub (update may leave stale snapshot):
    ```bash
-   grok plugin install github:ThewindMom/lazygrok --trust
+   grok plugin install ThewindMom/lazygrok@v0.4.4 --trust
    # or for local clone:
    grok plugin install "$(pwd)" --trust
    ```
-4. Clean stale global overlays **and** stale plugin IDs in config (old "user/<hash>/name" entries left by prior installs can cause reload_plugins_impl to report 0 hooks or skip registration):
+4. Archive and regenerate the LazyGrok user-hook bridge:
    ```bash
    bash scripts/remove-global-overlays.sh
    ```
+   If `config.toml` still contains an old `user/<hash>/lazygrok` entry, remove
+   that exact stale entry before reinstalling; the cleanup script does not edit
+   Grok configuration.
 5. Verify hooks are registered and firing:
    - `grok plugin list` and `grok plugin details lazygrok` (should list "hooks")
    - In TUI `Ctrl+L` → Hooks tab: look under **Plugin** source for lazygrok entries (SessionStart, UserPromptSubmit, PreToolUse, Stop, etc.)
-   - After a prompt in a fresh workspace: recent non-"test-*" dirs appear under `ls -t ~/.grok/state/skill-gate/ | head -3` and `~/.grok/state/using-superpowers/` (SessionStart + first UserPromptSubmit create these)
+   - After a prompt in a fresh workspace: recent non-"test-*" dirs appear under `ls -t ~/.grok/state/skill-gate/ | head -3`
    - Scrollback shows hook annotations (e.g. skill gate, ralph) only when plugins UI enabled.
 
 Stale entries example from real config that broke hook calls until cleaned + reload:
 ```
-enabled = [ ..., "user/2dae73a2/lazygrok", "user/f0ac7909/superpowers", ... ]
+enabled = [ ..., "user/2dae73a2/lazygrok", ... ]
 ```
-The remove script now prunes these automatically.
-
 ## Stale plugin copy
 
 `grok plugin update` may not refresh a broken snapshot. Reinstall from path or GitHub:
@@ -33,7 +34,7 @@ The remove script now prunes these automatically.
 ```bash
 grok plugin install /path/to/lazygrok --trust
 # or
-grok plugin install github:ThewindMom/lazygrok --trust
+grok plugin install ThewindMom/lazygrok@v0.4.4 --trust
 ```
 
 ## Mutating tools blocked (skill gate)
@@ -55,17 +56,29 @@ binding `# Goal` block and optionally use the ulw-loop CLI (`ulw-evidence`
 skill) for durable criteria/evidence. Do not disable workflows solely to force
 the legacy tool unless you need that host path.
 
-## Ralph / ultrawork stops and asks "next phase?" instead of continuing
+## Ralph stops and asks "next phase?" instead of continuing
 
-The Stop hook must see the workspace (stdin `workspaceRoot`/`cwd` or `GROK_WORKSPACE_ROOT`) and a routine stop reason (`EndTurn`, `completed`, etc.). If the loop never started, run `/ralph-loop` or `/ulw-loop` again after `grok plugin update lazygrok` and start a **new session** (or Hooks reload).
+The Stop hook must see the workspace (stdin `workspaceRoot`/`cwd` or
+`GROK_WORKSPACE_ROOT`) and a routine stop reason (`EndTurn`, `completed`, etc.).
+If the loop never started, run `/ralph-loop` again after
+`grok plugin update lazygrok` and start a **new session** (or Hooks reload).
 
-While a loop is active, the agent must not ask for permission between iterations — only emit `<promise>DONE</promise>` (ultrawork: then Oracle `<promise>VERIFIED</promise>`) or `/cancel-ralph`.
+While Ralph is active, the agent must not ask for permission between iterations:
+finish and emit `<promise>DONE</promise>`, or use `/cancel-ralph`.
 
-## Ralph / ultrawork loop will not stop
+## Ralph loop will not stop
 
-- Emit the completion promise tag required by the active loop (see `skills/ralph-loop/SKILL.md` or `skills/ulw-loop/SKILL.md`)
+- Emit the completion promise tag required by `skills/ralph-loop/SKILL.md`
 - Or run `/cancel-ralph`
 - Or `/stop-continuation` to pause continuation (also clears loop + boulder)
+
+## ULW activation or completion is missing
+
+`ulw`, `/ulw`, `ultrawork`, `/ultrawork`, and `/ulw-loop` use the ULW skill
+and goal ledger, not Ralph state. Confirm that Grok selected and read
+`skills/ultrawork/SKILL.md`, then inspect `.lazygrok/ulw-loop/` goals and
+evidence. ULW completes through its quality gate and checkpoint; neither
+`/cancel-ralph` nor a `VERIFIED` promise controls it.
 
 ## Boulder or todos out of sync
 

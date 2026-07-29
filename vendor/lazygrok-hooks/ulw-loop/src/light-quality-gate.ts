@@ -1,21 +1,25 @@
-import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { printJson } from "./cli-output.js";
-import { type UlwLoopScope, ulwLoopAttemptEvidenceDir } from "./paths.js";
+import { safeWorkspacePath, safeWriteWorkspaceTextFile } from "./file-safety.js";
+import { resolveUlwLoopSessionIdFromEnv, type UlwLoopScope, ulwLoopAttemptEvidenceDir } from "./paths.js";
 import { readUlwLoopPlan } from "./plan-io.js";
 import { UlwLoopError } from "./types.js";
 
 /**
  * Build a valid OmO quality-gate payload for LIGHT / smoke completions on Grok.
  * Writes real non-empty artifact files under the current attempt evidence dir
- * (evidence layout v2) so checkpoint validation accepts them.
+ * (evidence layout v2) and identifies the root agent as the actual reviewer.
  */
 export async function buildLightQualityGate(
 	repoRoot: string,
 	goalId: string,
 	scope?: UlwLoopScope,
-): Promise<{ qualityGatePath: string; attemptDir: string; qualityGate: unknown }> {
+): Promise<{
+	qualityGatePath: string;
+	attemptDir: string;
+	qualityGate: unknown;
+}> {
 	const plan = await readUlwLoopPlan(repoRoot, scope);
 	const goal = plan.goals.find((g) => g.id === goalId);
 	if (!goal) throw new UlwLoopError(`Unknown goal ${goalId}`, "ULW_LOOP_GOAL_NOT_FOUND");
@@ -29,18 +33,15 @@ export async function buildLightQualityGate(
 		);
 	}
 
-	const attemptDir = ulwLoopAttemptEvidenceDir(goal.id, goal.attempt ?? 0, scope);
-	const absAttempt = join(repoRoot, attemptDir);
-	await mkdir(absAttempt, { recursive: true });
+	const attemptDir = ulwLoopAttemptEvidenceDir(repoRoot, goal.id, goal.attempt ?? 0, scope);
+	const absAttempt = safeWorkspacePath(repoRoot, join(repoRoot, attemptDir));
 
 	const artifactId = "artifact-light-cli";
 	const artifactRel = `${attemptDir}/light-cli-evidence.txt`;
-	const codeReportRel = `${attemptDir}/light-code-review.md`;
-	const gateReportRel = `${attemptDir}/light-gate-review.md`;
+	const codeReportRel = `${attemptDir}/light-root-code-review.md`;
+	const gateReportRel = `${attemptDir}/light-root-gate-review.md`;
 
-	const evidenceLines = criteria.map(
-		(c) => `- ${c.id} (${c.status}): ${c.capturedEvidence ?? c.scenario ?? ""}`,
-	);
+	const evidenceLines = criteria.map((c) => `- ${c.id} (${c.status}): ${c.capturedEvidence ?? c.scenario ?? ""}`);
 	const cliBody = [
 		`LIGHT quality gate evidence for ${goal.id}`,
 		`objective: ${goal.objective}`,
@@ -51,22 +52,30 @@ export async function buildLightQualityGate(
 		"",
 		"Grok LIGHT path: root agent self-review + criterion evidence (no multi-agent gate required).",
 	].join("\n");
-	await writeFile(join(repoRoot, artifactRel), cliBody + "\n", "utf8");
-	await writeFile(
+	await safeWriteWorkspaceTextFile(repoRoot, join(repoRoot, artifactRel), `${cliBody}\n`);
+	await safeWriteWorkspaceTextFile(
+		repoRoot,
 		join(repoRoot, codeReportRel),
-		`# Light code review\n\nAPPROVE — LIGHT tier self-review.\n\n${evidenceLines.join("\n")}\n`,
-		"utf8",
+		`# LIGHT root code self-review\n\nAPPROVE — performed by the LazyGrok root agent, not an independent reviewer.\n\n${evidenceLines.join("\n")}\n`,
 	);
-	await writeFile(
+	await safeWriteWorkspaceTextFile(
+		repoRoot,
 		join(repoRoot, gateReportRel),
-		`# Light gate review\n\nAPPROVE — all ${criteria.length} criteria pass with captured evidence.\n`,
-		"utf8",
+		`# LIGHT root gate self-review\n\nAPPROVE — root agent confirmed all ${criteria.length} criteria pass with captured evidence.\n`,
 	);
 
 	const first = criteria[0];
+	if (first === undefined) {
+		throw new UlwLoopError("Goal has no success criteria", "ULW_LOOP_NO_CRITERIA");
+	}
 	const qualityGate = {
+		provenance: {
+			mode: "root-self-review",
+			producer: "lazygrok-root",
+			sessionId: scope?.sessionId ?? resolveUlwLoopSessionIdFromEnv() ?? "session",
+		},
 		codeReview: {
-			by: "lazygrok-code-reviewer",
+			by: "lazygrok-root",
 			recommendation: "APPROVE",
 			codeQualityStatus: "CLEAR",
 			reportPath: codeReportRel,
@@ -74,7 +83,7 @@ export async function buildLightQualityGate(
 			blockers: [],
 		},
 		manualQa: {
-			by: "lazygrok-qa-executor",
+			by: "lazygrok-root",
 			status: "passed",
 			evidence: criteria.map((c) => c.capturedEvidence || c.id).join(" | "),
 			surfaceEvidence: [
@@ -108,7 +117,7 @@ export async function buildLightQualityGate(
 			],
 		},
 		gateReview: {
-			by: "lazygrok-gate-reviewer",
+			by: "lazygrok-root",
 			recommendation: "APPROVE",
 			reportPath: gateReportRel,
 			evidence: "LIGHT gate: criteria coverage complete",
@@ -131,7 +140,11 @@ export async function buildLightQualityGate(
 	};
 
 	const qualityGatePath = join(attemptDir, "quality-gate.light.json");
-	await writeFile(join(repoRoot, qualityGatePath), JSON.stringify(qualityGate, null, 2) + "\n", "utf8");
+	await safeWriteWorkspaceTextFile(
+		repoRoot,
+		join(repoRoot, qualityGatePath),
+		`${JSON.stringify(qualityGate, null, 2)}\n`,
+	);
 	return { qualityGatePath, attemptDir: absAttempt, qualityGate };
 }
 

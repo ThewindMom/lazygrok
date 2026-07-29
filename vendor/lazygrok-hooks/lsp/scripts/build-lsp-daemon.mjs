@@ -1,10 +1,20 @@
 #!/usr/bin/env node
 import { execSync } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import {
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readdirSync,
+	realpathSync,
+	rmSync,
+	statSync,
+	symlinkSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const componentRoot = join(here, "..");
 const force = process.argv.includes("--force");
 
 // Ordered candidate list:
@@ -18,6 +28,8 @@ const candidates = [
 function requiredOutputs(dir) {
 	return [
 		join(dir, "dist", "cli.js"),
+		join(dir, "dist", "client.js"),
+		join(dir, "dist", "client.d.ts"),
 		join(dir, "dist", "index.js"),
 		join(dir, "dist", "index.d.ts"),
 	];
@@ -29,13 +41,15 @@ for (const dir of candidates) {
 	const packageJson = join(dir, "package.json");
 	if (existsSync(packageJson)) {
 		const outputs = requiredOutputs(dir);
-		if (!force && isBuildFresh(packageJson, outputs)) {
+		if (!force && isBuildFresh(dir, outputs)) {
+			ensureComponentPackageLink(dir);
 			process.exit(0);
 		}
 		console.log("Installing repository lsp-daemon dependencies...");
 		execSync("npm ci", { cwd: dir, stdio: "inherit" });
 		console.log("Building repository lsp-daemon...");
 		execSync("npm run build", { cwd: dir, stdio: "inherit" });
+		ensureComponentPackageLink(dir);
 		console.log("Done.");
 		process.exit(0);
 	}
@@ -46,6 +60,7 @@ for (const dir of candidates) {
 for (const dir of candidates) {
 	const outputs = requiredOutputs(dir);
 	if (outputs.every((p) => existsSync(p))) {
+		ensureComponentPackageLink(dir);
 		console.log(`Using bundled lsp-daemon dist at ${dir}.`);
 		process.exit(0);
 	}
@@ -60,9 +75,43 @@ console.error(
 console.error(`probed: ${probedPaths}`);
 process.exit(1);
 
-function isBuildFresh(inputPath, outputPaths) {
-	if (!existsSync(inputPath)) return false;
+function isBuildFresh(inputRoot, outputPaths) {
 	if (outputPaths.some((path) => !existsSync(path))) return false;
-	const inputMtime = statSync(inputPath).mtimeMs;
+	const inputMtime = newestInputMtime(inputRoot);
 	return outputPaths.every((path) => statSync(path).mtimeMs >= inputMtime);
+}
+
+function newestInputMtime(directory) {
+	let newest = 0;
+	for (const entry of readdirSync(directory, { withFileTypes: true })) {
+		if (entry.name === "dist" || entry.name === "node_modules") continue;
+		const path = join(directory, entry.name);
+		if (entry.isDirectory()) newest = Math.max(newest, newestInputMtime(path));
+		else if (entry.isFile()) newest = Math.max(newest, statSync(path).mtimeMs);
+	}
+	return newest;
+}
+
+function ensureComponentPackageLink(packageDir) {
+	const scopeDir = join(componentRoot, "node_modules", "@code-yeongyu");
+	const linkPath = join(scopeDir, "lsp-daemon");
+	mkdirSync(scopeDir, { recursive: true });
+	if (isSymlinkToUsablePackage(linkPath, packageDir)) return;
+	rmSync(linkPath, { recursive: true, force: true });
+	symlinkSync(packageDir, linkPath, "junction");
+}
+
+function isSymlinkToUsablePackage(linkPath, packageDir) {
+	try {
+		const stat = lstatSync(linkPath);
+		return (
+			stat.isSymbolicLink() &&
+			existsSync(packageDir) &&
+			realpathSync(linkPath) === realpathSync(packageDir) &&
+			requiredOutputs(linkPath).every((path) => existsSync(path))
+		);
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+		throw error;
+	}
 }

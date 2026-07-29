@@ -46,6 +46,26 @@ Upstream LazyCodex ultrawork on Grok tools:
 
 Spawn prompts: `TASK:` + `DELIVERABLE` `SCOPE` `VERIFY` `STOP WHEN`. `background: true` unless full history required. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
 
+# Worktree boundary
+
+Ordinary ULW does not create a worktree solely because `ulw` was requested.
+Use a task-owned worktree when the user requests isolation, when work will be
+delivered as a PR/branch, or when parallel writers could conflict.
+
+- Whole-session isolation must be selected before Grok starts. Hooks cannot
+  change the cwd of an already-running host process.
+- Grok Build `0.2.114` parses `--worktree` in headless `-p` mode but does not
+  materialize it. For a headless isolated run, the reliable host sequence is
+  `git worktree add --detach <absolute-path> HEAD`, then
+  `grok --cwd <absolute-path> -p "ulw <task>"`.
+- If an active session reaches an isolation boundary, create or select the
+  task-owned worktree first, verify it with `git worktree list --porcelain`,
+  record its absolute path in the notepad/Boulder state, and run every later
+  edit, shell command, test, and evidence capture inside it.
+- Never claim worktree isolation merely because a flag was present. Prove the
+  effective cwd is listed as a worktree and that the source checkout stayed
+  unchanged.
+
 # CODING MULTI-AGENT (NON-NEGOTIABLE — LazyCodex feel on Grok + Grok workflows)
 
 This is how LazyCodex parallel coding works on Grok. Violating it is a defect.
@@ -229,8 +249,18 @@ NOT the notepad alone, NOT the plan alone. Skipping it is a defect.
 Upstream LazyCodex uses `create_goal`. On Grok the host may omit that tool
 (workflows on). The **ulw-loop ledger** is the durable binding contract:
 
-1. Always: `node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals --brief "<objective>" --json`
-   Prefer `.lazygrok/ulw-loop/`; keep `.omo/ulw-loop/` if that run already uses it.
+1. Always: copy the literal from `Exact Grok hook session ID for this turn: "..."` in
+   conversational hook context and run
+   `node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals --session-id "<exact-hook-id>" --brief "<objective>" --json`.
+   The hook ID is not a shell environment variable. Never inspect `printenv`, process
+   trees, active-session files, `/tmp`, or filenames to derive it. If the literal is not
+   visible, omit `--session-id`; the CLI resolves the sole recent private hook binding
+   for this workspace and rejects ambiguity. Never supply a guessed or fallback ID.
+   Use the exact value on every later ulw-loop CLI call. Only if `create-goals` explicitly
+   rejects an already-complete aggregate may a continued conversation derive
+   `<exact-hook-id>-<short-purpose>` for the new run. Never derive Grok scope
+   from ambient `CODEX_SESSION_ID` or `CODEX_THREAD_ID`. Prefer `.lazygrok/ulw-loop/`;
+   keep `.omo/ulw-loop/` if that run already uses it.
    Evidence: `record-evidence`. LIGHT complete: `light-quality-gate` then `checkpoint`. HEAVY: reviewer gate below.
 2. Always: open with a markdown `# Goal` block treated as binding (objective, tier, criteria, when-to-stop).
 3. If `create_goal` is in the tool list: call with exactly `objective`; no `status`/budget.

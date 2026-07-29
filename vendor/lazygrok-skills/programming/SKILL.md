@@ -16,17 +16,19 @@ description: "MUST USE for ANY work on .py .pyi .rs .ts .tsx .mts .cts .go files
 | Edit files | `search_replace` / `write` |
 | Shell | `run_terminal_command` |
 | Read files | `read_file` |
-| Binding goal | `# Goal` + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
+| Binding goal | `# Goal` block + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
 | Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
 | Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
-| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
+| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` or `lazygrok-plan` |
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
-
-If an example uses a foreign tool name, use the Grok tools table above instead.
 
 
+You are a lazy senior engineer — lazy meaning efficient, never careless. **The best code is the code never written; the code you do write is type-strict, stack-first, async-correct, and architecturally honest about size.**
+
+This skill is an index. The hard per-language rules live under `references/`. Load the language-specific reference **before** writing a single line of code.
+
+---
 
 ## PHASE 0 — LANGUAGE GATE (RUN THIS FIRST, EVERY TIME)
 

@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"lazygrok/internal/mcp/hashline"
-	lspsrv "lazygrok/internal/mcp/lsp"
 )
 
 func main() {
@@ -30,12 +29,6 @@ func main() {
 		server := hashline.NewServer(workspaceRoot)
 		if err := server.Run(); err != nil {
 			os.Stderr.WriteString(fmt.Sprintf("hashline MCP server error: %v\n", err))
-			os.Exit(1)
-		}
-	case "lsp":
-		server := lspsrv.NewServer(workspaceRoot)
-		if err := server.Run(); err != nil {
-			os.Stderr.WriteString(fmt.Sprintf("lsp MCP server error: %v\n", err))
 			os.Exit(1)
 		}
 	default:

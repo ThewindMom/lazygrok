@@ -2,12 +2,12 @@ package boulder
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 const boulderFile = ".lazygrok/boulder.json"
@@ -17,7 +17,7 @@ func boulderPath(workspace string) string {
 }
 
 func readBoulder(workspace string) map[string]any {
-	b, err := os.ReadFile(boulderPath(workspace))
+	b, err := safestate.ReadFile(boulderPath(workspace))
 	if err != nil {
 		return nil
 	}
@@ -30,12 +30,11 @@ func readBoulder(workspace string) map[string]any {
 
 func writeBoulder(workspace string, state map[string]any) bool {
 	path := boulderPath(workspace)
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	b, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return false
 	}
-	return os.WriteFile(path, append(b, '\n'), 0o644) == nil
+	return safestate.WriteFile(path, append(b, '\n'), 0o600) == nil
 }
 
 func getWorks(state map[string]any) []map[string]any {
@@ -65,16 +64,16 @@ func getWorkForSession(state map[string]any, sessionID string) map[string]any {
 	for _, id := range ids {
 		if s, ok := id.(string); ok && s == sessionID {
 			return map[string]any{
-				"work_id":        state["active_work_id"],
-				"active_plan":    state["active_plan"],
-				"plan_name":      state["plan_name"],
-				"status":         state["status"],
-				"started_at":     state["started_at"],
-				"ended_at":       state["ended_at"],
-				"elapsed_ms":     state["elapsed_ms"],
-				"session_ids":    state["session_ids"],
-				"task_sessions":  state["task_sessions"],
-				"worktree_path":  state["worktree_path"],
+				"work_id":       state["active_work_id"],
+				"active_plan":   state["active_plan"],
+				"plan_name":     state["plan_name"],
+				"status":        state["status"],
+				"started_at":    state["started_at"],
+				"ended_at":      state["ended_at"],
+				"elapsed_ms":    state["elapsed_ms"],
+				"session_ids":   state["session_ids"],
+				"task_sessions": state["task_sessions"],
+				"worktree_path": state["worktree_path"],
 			}
 		}
 	}
@@ -197,11 +196,17 @@ func formatInt(n int64) string {
 }
 
 func nudgeStatePath(sessionID string) string {
+	if _, err := hookenv.ParseSessionID(sessionID); err != nil || sessionID == "" {
+		return ""
+	}
 	return filepath.Join(hookenv.GrokHome(), "state", "boulder-nudge", sessionID, "nudged.json")
 }
 
 func wasBoulderNudged(workID, sessionID string) bool {
-	b, err := os.ReadFile(nudgeStatePath(sessionID))
+	if sessionID == "" {
+		return false
+	}
+	b, err := safestate.ReadFileBelow(hookenv.GrokHome(), nudgeStatePath(sessionID))
 	if err != nil {
 		return false
 	}
@@ -220,10 +225,13 @@ func wasBoulderNudged(workID, sessionID string) bool {
 }
 
 func markBoulderNudged(workID, sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	root := hookenv.GrokHome()
 	path := nudgeStatePath(sessionID)
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	data := map[string]any{"work_ids": []string{}}
-	if b, err := os.ReadFile(path); err == nil {
+	if b, err := safestate.ReadFileBelow(root, path); err == nil {
 		_ = json.Unmarshal(b, &data)
 	}
 	ids, _ := data["work_ids"].([]any)
@@ -239,5 +247,5 @@ func markBoulderNudged(workID, sessionID string) {
 	data["work_ids"] = toAnySlice(strIDs)
 	data["updated_at"] = nowISO()
 	b, _ := json.MarshalIndent(data, "", "  ")
-	_ = os.WriteFile(path, append(b, '\n'), 0o644)
+	_ = safestate.WriteFileBelow(root, path, append(b, '\n'), 0o600)
 }

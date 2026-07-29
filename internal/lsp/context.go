@@ -2,16 +2,19 @@ package lsp
 
 import (
 	"encoding/json"
-	"os"
 	"sort"
 	"strings"
 
+	"lazygrok/internal/safestate"
 )
 
 // CollectContext returns LSP diagnostic reminder for UserPromptSubmit.
 func CollectContext(sessionID string) string {
 	path := StashPath(sessionID)
-	b, err := os.ReadFile(path)
+	if path == "" {
+		return ""
+	}
+	b, err := safestate.ReadFileBelow(stashRoot(), path)
 	if err != nil {
 		return ""
 	}

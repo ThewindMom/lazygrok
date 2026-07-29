@@ -45,12 +45,15 @@ function notConfiguredAvailability(details) {
 }
 export function codexLspRequestContext(env = process.env, cwd = process.cwd()) {
     const canonicalCwd = realpathSync(resolve(cwd));
-    const codexHome = resolve(env["CODEX_HOME"]?.trim() || join(homedir(), ".codex"));
+    const grokHome = resolve(env["GROK_HOME"]?.trim() || env["CODEX_HOME"]?.trim() || join(homedir(), ".grok"));
     return parseLspRequestContext({
         cwd: canonicalCwd,
-        projectConfigPaths: [join(canonicalCwd, ".codex", "lsp-client.json")],
-        userConfigPath: join(codexHome, "lsp-client.json"),
-        installDecisionsPath: join(codexHome, "lsp-install-decisions.json"),
+        projectConfigPaths: [
+            join(canonicalCwd, ".grok", "lsp-client.json"),
+            join(canonicalCwd, ".codex", "lsp-client.json"),
+        ],
+        userConfigPath: join(grokHome, "lsp-client.json"),
+        installDecisionsPath: join(grokHome, "lsp-install-decisions.json"),
         capabilities: { installDecisionTool: true },
     });
 }

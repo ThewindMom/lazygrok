@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 
 import { buildUltraworkAdditionalContext, type UltraworkAdditionalContextOptions } from "./ultrawork-skill-pointer.js";
 
@@ -64,8 +64,17 @@ function hasUltraworkDirectiveAlreadyInTranscript(transcriptPath: string | null 
 }
 
 function readTranscriptTail(transcriptPath: string): string {
-	const rawTranscript = readFileSync(transcriptPath);
-	return rawTranscript.subarray(Math.max(0, rawTranscript.byteLength - TRANSCRIPT_SEARCH_BYTES)).toString("utf8");
+	const fileDescriptor = openSync(transcriptPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+	try {
+		const file = fstatSync(fileDescriptor);
+		if (!file.isFile()) throw new Error("transcript is not a regular file");
+		const length = Math.min(file.size, TRANSCRIPT_SEARCH_BYTES);
+		const buffer = Buffer.alloc(length);
+		const bytesRead = readSync(fileDescriptor, buffer, 0, length, file.size - length);
+		return buffer.subarray(0, bytesRead).toString("utf8");
+	} finally {
+		closeSync(fileDescriptor);
+	}
 }
 
 function isUltraworkPrompt(prompt: string): boolean {

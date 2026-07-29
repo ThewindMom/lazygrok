@@ -11,6 +11,9 @@ Releases are normally automated via [release-please](https://github.com/googleap
 * Update CodeGraph bootstrap to 4.19.3 with ancestor project discovery, per-project worker locks, stale-lock recovery, and failure cooldowns
 * Add the frontend interaction-mechanics reference and routing for micro-interaction/motion work
 * Make Grok-native skill selection the documented ULW activation path, add deterministic `/ulw`, and use Grok-supported `user-invocable` skill metadata
+* Split ULW activation from legacy Ralph completely: `ulw`, `/ulw`, `ultrawork`, and `/ulw-loop` use only the ULW goal ledger; promise + verifier remains explicit as `/ulw-ralph-loop`, alongside `/ralph-loop` and `/cancel-ralph`
+* Preserve the worktree/cwd/source-clean contract in the injected ultrawork skill and all generated copies
+* Correct active docs for the 0.4.4 install/bootstrap, inactive upstream superpowers sources, manual build-time prompt variants, and the complete local/remote MCP privacy inventory
 * Keep vendored git-bash compatibility sources while explicitly leaving the unsupported `git_bash` MCP unregistered on Grok/Linux
 * Keep Codex config migration and version-only root hook status changes out of the Grok runtime
 
@@ -51,10 +54,11 @@ Releases are normally automated via [release-please](https://github.com/googleap
 * See `docs/ultrawork-upstream.md`
 
 ### Hard UPS inject + full hook bridge (Grok 0.2.x)
-* Permanent `lazygrok-ups-probe.mjs` + race-safe prompt_history recovery in shim
+* Bounded `lazygrok-ups-probe.mjs` forwarder + race-safe prompt_history recovery in shim
 * **`scripts/install-user-hooks.mjs` (v4)** → full mirror of all plugin hooks under `~/.grok/hooks/` (dynamic plugin root)
 * **`scripts/audit-hooks.py`** — inventory, dry-run (39 commands), parse live debug, session inspect
-* Offline: `scripts/verify-ups-inject.mjs`; live: `ups-probe-latest.json` + debug fires
+* Offline: `scripts/verify-ups-inject.mjs`; live activation verified from Grok session history
+* Prompt-time diagnostic persistence was later removed; only sanitized session bindings remain
 * Dropped broken default **git_bash** MCP; ulw-plan prefers `.lazygrok/` drafts
 * Docs: `docs/ultrawork-inject.md` (soft skill path vs hard inject)
 

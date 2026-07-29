@@ -158,7 +158,7 @@ For tasks where the deliverable is an **artifact, not a bug fix** (reverse engin
 ### Pattern
 
 ```
-spawn_subagent(subagent_type="oracle", background=false,
+task(subagent_type="oracle", load_skills=[], run_in_background=false,
      prompt="""
 SKEPTICAL FINAL VERIFICATION — be critical, look for reasons the task is incomplete or wrong.
 

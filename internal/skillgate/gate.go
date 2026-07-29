@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 type catalogEntry struct {
@@ -20,17 +21,28 @@ type catalogEntry struct {
 // SessionDir returns ~/.grok/state/skill-gate/<session>.
 func SessionDir(sessionID string) string {
 	if sessionID == "" {
-		sessionID = "unknown"
+		return ""
+	}
+	if _, err := hookenv.ParseSessionID(sessionID); err != nil {
+		return ""
 	}
 	return filepath.Join(hookenv.GrokHome(), "state", "skill-gate", sessionID)
 }
 
 func catalogPath(sessionID string) string {
-	return filepath.Join(SessionDir(sessionID), "all-skills.json")
+	dir := SessionDir(sessionID)
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "all-skills.json")
 }
 
 func loadedPath(sessionID string) string {
-	return filepath.Join(SessionDir(sessionID), "skills.loaded")
+	dir := SessionDir(sessionID)
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "skills.loaded")
 }
 
 // RulesPath returns the agent-skill-gate rules markdown path.
@@ -45,7 +57,11 @@ func RulesPath() string {
 }
 
 func loadCatalog(sessionID string) []catalogEntry {
-	b, err := os.ReadFile(catalogPath(sessionID))
+	path := catalogPath(sessionID)
+	if path == "" {
+		return nil
+	}
+	b, err := safestate.ReadFileBelow(hookenv.GrokHome(), path)
 	if err != nil {
 		return nil
 	}
@@ -57,7 +73,11 @@ func loadCatalog(sessionID string) []catalogEntry {
 }
 
 func loadLoadedIDs(sessionID string) map[string]struct{} {
-	b, err := os.ReadFile(loadedPath(sessionID))
+	path := loadedPath(sessionID)
+	if path == "" {
+		return map[string]struct{}{}
+	}
+	b, err := safestate.ReadFileBelow(hookenv.GrokHome(), path)
 	if err != nil {
 		return map[string]struct{}{}
 	}
@@ -112,21 +132,15 @@ func MarkSkillLoaded(sessionID, skillID string) error {
 		return nil
 	}
 	dir := SessionDir(sessionID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+	if dir == "" {
+		return hookenv.ErrInvalidSessionID
 	}
 	path := loadedPath(sessionID)
 	existing := loadLoadedIDs(sessionID)
 	if _, ok := existing[skillID]; ok {
 		return nil
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = fmt.Fprintf(f, "%s\n", skillID)
-	return err
+	return safestate.AppendFileBelow(hookenv.GrokHome(), path, []byte(skillID+"\n"), 0o600)
 }
 
 // SkillIDForPath resolves catalog id or conventional SKILL.md layout.

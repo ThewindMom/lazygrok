@@ -5,20 +5,29 @@ description: "Maximum-saturation research orchestration: parallel explore+librar
 
 > **Alias of `ulw-research`** (LazyCodex 4.19.3 name). Prefer `ulw-research`.
 
-## Grok tools only
+## Grok Harness Tool Compatibility
 
-| Need | Tool |
+This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools:
+
+| OpenCode example | Grok tool to use |
 | --- | --- |
-| Spawn | `spawn_subagent({ subagent_type, prompt, background: true })` |
-| Wait | `get_command_or_subagent_output({ task_ids, timeout_ms })` |
-| Kill | `kill_command_or_subagent({ task_id })` |
-| Todos | `todo_write` |
-| Shell | `run_terminal_command` |
-| Edit | `search_replace` / `write` |
-| Read | `read_file` |
+| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as an explorer. ...","agent_type":"explorer","background":false})` |
+| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as a librarian. ...","agent_type":"librarian","background":false})` |
+| `task(subagent_type="plan", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as a planning agent. ...","agent_type":"plan","background":false})` |
+| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent.spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazygrok-gate-reviewer","background":false})` |
+| `task(category="...", ...)` for implementation or QA | `spawn_subagent.spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":false})` |
+| `background_output(task_id="...")` | `spawn_subagent.get_command_or_subagent_output(...)` for mailbox signals |
+| `team_*(...)` | Use Grok native subagents via `spawn_subagent.spawn_subagent` and `spawn_subagent.get_command_or_subagent_output`; use `spawn_subagent.send_input` and `spawn_subagent.kill_command_or_subagent` only when exposed in the active tools list |
 
-Only call tools from this session's tool list. See plugin `rules/15-grok-tools-only.md`.
+Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into `~/.grok/agents/`: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `agent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `agent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
 
+Grok exposes ONE of two subagent tool surfaces per session; check your own tool list and route accordingly. If `spawn_subagent` tools exist, use the table above as written. If instead a flat `spawn_subagent` with a required `task_name` exists (`spawn_subagent`), rewrite every `spawn_subagent` example: `spawn_subagent.spawn_subagent({...,"background":false})` becomes `spawn_subagent({"task_name":"<lowercase_digits_underscores>","message":...,"agent_type":...,"fork_turns":"none"})` (`"all"` only when full parent history is truly required); `send_input` becomes `spawn_subagent (message-only follow-up)`; do not call `kill_command_or_subagent`/`resume_agent` (finished agents end on their own; `spawn_subagent (re-task: new prompt to same role)` re-tasks one, `kill_command_or_subagent` stops one); `get_command_or_subagent_output` takes only `timeout_ms` and returns on any child mailbox activity. On the v2 surface `agent_type` may be ABSENT from the spawn schema (verified 2026-07-11: only `fork_turns`/`message`/`task_name`) — when absent, omit it and describe the role inside `message`; installed role TOMLs cannot be selected on that surface. If a code block below conflicts with this section, this section wins.
+
+When translating `load_skills=[...]`, include the requested skill names in the spawned agent's `message`. If a code block below conflicts with this section, this section wins.
+
+For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `spawn_subagent.get_command_or_subagent_output` timeout only means no new mailbox update arrived; back off between waits (double the timeout up to ~5 minutes) instead of spinning short cycles. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
+
+---
 
 # ULW-RESEARCH — Maximum-Saturation Research
 
@@ -36,8 +45,7 @@ Silent priority — never narrate missing tools:
 4. Live checklist: `todo_write` (exactly one `in_progress`, mark completed immediately).
 5. Host `/goal` slash command is optional extra; do not block on it.
 
-When OmO/Codex docs say "call get_goal / create_goal / update_goal", translate to this protocol.
-
+When Codex/OmO docs say "call get_goal / create_goal / update_goal", translate to this protocol.
 
 
 ## Grok Tool Mapping
@@ -51,17 +59,15 @@ When OmO/Codex docs say "call get_goal / create_goal / update_goal", translate t
 | Edit files | `search_replace` / `write` |
 | Shell | `run_terminal_command` |
 | Read files | `read_file` |
-| Binding goal | `# Goal` + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
+| Binding goal | `# Goal` block + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
 | Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
 | Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
-| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
+| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` or `lazygrok-plan` |
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
-
-If an example uses a foreign tool name, use the Grok tools table above instead.
 
 
+You are the research orchestrator. The user has explicitly ordered exhaustive research: fan parallel worker swarms out over every relevant source, chase every lead they surface until the leads run dry, prove contested claims by running code, and deliver a synthesis in which every claim carries a citation or a proof. Exhaustive coverage is the assignment, not a risk to manage.
 
 ## Activation
 
@@ -99,14 +105,25 @@ Saturation is not just more searching; it is a knowledge-production protocol. Th
 
 Observation candidates and claim candidates travel back from workers as message text. The orchestrator writes the instrumentation artifacts, links candidates into the intent diff and claim graph, and records where each observation entered the synthesis. A conclusion is not ready for final materials until its expected truth/reality diff is closed or marked unknown, its claim node exists, and its independent-observation convergence status is supported or explicitly excepted.
 
-## Run the swarm as a cooperating team
+## Run the swarm with parallel Grok subagents
 
-Saturation research defaults to teammode, not isolated fire-and-forget workers: a lead one worker surfaces almost always reshapes what another should search next. When your harness gives you real cooperating members — Grok: the `teammode` skill (Grok spawn_subagent agents, or `codex_app` threads as its fallback); OpenCode: `team_mode` — run this swarm as a team. Fall back to the background-worker swarm below only when team mode is unavailable, or the axes are genuinely independent with no cross-pollination expected.
+Saturation research on Grok uses parallel `spawn_subagent` workers. Grok Build
+does not expose the upstream durable team transport, mailbox, or thread lifecycle,
+so the parent remains the only orchestrator and synthesizes every worker result.
+Use one worker per independent research axis and launch expansion waves when a
+result creates a new axis.
 
-- **One member per axis — by part, ownership, or perspective, never a job title.** Each Phase 0 axis is one member owning one concrete slice: a codebase part, a source territory, or a question lens. No two members share an angle. "Backend researcher" or "the web person" gives no real boundary and invites overlap — name what the member owns.
-- **Many teammates by default.** Prefer a larger roster, usually 5-8 teammates, whenever the axes can be made distinct. Add at least one skeptic or red-team perspective for hyperdebate/ultradebate: cross-critique claims, evidence quality, synthesis structure, and visual-report choices before they reach the final deliverable.
-- **The raise law — broadcast every lead the instant it surfaces.** Members over-communicate relentlessly: every new lead, finding, contradiction, and dead end is raised to you the moment it surfaces, never hoarded for a final dump. Through long passes they send `WORKING: <axis> - <phase>`, and `BLOCKED: <reason>` the moment progress stops, so you always know a member is alive. Too many small updates is correct here; going quiet is the only failure.
-- **You lead; expand on each raised lead.** Members raise via message text, never write session files. Journal each lead and spawn its expansion the instant it lands (Phase 2), not only when a member's final reply arrives.
+- **One worker per axis — by part, ownership, or perspective, never a job title.**
+  Each Phase 0 axis owns one concrete slice: a codebase part, a source territory,
+  or a question lens. No two workers share an angle.
+- **Many workers when the axes justify it.** Prefer 5-8 distinct workers for a
+  genuinely broad search. Add a skeptic or red-team axis for
+  hyperdebate/ultradebate.
+- **Workers return evidence to the parent.** Each result includes leads,
+  contradictions, and dead ends. Workers never write shared session files.
+- **The parent expands leads.** Journal each returned lead and launch its
+  expansion in the next wave; do not depend on peer-to-peer messaging.
+
 
 ## Worker ground rules
 
@@ -190,7 +207,7 @@ Role protocols — embed the relevant one in each spawn message; every worker ge
 Example spawn (codebase axis; librarian, browsing, and repo-dive follow the same contract with their own protocol):
 
 ```
-spawn_subagent(subagent_type="explore", background=true, prompt="TASK: act as a codebase researcher. AXIS: <specific angle>.
+task(subagent_type="explore", run_in_background=true, prompt="TASK: act as a codebase researcher. AXIS: <specific angle>.
 This is an explicit exhaustive-research assignment. Your default retrieval budget and stop-when-answered rules do not apply — run the full protocol below and report every lead.
 SCOPE: find everything in this codebase related to <angle>: <what complete looks like>.
 PROTOCOL: grep 3+ keyword variations; structural search; LSP references; globs; git history (-S and --grep). Cross-validate across tools. Report absolute paths and file:line patterns.
@@ -206,7 +223,7 @@ This loop is what makes the mode research rather than search. Collect returns as
 3. Spawn an expansion worker immediately for each new unchecked lead:
 
 ```
-spawn_subagent(subagent_type="librarian", background=true, prompt="TASK: expansion wave <N> — investigate: <lead>.
+task(subagent_type="librarian", run_in_background=true, prompt="TASK: expansion wave <N> — investigate: <lead>.
 PARENT: <which return surfaced it>. This is an explicit exhaustive-research assignment; budgets do not apply.
 <role protocol for the lead's territory — librarian protocol for external leads, explore protocol for codebase leads>
 End your reply with the ## EXPAND tail.")
@@ -225,7 +242,7 @@ End your reply with the ## EXPAND tail.")
 Settle with executed code, not judgment, whenever sources disagree, a behavior is undocumented, a claim is performance- or compatibility-shaped, or the honest answer is "it should work". Spawn one verification worker per claim:
 
 ```
-spawn_subagent(subagent_type="deep", background=true, prompt="TASK: verify by execution: <claim>.
+task(category="deep", run_in_background=true, prompt="TASK: verify by execution: <claim>.
 SOURCE: <where it came from>; CONTRADICTION: <opposing source, if any>.
 Write a minimal self-contained script that tests the claim; run it (uv run --with <deps> python / bun / direct compile); capture full stdout+stderr; pin versions.
 Reply with: the exact code, the full output, environment (OS, runtime, dependency versions), and a verdict — CONFIRMED / REFUTED / PARTIAL — grounded in the output.")
@@ -281,7 +298,7 @@ Default final materials to HTML/PDF unless the user explicitly asks for a differ
 
 Asset workers (background, parallel): actively use charts for quantitative findings (`uv run --with matplotlib --with plotly python`) saved by you to `$SESSION_DIR/assets/`; Mermaid graphs for process, architecture, argument, and evidence-flow structure; full-page screenshots of the top 5-10 sources (browsing skill); generated diagrams or editorial visuals with the imagegen skill when architecture, flows, or narrative framing benefit from bitmap assets.
 
-Assembly worker — `spawn_subagent(subagent_type="deep", background=true, ...)`: before writing, read every available design and visualization skill and apply it — the report is a designed artifact, not a text dump. Run HTML/PDF output through the ULW loop with frontend and visual-qa, then repair until the reviewer says no broken parts and gives approval. Structure: executive summary → key findings by theme → detailed analysis (quotes under 20 words with attribution, charts, Mermaid graphs, generated visuals, SHA-pinned permalinks, verification results) → comparative analysis when options compete → numbered sources with access dates → methodology appendix (workers, waves, searches, verifications). Every claim cites `[Source N]`.
+Assembly worker — `task(category="deep", load_skills=["frontend", "visual-qa", "open-design", "data-scientist", "imagegen", "ulw-loop"], run_in_background=true, ...)`: before writing, read every available design and visualization skill and apply it — the report is a designed artifact, not a text dump. Run HTML/PDF output through the ULW loop with frontend and visual-qa, then repair until the reviewer says no broken parts and gives approval. Structure: executive summary → key findings by theme → detailed analysis (quotes under 20 words with attribution, charts, Mermaid graphs, generated visuals, SHA-pinned permalinks, verification results) → comparative analysis when options compete → numbered sources with access dates → methodology appendix (workers, waves, searches, verifications). Every claim cites `[Source N]`.
 
 ## Search craft
 

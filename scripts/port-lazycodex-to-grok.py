@@ -10,6 +10,7 @@ todo_write, spawn_subagent, .lazygrok/).
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 from pathlib import Path
@@ -20,7 +21,10 @@ REPLACEMENTS: list[tuple[str, str]] = [
     (r"\.omo/ulw-loop", r".lazygrok/ulw-loop"),
     (r"\.omo/evidence", r".lazygrok/evidence"),
     (r"\.omo/plans", r".lazygrok/plans"),
+    (r"\.omo/drafts", r".lazygrok/drafts"),
     (r"\.omo/teams", r".lazygrok/teams"),
+    (r"\.omo/boulder\.json", r".lazygrok/boulder.json"),
+    (r"\.omo/start-work", r".lazygrok/start-work"),
     (r"`\.omo/`", r"`.lazygrok/` (or `.omo/` if that run already started there)"),
     (r"under `\.omo`", r"under `.lazygrok` (accept `.omo` if the CLI already used it)"),
     # Branding
@@ -35,6 +39,7 @@ REPLACEMENTS: list[tuple[str, str]] = [
     (r"\bCodex App\b", r"Grok"),
     (r"\bCodex\b", r"Grok"),
     (r"\bCODEX_HOME\b", r"GROK_HOME"),
+    (r"\bcodex:<session_id>", r"grok:<session_id>"),
     (r"\$HOME/\.codex", r"$HOME/.grok"),
     (r"~/\.codex", r"~/.grok"),
     (r"sisyphuslabs/omo", r"lazygrok"),
@@ -66,6 +71,14 @@ REPLACEMENTS: list[tuple[str, str]] = [
     (r"\bBash tool\b", r"run_terminal_command tool"),
     (r"browser:control-in-app-browser", r"playwright MCP tools"),
     (r"control-in-app-browser", r"playwright"),
+    (
+        r"Directly open the screenshots with the available image-viewing tool "
+        r"\(`view_image`, `look_at`, or browser inspection\) before judging\.",
+        "Inspect rendered web captures through Grok Build's Playwright/browser "
+        "surface before judging. If a capture exists only as a local raster path "
+        "and no rendered browser surface is available, return INCONCLUSIVE and "
+        "request an inspectable attachment instead of claiming visual review.",
+    ),
     # Skill renames
     (r"\bulw-research\b", r"ulw-research"),  # keep name; we also alias ultraresearch
     (r"npx lazycodex-ai install", r"grok plugin install/update (lazygrok)"),
@@ -111,6 +124,180 @@ GROK_TOOL_MAPPING = """
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
 """.strip()
 
+GROK_WORKTREE_BOUNDARY = """
+# Worktree boundary
+
+Ordinary ULW does not create a worktree solely because `ulw` was requested.
+Use a task-owned worktree when the user requests isolation, when work will be
+delivered as a PR/branch, or when parallel writers could conflict.
+
+- Whole-session isolation must be selected before Grok starts. Hooks cannot
+  change the cwd of an already-running host process.
+- Grok Build `0.2.114` parses `--worktree` in headless `-p` mode but does not
+  materialize it. For a headless isolated run, the reliable host sequence is
+  `git worktree add --detach <absolute-path> HEAD`, then
+  `grok --cwd <absolute-path> -p "ulw <task>"`.
+- If an active session reaches an isolation boundary, create or select the
+  task-owned worktree first, verify it with `git worktree list --porcelain`,
+  record its absolute path in the notepad/Boulder state, and run every later
+  edit, shell command, test, and evidence capture inside it.
+- Never claim worktree isolation merely because a flag was present. Prove the
+  effective cwd is listed as a worktree and that the source checkout stayed
+  unchanged.
+""".strip()
+
+GROK_TEAMMODE_SKILL = """---
+name: teammode
+description: >
+  Grok: durable team orchestration is unavailable. Use parallel
+  spawn_subagent workers instead. Trigger when user asks for a team of agents
+  so you route to fan-out (not a separate team transport).
+---
+
+# Parallel agents on Grok (not durable teams)
+
+> **Status:** Grok Build has no durable multi-member team transport. Use parallel one-shot subagents.
+
+## What to do
+
+| Need | Tool |
+| --- | --- |
+| Parallel research | Same-turn `spawn_subagent` for `lazygrok:explore` and/or `lazygrok:librarian` |
+| Parallel implementation | One `spawn_subagent` per independent slice (`lazygrok:lazygrok-worker-*` / `hephaestus`) |
+| Wait | `get_command_or_subagent_output({ task_ids, timeout_ms })` |
+| Stop | `kill_command_or_subagent` |
+| Fixed multi-lane research | Host `workflow` tool when appropriate |
+
+### Spawn contract
+
+```
+spawn_subagent({
+  subagent_type: "lazygrok:explore",
+  prompt: "TASK: …\\nDELIVERABLE: …\\nSCOPE: …\\nVERIFY: …\\nSTOP WHEN: …",
+  background: true
+})
+```
+
+- Depth max **1**
+- Parent is the only orchestrator
+- Only call tools from this session's tool list (`rules/15-grok-tools-only.md`)
+
+If the user asked for "teammode", say once that Grok uses parallel `spawn_subagent` for independent scopes, then fan out.
+"""
+
+GROK_RESEARCH_SWARM = """## Run the swarm with parallel Grok subagents
+
+Saturation research on Grok uses parallel `spawn_subagent` workers. Grok Build
+does not expose the upstream durable team transport, mailbox, or thread lifecycle,
+so the parent remains the only orchestrator and synthesizes every worker result.
+Use one worker per independent research axis and launch expansion waves when a
+result creates a new axis.
+
+- **One worker per axis — by part, ownership, or perspective, never a job title.**
+  Each Phase 0 axis owns one concrete slice: a codebase part, a source territory,
+  or a question lens. No two workers share an angle.
+- **Many workers when the axes justify it.** Prefer 5-8 distinct workers for a
+  genuinely broad search. Add a skeptic or red-team axis for
+  hyperdebate/ultradebate.
+- **Workers return evidence to the parent.** Each result includes leads,
+  contradictions, and dead ends. Workers never write shared session files.
+- **The parent expands leads.** Journal each returned lead and launch its
+  expansion in the next wave; do not depend on peer-to-peer messaging.
+"""
+
+UNSUPPORTED_GROK_TOOL_ROUTE = re.compile(
+    r"\bcodex_app\."
+    r"|\bteam_mode\b"
+    r"|\bmulti_agent_v[12]\b"
+    r"|\bteam_(?:create|task_create|status|list|delete|shutdown_request|"
+    r"approve_shutdown|send_message)\b"
+)
+
+REVIEW_WORK_ISOLATION_GATE = """
+## Phase -1: Mandatory branch-review isolation gate
+
+For every PR or branch review, complete this gate before reading the changed
+branch, collecting its diff or files, running tests, or spawning reviewers:
+
+```bash
+# List trusted local refs first, then copy only the object ID from the matching
+# row. Never interpolate a user-supplied ref into shell syntax.
+git for-each-ref --format='%(refname)%09%(objectname)' refs/heads refs/remotes
+REVIEW_HEAD='<hex-object-id-from-the-matching-row>'
+case "$REVIEW_HEAD" in
+  ''|*[!0-9a-f]*) echo "invalid review object ID" >&2; exit 1 ;;
+esac
+git cat-file -e "${REVIEW_HEAD}^{commit}" || exit 1
+REVIEW_ROOT="$(mktemp -d)" || exit 1
+REVIEW_WT="${REVIEW_ROOT}/review"
+if ! git worktree add --detach --no-checkout "$REVIEW_WT" "$REVIEW_HEAD"; then
+  rmdir "$REVIEW_ROOT" 2>/dev/null || true
+  exit 1
+fi
+if ! REVIEW_GIT_DIR="$(git -C "$REVIEW_WT" rev-parse --absolute-git-dir)"; then
+  git worktree remove --force "$REVIEW_WT"
+  rmdir "$REVIEW_ROOT" 2>/dev/null || true
+  exit 1
+fi
+printf 'REVIEW_HEAD=%s\nREVIEW_ROOT=%s\nREVIEW_WT=%s\nREVIEW_GIT_DIR=%s\n' \
+  "$REVIEW_HEAD" "$REVIEW_ROOT" "$REVIEW_WT" "$REVIEW_GIT_DIR"
+```
+
+`git worktree add --no-checkout` registers an empty worktree without
+materializing reviewed files. Materialization can invoke Git filters, so run
+the following command inside the same effective sandbox required for tests,
+with cwd set to the printed `REVIEW_WT`. Grok terminal calls may use separate
+shells: copy the four exact printed values into every later command and never
+assume shell variables persist. Never run this on the unsandboxed host:
+
+```bash
+REVIEW_HEAD='<literal-printed-hex-object-id>'
+git -c core.hooksPath=/dev/null checkout --detach "$REVIEW_HEAD" || exit 1
+git rev-parse HEAD
+git worktree list --porcelain
+```
+
+The `git worktree list --porcelain` output must contain the exact
+`$REVIEW_WT` path at `$REVIEW_HEAD`. Run every changed-branch read, diff, test,
+QA command, and filesystem-capable review lane from `$REVIEW_WT`; tell every
+subagent that this exact path is its required cwd. The original checkout is
+read-only context.
+
+`git archive`, `git show`, copied files, and extracted temporary trees are not
+substitutes for this gate. A detached review worktree does not modify either
+branch. If the worktree cannot be created or verified, return a blocking review
+failure instead of continuing in the original checkout.
+
+A worktree isolates Git checkout state; it does not sandbox processes. Treat
+reviewed code as untrusted. Both the checkout that materializes reviewed files
+and every repository-provided command require the user's applicable
+permissions and an effective host/container sandbox that denies credentials,
+network, and writes outside `$REVIEW_WT`, except for the exact printed
+`REVIEW_GIT_DIR` that Git must update for this linked worktree. No other part of
+the parent repository or host is writable. If safe materialization or execution
+is not available, clean the empty worktree, perform static review, and report
+hands-on QA as blocking or `INCONCLUSIVE`.
+
+Once `$REVIEW_ROOT` is allocated, cleanup is a mandatory invariant. Before
+**every** blocking or successful return, including verification failure,
+collection failure, reviewer timeout, or interruption, preserve any evidence
+worth retaining and then run:
+
+```bash
+if git worktree list --porcelain | grep -Fqx "worktree $REVIEW_WT"; then
+  git worktree remove --force "$REVIEW_WT"
+fi
+rmdir "$REVIEW_ROOT" 2>/dev/null || true
+```
+
+Do not rely on a shell `trap`: Grok terminal calls may use separate shells.
+Set `REVIEW_WT` and `REVIEW_ROOT` to their exact printed literal values, then
+run the cleanup block explicitly on every exit path after allocation. Any
+artifact path cited in the final report must still resolve after cleanup; copy
+worktree-local evidence to a registered stable path outside `$REVIEW_ROOT` and
+cite that preserved path before removing the worktree.
+""".strip()
+
 ULW_CLI_BOOTSTRAP = """
 ### Resolve ulw-loop CLI (Grok)
 ```sh
@@ -119,8 +306,12 @@ ULW_NODE="$(command -v node 2>/dev/null || true)"
 ULW_CLI=
 if [ -n "$GROK_PLUGIN_ROOT" ] && [ -f "$GROK_PLUGIN_ROOT/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" ]; then
   ULW_CLI="$GROK_PLUGIN_ROOT/vendor/lazygrok-hooks/ulw-loop/dist/cli.js"
-elif [ -f "$HOME/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" ]; then
-  ULW_CLI="$HOME/.grok/installed-plugins/lazygrok-85b8f856/vendor/lazygrok-hooks/ulw-loop/dist/cli.js"
+else
+  for candidate in "$HOME"/.grok/installed-plugins/lazygrok-*/vendor/lazygrok-hooks/ulw-loop/dist/cli.js; do
+    [ -f "$candidate" ] || continue
+    ULW_CLI="$candidate"
+    break
+  done
 fi
 # Convenience wrapper (optional):
 ulw() { "$ULW_NODE" "$ULW_CLI" "$@"; }
@@ -135,6 +326,56 @@ def transform_text(text: str) -> str:
     out = text
     for pat, repl in REPLACEMENTS:
         out = re.sub(pat, repl, out)
+
+    if "\nname: teammode\n" in out:
+        return GROK_TEAMMODE_SKILL
+
+    if "## Run the swarm as a cooperating team" in out:
+        out, substitutions = re.subn(
+            r"## Run the swarm as a cooperating team[\s\S]*?(?=## Worker ground rules)",
+            GROK_RESEARCH_SWARM + "\n\n",
+            out,
+            count=1,
+        )
+        if substitutions != 1:
+            raise ValueError(
+                "ulw-research port changed shape: cooperating-team section "
+                "could not be replaced"
+            )
+
+    if "\nname: refactor\n" in out:
+        template_marker = "export const REFACTOR_TEMPLATE = `"
+        team_marker = "\n`\n\nexport const REFACTOR_TEAM_MODE_ADDENDUM = `"
+        frontmatter = out.split("---", 2)
+        if template_marker in out and len(frontmatter) == 3:
+            template = out.split(template_marker, 1)[1]
+            template = template.split(team_marker, 1)[0]
+            out = f"---{frontmatter[1]}---\n\n{template.rstrip()}\n"
+        elif team_marker in out:
+            out = out.split(team_marker, 1)[0].rstrip() + "\n"
+
+    if "# Phase 2 + 3 — Hypothesis Formation & Parallel Investigation" in out:
+        out = re.sub(
+            r"### Path A: Team mode ENABLED[\s\S]*?(?=### Path B: Team mode DISABLED)",
+            "",
+            out,
+            count=1,
+        )
+        out = out.replace(
+            "### Path B: Team mode DISABLED",
+            "### Grok parallel investigation",
+            1,
+        )
+        out = out.replace(
+            "Fan out async explore/deep subagents instead.",
+            "Grok has no durable `team_*` transport. Fan out async explore/deep subagents with `spawn_subagent`.",
+            1,
+        )
+
+    out = out.replace(
+        "**Parallel investigation** — team mode `debug-squad` when enabled, async subagents otherwise",
+        "**Parallel investigation** — one hypothesis per Grok `spawn_subagent`, with the parent synthesizing results",
+    )
 
     # Collapse accidental double brand
     out = out.replace("LazyGrok LazyGrok", "LazyGrok")
@@ -167,8 +408,124 @@ def transform_text(text: str) -> str:
     out = out.replace("# ULTRARESEARCH", "# ULW-RESEARCH")
     out = out.replace("Ultraresearch", "ULW-Research")
     out = out.replace("ultraresearch", "ulw-research")
+    out = out.replace(
+        '"$GROK_HOME"/plugins/cache/lazygrok/*/components/ulw-loop/dist/cli.js',
+        '"$GROK_HOME"/installed-plugins/lazygrok-*/vendor/lazygrok-hooks/ulw-loop/dist/cli.js '
+        '"$GROK_HOME"/plugins/cache/lazygrok/*/components/ulw-loop/dist/cli.js',
+    )
+
+    if "\nname: review-work\n" in out:
+        out = out.replace(
+            "Review PRs and branches from a dedicated review worktree only: "
+            "create or attach one with `git worktree add <path> <branch>` "
+            "before collecting changed files, diff, file contents, or running "
+            "checks. The main worktree is read-only context; never checkout, "
+            "test, or edit the review branch there.",
+            "Review PRs and branches only through the mandatory Phase -1 "
+            "isolation gate above. Do not create, attach, or materialize a "
+            "review worktree through any alternate command. The main worktree "
+            "is read-only context; never checkout, test, or edit the review "
+            "branch there.",
+        )
+        isolation_marker = "## Phase -1: Mandatory branch-review isolation gate"
+        review_heading = "# Review Work - 5-Agent Parallel Review Orchestrator"
+        if isolation_marker not in out:
+            if review_heading not in out:
+                raise ValueError(
+                    "review-work port changed shape: isolation gate insertion "
+                    "heading is missing"
+                )
+            out = out.replace(
+                review_heading,
+                REVIEW_WORK_ISOLATION_GATE + "\n\n" + review_heading,
+                1,
+            )
 
     return out
+
+
+def remove_unsupported_hook_routes(hooks_path: Path) -> int:
+    data = json.loads(hooks_path.read_text(encoding="utf-8"))
+    removed = 0
+    for event, groups in data.get("hooks", {}).items():
+        if not isinstance(groups, list):
+            continue
+        kept = []
+        for group in groups:
+            matcher = str(group.get("matcher", ""))
+            commands = [
+                str(hook.get("command", ""))
+                for hook in group.get("hooks", [])
+                if isinstance(hook, dict)
+            ]
+            unsupported = (
+                "create_thread" in matcher
+                or "codex_app" in matcher
+                or any("teammode post-tool-use" in command for command in commands)
+                or any("telemetry session-start" in command for command in commands)
+            )
+            if unsupported:
+                removed += 1
+            else:
+                kept.append(group)
+        data["hooks"][event] = kept
+    if removed:
+        hooks_path.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+    return removed
+
+
+def prune_unsupported_runtime(plugin_root: Path) -> list[str]:
+    targets = [
+        plugin_root / "vendor" / "lazygrok-hooks" / "teammode",
+        plugin_root / "vendor" / "lazygrok-hooks" / "telemetry",
+        plugin_root / "vendor" / "lazygrok-skills" / "teammode" / "agents",
+        plugin_root / "vendor" / "lazygrok-skills" / "teammode" / "scripts",
+    ]
+    removed: list[str] = []
+    for target in targets:
+        if not target.exists():
+            continue
+        shutil.rmtree(target)
+        removed.append(str(target.relative_to(plugin_root)))
+    return removed
+
+
+def find_unsupported_active_tool_routes(plugin_root: Path) -> list[str]:
+    manifest = json.loads((plugin_root / "plugin.json").read_text(encoding="utf-8"))
+    skill_files: set[Path] = set()
+    hook_files: set[Path] = {plugin_root / "hooks" / "hooks.json"}
+    teammode_runtime_files: set[Path] = set()
+    for configured_root in manifest["skills"]:
+        active_root = plugin_root / configured_root
+        skill_files.update(active_root.rglob("SKILL.md"))
+        hook_files.update(active_root.rglob("hooks.json"))
+        teammode_root = active_root / "teammode"
+        if teammode_root.exists():
+            teammode_runtime_files.update(
+                path for path in teammode_root.rglob("*") if path.is_file()
+            )
+
+    offenders: list[str] = []
+    for path in sorted(skill_files | hook_files | teammode_runtime_files):
+        for line_number, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), 1
+        ):
+            if UNSUPPORTED_GROK_TOOL_ROUTE.search(line) or (
+                path.name == "hooks.json"
+                and (
+                    "create_thread" in line
+                    or "teammode post-tool-use" in line
+                    or "telemetry session-start" in line
+                )
+            ):
+                offenders.append(
+                    f"{path.relative_to(plugin_root)}:{line_number}: {line.strip()}"
+                )
+
+    return offenders
 
 
 def normalize_skill_user_invocable(path: Path, *, add_if_missing: bool = False) -> bool:
@@ -190,6 +547,33 @@ def normalize_skill_user_invocable(path: Path, *, add_if_missing: bool = False) 
         )
     path.write_text(updated, encoding="utf-8")
     return updated != text
+
+
+def synchronize_tree_copies(canonical: Path, copies: list[Path]) -> int:
+    changed = 0
+    canonical_files = {
+        path.relative_to(canonical): path.read_bytes()
+        for path in canonical.rglob("*")
+        if path.is_file()
+    }
+    for destination in copies:
+        destination_files = (
+            {
+                path.relative_to(destination): path.read_bytes()
+                for path in destination.rglob("*")
+                if path.is_file()
+            }
+            if destination.exists()
+            else {}
+        )
+        if destination_files == canonical_files:
+            continue
+        if destination.exists():
+            shutil.rmtree(destination)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(canonical, destination)
+        changed += 1
+    return changed
 
 
 def safe_top_level_skill_files(skill_root: Path, allowed_root: Path) -> list[Path]:
@@ -240,6 +624,31 @@ def normalize_ultrawork_skill(path: Path) -> bool:
         text,
         count=1,
     )
+    updated = updated.replace(
+        '1. Always: `node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" '
+        'create-goals --brief "<objective>" --json`\n'
+        "   Prefer `.lazygrok/ulw-loop/`; keep `.omo/ulw-loop/` if that run already uses it.",
+        "1. Always: copy `CURRENT_GROK_SESSION_ID` from this turn's injected hook context and run\n"
+        '   `node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" '
+        'create-goals --session-id "<CURRENT_GROK_SESSION_ID>" --brief "<objective>" --json`.\n'
+        "   Use that value exactly: do not generate, rename, timestamp, or suffix it. Pass the same\n"
+        "   `--session-id` on every later ulw-loop CLI call. Only if `create-goals` explicitly\n"
+        "   rejects an already-complete aggregate may a continued conversation derive\n"
+        "   `<CURRENT_GROK_SESSION_ID>-<short-purpose>` for the new run. Never derive Grok scope\n"
+        "   from ambient `CODEX_SESSION_ID` or `CODEX_THREAD_ID`. Prefer `.lazygrok/ulw-loop/`;\n"
+        "   keep `.omo/ulw-loop/` if that run already uses it.",
+    )
+    if "# Worktree boundary" not in updated:
+        marker = "# CODING MULTI-AGENT"
+        if marker not in updated:
+            raise ValueError(
+                "ultrawork port changed shape: coding multi-agent heading is missing"
+            )
+        updated = updated.replace(
+            marker,
+            GROK_WORKTREE_BOUNDARY + "\n\n" + marker,
+            1,
+        )
     path.write_text(updated, encoding="utf-8")
     metadata_changed = normalize_skill_user_invocable(path, add_if_missing=True)
     return updated != text or metadata_changed
@@ -354,6 +763,20 @@ def copy_tree_transformed(src: Path, dst: Path, *, inject_goal: bool = False) ->
     return count
 
 
+def skill_destination(name: str, vendor_skills: Path, top_skills: Path) -> Path:
+    if name == "start-work":
+        return top_skills / "start-work-execution"
+    return vendor_skills / name
+
+
+def canonical_skill_path(name: str, top_skills: Path) -> Path | None:
+    if name == "ulw-loop":
+        return top_skills / "ulw-loop"
+    if name == "start-work":
+        return top_skills / "start-work-execution"
+    return None
+
+
 def write_worker_agents(agents_dir: Path, workers_src: Path) -> None:
     """Create Grok .md agents from LCX worker tomls (already transformed text body)."""
     tiers = {
@@ -448,8 +871,13 @@ def main() -> int:
         if not src.exists():
             report.append(f"SKIP missing LCX skill: {name}")
             continue
-        dst_name = name
-        dst = vendor_skills / dst_name
+        dst = skill_destination(name, vendor_skills, top_skills)
+        canonical = canonical_skill_path(name, top_skills)
+        if canonical is not None and canonical.exists():
+            report.append(
+                f"preserved canonical Grok {name}: {canonical.relative_to(lg)}"
+            )
+            continue
         if args.dry_run:
             report.append(f"WOULD port {name} → {dst}")
             continue
@@ -459,6 +887,11 @@ def main() -> int:
             inject_goal=name.startswith("ulw") or name in {"start-work", "ultrawork"},
         )
         report.append(f"ported {name}: {n} files → {dst.relative_to(lg)}")
+
+    stale_start_work = vendor_skills / "start-work"
+    if not args.dry_run and stale_start_work.exists():
+        shutil.rmtree(stale_start_work)
+        report.append("removed stale duplicate vendor/lazygrok-skills/start-work")
 
     # Also publish ulw-research as alias path (catalog may still reference ultraresearch)
     if not args.dry_run and (vendor_skills / "ulw-research").exists():
@@ -483,8 +916,8 @@ def main() -> int:
 
     # Top-level skills that should mirror vendor OmO cores (catalog-priority)
     top_mirrors = {
-        "ulw-loop": True,  # REAL OmO goal conductor (replaces Ralph stub)
-        "ulw-plan": True,
+        "ulw-loop": False,  # REAL OmO goal conductor (replaces Ralph stub)
+        "ulw-plan": False,
         "ultrawork": True,
         "start-work": False,  # keep start-work-execution separate; mirror into start-work under skills if absent
     }
@@ -618,7 +1051,7 @@ Delegate implementation/QA with `spawn_subagent` and:
 
 ## Cancel / related
 
-- `/cancel-ralph` stops Ralph/ultrawork promise loops.
+- `/cancel-ralph` stops Ralph-family promise loops, including the explicit `/ulw-ralph-loop` variant; it does not cancel this ULW goal ledger.
 - `/stop-continuation` stops broader continuations.
 - Ralph-only verifier loop: skill `ulw-ralph-loop`.
 """,
@@ -682,6 +1115,11 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
             report.append("widened SubagentStop executor-verify matcher for workers")
         else:
             report.append("hooks matcher already includes workers")
+        removed_hooks = remove_unsupported_hook_routes(hooks)
+        report.append(
+            "removed "
+            f"{removed_hooks} unsupported teammode/telemetry hook registration(s)"
+        )
 
         # Patch ultrawork skill-pointer dist for Grok (keep goal fallback)
         pointer = lg / "vendor" / "lazygrok-hooks" / "ultrawork" / "dist" / "cli.js"
@@ -766,23 +1204,41 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
             f"synchronized native Grok ultrawork skill into {normalized} changed copies"
         )
 
-        ulw_loop_skill_paths = [
-            top_skills / "ulw-loop" / "SKILL.md",
-            vendor_skills / "ulw-loop" / "SKILL.md",
+        canonical_ulw_loop = top_skills / "ulw-loop"
+        ulw_loop_skill_copies = [
+            vendor_skills / "ulw-loop",
             lg
             / "vendor"
             / "lazygrok-hooks"
             / "ulw-loop"
             / "skills"
-            / "ulw-loop"
-            / "SKILL.md",
+            / "ulw-loop",
         ]
-        normalized = sum(
-            normalize_skill_user_invocable(path, add_if_missing=True)
-            for path in ulw_loop_skill_paths
+        normalize_skill_user_invocable(
+            canonical_ulw_loop / "SKILL.md", add_if_missing=True
+        )
+        normalized = synchronize_tree_copies(
+            canonical_ulw_loop, ulw_loop_skill_copies
         )
         report.append(
-            f"normalized Grok ulw-loop metadata in {normalized} changed copies"
+            f"synchronized canonical Grok ulw-loop tree into {normalized} changed copies"
+        )
+
+        canonical_ulw_plan = top_skills / "ulw-plan"
+        ulw_plan_skill_copies = [
+            vendor_skills / "ulw-plan",
+            lg
+            / "vendor"
+            / "lazygrok-hooks"
+            / "ultrawork"
+            / "skills"
+            / "ulw-plan",
+        ]
+        normalized = synchronize_tree_copies(
+            canonical_ulw_plan, ulw_plan_skill_copies
+        )
+        report.append(
+            f"synchronized canonical Grok ulw-plan tree into {normalized} changed copies"
         )
 
         normalized = sum(
@@ -793,24 +1249,24 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
             f"normalized legacy Grok skill metadata in {normalized} changed files"
         )
 
-        # teammode: ensure n/a banner on Grok
-        for tm in [
-            vendor_skills / "teammode" / "SKILL.md",
-            lg / "vendor" / "omo-skills" / "teammode" / "SKILL.md",
-        ]:
-            if tm.exists():
-                t = tm.read_text(encoding="utf-8")
-                if "not available on Grok" not in t and "n/a" not in t[:800].lower():
-                    t = t.replace(
-                        "---\n\n",
-                        "---\n\n"
-                        "> **Grok: multi_agent_v2 / team mode transport is n/a.** "
-                        "Use `spawn_subagent` + LazyGrok agents instead. "
-                        "Thread-title hooks are no-ops without Codex create_thread.\n\n",
-                        1,
-                    )
-                    tm.write_text(t, encoding="utf-8")
-                    report.append(f"added teammode n/a banner: {tm.relative_to(lg)}")
+        removed_teammode_runtime = prune_unsupported_runtime(lg)
+        report.extend(
+            f"removed unsupported Grok teammode runtime: {path}"
+            for path in removed_teammode_runtime
+        )
+        tm = vendor_skills / "teammode" / "SKILL.md"
+        tm.parent.mkdir(parents=True, exist_ok=True)
+        if not tm.exists() or tm.read_text(encoding="utf-8") != GROK_TEAMMODE_SKILL:
+            tm.write_text(GROK_TEAMMODE_SKILL, encoding="utf-8")
+            report.append(f"wrote Grok-native teammode routing: {tm.relative_to(lg)}")
+
+        unsupported_routes = find_unsupported_active_tool_routes(lg)
+        if unsupported_routes:
+            raise ValueError(
+                "generated active Grok surfaces still expose unsupported tool "
+                "routes:\n" + "\n".join(unsupported_routes)
+            )
+        report.append("verified active skills and hooks use only Grok team routing")
 
         # Copy shared-skills ultimate-browsing fully if plugin skill was thin
         # (already handled via sync list)
@@ -846,6 +1302,12 @@ Load skill `ulw-ralph-loop` and follow it. Prefer also loading `ultrawork` and
             "- No npm auto-update SessionStart\n"
             "- spawn_subagent / todo_write / search_replace / run_terminal_command\n"
             "- State under `.lazygrok/` (accept mid-run `.omo/`)\n"
+            "- New ULW plans scaffold under `.lazygrok/`; an existing same-slug `.omo/` run remains legacy-rooted\n"
+            "- ULW state uses the exact hook session ID; a private workspace-hash binding resolves it when Grok terminal commands omit hook environment\n"
+            "- Inherited Codex session/thread variables are stripped before vendored hook CLIs run\n"
+            "- Linux state/evidence and LSP mutations remain descriptor-bound across parent swaps; sensitive operations fail closed elsewhere\n"
+            "- Local state and hook diagnostics use 0700/0600; diagnostics retain metadata only and no prompt payloads\n"
+            "- Upstream telemetry runtime is removed and has no active hook registration\n"
             "- Ralph VERIFIED loop split to `ulw-ralph-loop`; `ulw-loop` is OmO goal ledger\n",
             encoding="utf-8",
         )

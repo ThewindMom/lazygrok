@@ -3,6 +3,7 @@ package skillgate
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,31 +12,40 @@ import (
 	"strings"
 
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 var (
-	nameRE        = regexp.MustCompile(`(?m)^name:\s*([^\n]+)`)
-	descBlockRE   = regexp.MustCompile(`(?m)^description:\s*>\s*\n((?:[ \t]+[^\n]+\n?)+)`)
-	descLineRE    = regexp.MustCompile(`(?m)^description:\s*(.+)$`)
+	nameRE      = regexp.MustCompile(`(?m)^name:\s*([^\n]+)`)
+	descBlockRE = regexp.MustCompile(`(?m)^description:\s*>\s*\n((?:[ \t]+[^\n]+\n?)+)`)
+	descLineRE  = regexp.MustCompile(`(?m)^description:\s*(.+)$`)
 )
 
 // ResetSession clears skill-gate session state (session-start).
 func ResetSession(sessionID string) {
 	dir := SessionDir(sessionID)
-	_ = os.MkdirAll(dir, 0o755)
-	_ = os.WriteFile(catalogPath(sessionID), []byte("[]\n"), 0o644)
-	_ = os.WriteFile(loadedPath(sessionID), nil, 0o644)
+	if dir == "" {
+		return
+	}
+	root := hookenv.GrokHome()
+	_ = safestate.WriteFileBelow(root, catalogPath(sessionID), []byte("[]\n"), 0o600)
+	_ = safestate.WriteFileBelow(root, loadedPath(sessionID), nil, 0o600)
 }
 
 // CleanupSession removes skill-gate dir (session-end).
 func CleanupSession(sessionID string) {
-	_ = os.RemoveAll(SessionDir(sessionID))
+	root := hookenv.GrokHome()
+	_ = safestate.RemoveBelow(root, catalogPath(sessionID))
+	_ = safestate.RemoveBelow(root, loadedPath(sessionID))
 }
 
 // CleanupStopVerify removes stop-verify state (session-end).
 func CleanupStopVerify(sessionID string) {
-	dir := filepath.Join(hookenv.GrokHome(), "state", "stop-verify", sessionID)
-	_ = os.RemoveAll(dir)
+	if _, err := hookenv.ParseSessionID(sessionID); err != nil {
+		return
+	}
+	root := hookenv.GrokHome()
+	_ = safestate.RemoveBelow(root, filepath.Join(root, "state", "stop-verify", sessionID, "blocks.json"))
 }
 
 func catalogCount(sessionID string) int {
@@ -311,20 +321,28 @@ func skillDescFromFile(path string) string {
 }
 
 func readHead(path string, n int) (string, error) {
-	b, err := os.ReadFile(path)
+	if n <= 0 {
+		return "", nil
+	}
+	file, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-	if len(b) > n {
-		b = b[:n]
+	defer file.Close()
+	b, err := io.ReadAll(io.LimitReader(file, int64(n)))
+	if err != nil {
+		return "", err
 	}
 	return string(b), nil
 }
 
 func writeCatalog(sessionID string, catalog []catalogEntry) int {
-	_ = os.MkdirAll(SessionDir(sessionID), 0o755)
+	dir := SessionDir(sessionID)
+	if dir == "" {
+		return 0
+	}
 	b, _ := json.MarshalIndent(catalog, "", "  ")
-	_ = os.WriteFile(catalogPath(sessionID), append(b, '\n'), 0o644)
+	_ = safestate.WriteFileBelow(hookenv.GrokHome(), catalogPath(sessionID), append(b, '\n'), 0o600)
 	return len(catalog)
 }
 

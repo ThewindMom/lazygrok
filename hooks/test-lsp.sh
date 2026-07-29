@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LSP diagnostics stash + Stop enforcement (mock diagnostics).
+# LSP diagnostics stash + Stop enforcement.
 set -euo pipefail
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=test-support.sh
@@ -8,14 +8,20 @@ source "${HOOKS_DIR}/test-support.sh"
 export GROK_HOME="${GROK_HOME:-$(resolve_grok_home)}"
 export GROK_PLUGIN_ROOT="${GROK_PLUGIN_ROOT:-$(cd "${HOOKS_DIR}/.." && pwd)}"
 export GROK_SESSION_ID="test-lsp-$$"
-export LAZYGROK_LSP_MOCK_DIAG='error[typescript] (1) at 1:1: syntax error'
 export LAZYGROK_LSP_ENFORCE=1
 
 tmpdir="$(mktemp -d)"
 export GROK_WORKSPACE_ROOT="$tmpdir"
 trap 'rm -rf "$tmpdir" "$(lsp_stash_path)"' EXIT
-mkdir -p "$tmpdir"
-printf '// broken\n' >"${tmpdir}/bad.ts"
+fixture="${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/lsp-core/src/lsp/fixtures/workspace-edit-server.mjs"
+[ -f "$fixture" ] || { echo "missing LSP fixture: $fixture"; exit 1; }
+scenario="${tmpdir}/scenario.json"
+events="${tmpdir}/events.jsonl"
+config="${tmpdir}/lsp-client.json"
+printf '%s\n' '{"capabilities":{"textDocumentSync":1},"publishDiagnostics":[{"trigger":"didOpen","version":1,"diagnostics":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":5}},"severity":1,"source":"fixture","message":"controlled syntax error"}]}]}' >"$scenario"
+printf '%s\n' '{"lsp":{"fixture":{"command":["node","'"$fixture"'","'"$scenario"'","'"$events"'"],"extensions":[".ts"],"priority":100}}}' >"$config"
+export LSP_TOOLS_MCP_USER_CONFIG="$config"
+printf 'const broken = true;\n' >"${tmpdir}/bad.ts"
 
 # Post-tool: simulate Write on bad.ts
 printf '%s\n' '{"hookEventName":"PostToolUse","sessionId":"'"$GROK_SESSION_ID"'","workspaceRoot":"'"$GROK_WORKSPACE_ROOT"'","toolName":"Write","toolInput":{"path":"'"${tmpdir}/bad.ts"'"}}' \
@@ -23,7 +29,11 @@ printf '%s\n' '{"hookEventName":"PostToolUse","sessionId":"'"$GROK_SESSION_ID"'"
 
 stash="$(lsp_stash_path)"
 [ -f "$stash" ] || { echo "missing stash: $stash"; exit 1; }
-rg -q 'syntax error' "$stash" || { echo "stash missing mock error:"; cat "$stash"; exit 1; }
+rg -q 'controlled syntax error' "$stash" || {
+  echo "stash missing real TypeScript diagnostic:"
+  cat "$stash"
+  exit 1
+}
 rg -q '"has_errors": true' "$stash" || { echo "stash missing has_errors:"; cat "$stash"; exit 1; }
 
 # UserPrompt should surface LSP context

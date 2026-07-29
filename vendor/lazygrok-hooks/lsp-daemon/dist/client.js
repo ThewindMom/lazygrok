@@ -1,7 +1,11 @@
+// src/client.ts
+import { statSync as statSync5 } from "node:fs";
+import { isAbsolute as isAbsolute4 } from "node:path";
+
 // src/daemon-client.ts
 import { connect } from "node:net";
 import { homedir as homedir3 } from "node:os";
-import { join as join7 } from "node:path";
+import { join as join8 } from "node:path";
 
 // ../lsp-core/src/request-context.ts
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -337,7 +341,11 @@ function authenticateMessage(raw, expectedToken) {
     return authError(id);
   const cleanParams = { ...params };
   delete cleanParams["_omo"];
-  return { input: { ...raw, params: cleanParams }, id, method: typeof raw["method"] === "string" ? raw["method"] : undefined };
+  return {
+    input: { ...raw, params: cleanParams },
+    id,
+    method: typeof raw["method"] === "string" ? raw["method"] : undefined
+  };
 }
 function isAuthErrorResponse(message) {
   if (!isPlainRecord(message))
@@ -445,14 +453,22 @@ function authError(id) {
   return {
     jsonrpc: "2.0",
     id,
-    error: { code: AUTH_ERROR_CODE, message: "daemon authentication failed", data: { code: "daemon_authentication_failed" } }
+    error: {
+      code: AUTH_ERROR_CODE,
+      message: "daemon authentication failed",
+      data: { code: "daemon_authentication_failed" }
+    }
   };
 }
 function protocolError(id) {
   return {
     jsonrpc: "2.0",
     id,
-    error: { code: PROTOCOL_ERROR_CODE, message: "daemon protocol mismatch", data: { code: "daemon_protocol_mismatch" } }
+    error: {
+      code: PROTOCOL_ERROR_CODE,
+      message: "daemon protocol mismatch",
+      data: { code: "daemon_protocol_mismatch" }
+    }
   };
 }
 
@@ -620,16 +636,48 @@ function encodeJsonLine(message) {
   return `${JSON.stringify(message)}
 `;
 }
-function createLineDecoder(onMessage, onParseError) {
-  let buffer = "";
+
+class JsonRpcLineTooLargeError extends Error {
+  actualBytes;
+  maxBytes;
+  name = "JsonRpcLineTooLargeError";
+  constructor(actualBytes, maxBytes) {
+    super(`JSON-RPC line exceeds ${maxBytes} bytes (received ${actualBytes} bytes)`);
+    this.actualBytes = actualBytes;
+    this.maxBytes = maxBytes;
+  }
+}
+var DEFAULT_MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
+function createLineDecoder(onMessage, onParseError, options = {}) {
+  let buffer = Buffer.alloc(0);
+  let rejected = false;
+  const maxMessageBytes = options.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES;
+  const rejectOversized = (actualBytes) => {
+    buffer = Buffer.alloc(0);
+    rejected = true;
+    const error = new JsonRpcLineTooLargeError(actualBytes, maxMessageBytes);
+    if (onParseError) {
+      onParseError("", error);
+      return;
+    }
+    throw error;
+  };
   return {
     push(chunk) {
-      buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
-      let index = buffer.indexOf(`
-`);
+      if (rejected)
+        return;
+      const input = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+      let offset = 0;
+      let index = input.indexOf(10, offset);
       while (index !== -1) {
-        const raw = buffer.slice(0, index).trim();
-        buffer = buffer.slice(index + 1);
+        const segment = input.subarray(offset, index);
+        const lineBytes = buffer.length + segment.length;
+        if (lineBytes > maxMessageBytes) {
+          rejectOversized(lineBytes);
+          return;
+        }
+        const raw = (buffer.length === 0 ? segment.toString("utf8") : Buffer.concat([buffer, segment], lineBytes).toString("utf8")).replace(/\r$/, "").trim();
+        buffer = Buffer.alloc(0);
         if (raw.length > 0) {
           try {
             onMessage(JSON.parse(raw));
@@ -641,8 +689,17 @@ function createLineDecoder(onMessage, onParseError) {
             }
           }
         }
-        index = buffer.indexOf(`
-`);
+        offset = index + 1;
+        index = input.indexOf(10, offset);
+      }
+      const trailing = input.subarray(offset);
+      const pendingBytes = buffer.length + trailing.length;
+      if (pendingBytes > maxMessageBytes) {
+        rejectOversized(pendingBytes);
+        return;
+      }
+      if (trailing.length > 0) {
+        buffer = buffer.length === 0 ? Buffer.from(trailing) : Buffer.concat([buffer, trailing], pendingBytes);
       }
     }
   };
@@ -705,7 +762,7 @@ function pingDaemon(paths, token, timeoutMs = PROBE_TIMEOUT_MS, signal) {
     const onAbort = () => finish(null);
     const decoder = createLineDecoder((message) => {
       finish(parsePingResponse(message));
-    });
+    }, () => finish(null));
     socket.once("connect", () => {
       socket.write(encodeJsonLine({ jsonrpc: "2.0", id: 1, method: "omo/ping", params: { _omo: authEnvelope(token) } }));
     });
@@ -840,12 +897,33 @@ function messageFromError(error) {
 var HEADER_SEPARATOR = Buffer.from(`\r
 \r
 `);
-async function* readStdioJsonRpcMessages(input) {
+var DEFAULT_MAX_MESSAGE_BYTES2 = 8 * 1024 * 1024;
+var DEFAULT_MAX_HEADER_BYTES = 8 * 1024;
+
+class StdioJsonRpcMessageTooLargeError extends Error {
+  actualBytes;
+  maxBytes;
+  name = "StdioJsonRpcMessageTooLargeError";
+  constructor(actualBytes, maxBytes) {
+    super(`JSON-RPC message exceeds ${maxBytes} bytes (received or declared ${actualBytes} bytes)`);
+    this.actualBytes = actualBytes;
+    this.maxBytes = maxBytes;
+  }
+}
+async function* readStdioJsonRpcMessages(input, limits = {}) {
   let buffer = Buffer.alloc(0);
+  const maxMessageBytes = limits.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES2;
+  const maxHeaderBytes = limits.maxHeaderBytes ?? DEFAULT_MAX_HEADER_BYTES;
+  const maxBufferedBytes = maxMessageBytes + maxHeaderBytes;
   for await (const chunk of input) {
-    buffer = Buffer.concat([buffer, bufferFromChunk(chunk)]);
+    const chunkBuffer = bufferFromChunk(chunk);
+    const nextLength = buffer.length + chunkBuffer.length;
+    if (nextLength > maxBufferedBytes) {
+      throw new StdioJsonRpcMessageTooLargeError(nextLength, maxMessageBytes);
+    }
+    buffer = buffer.length === 0 ? chunkBuffer : Buffer.concat([buffer, chunkBuffer], nextLength);
     while (true) {
-      const result = readNextMessage(buffer);
+      const result = readNextMessage(buffer, maxMessageBytes, maxHeaderBytes);
       if (result.kind === "incomplete")
         break;
       buffer = result.remaining;
@@ -898,15 +976,22 @@ function writeChunk(output, chunk) {
     }
   });
 }
-function readNextMessage(buffer) {
+function readNextMessage(buffer, maxMessageBytes, maxHeaderBytes) {
   if (buffer.length === 0)
     return { kind: "incomplete" };
-  return startsWithContentLength(buffer) ? readFramedMessage(buffer) : readLineMessage(buffer);
+  return startsWithContentLength(buffer) ? readFramedMessage(buffer, maxMessageBytes, maxHeaderBytes) : readLineMessage(buffer, maxMessageBytes);
 }
-function readLineMessage(buffer) {
+function readLineMessage(buffer, maxMessageBytes) {
   const newlineIndex = buffer.indexOf(10);
-  if (newlineIndex === -1)
+  if (newlineIndex === -1) {
+    if (buffer.length > maxMessageBytes) {
+      throw new StdioJsonRpcMessageTooLargeError(buffer.length, maxMessageBytes);
+    }
     return { kind: "incomplete" };
+  }
+  if (newlineIndex > maxMessageBytes) {
+    throw new StdioJsonRpcMessageTooLargeError(newlineIndex, maxMessageBytes);
+  }
   const line = buffer.subarray(0, newlineIndex).toString("utf8").replace(/\r$/, "");
   if (line.trim().length === 0) {
     return { kind: "complete", remaining: buffer.subarray(newlineIndex + 1) };
@@ -917,10 +1002,17 @@ function readLineMessage(buffer) {
     remaining: buffer.subarray(newlineIndex + 1)
   };
 }
-function readFramedMessage(buffer) {
+function readFramedMessage(buffer, maxMessageBytes, maxHeaderBytes) {
   const separatorIndex = buffer.indexOf(HEADER_SEPARATOR);
-  if (separatorIndex === -1)
+  if (separatorIndex === -1) {
+    if (buffer.length > maxHeaderBytes) {
+      throw new StdioJsonRpcMessageTooLargeError(buffer.length, maxHeaderBytes);
+    }
     return { kind: "incomplete" };
+  }
+  if (separatorIndex > maxHeaderBytes) {
+    throw new StdioJsonRpcMessageTooLargeError(separatorIndex, maxHeaderBytes);
+  }
   const headers = buffer.subarray(0, separatorIndex).toString("ascii");
   const contentLength = parseContentLength(headers);
   const bodyStart = separatorIndex + HEADER_SEPARATOR.length;
@@ -934,6 +1026,9 @@ function readFramedMessage(buffer) {
       },
       remaining: buffer.subarray(bodyStart)
     };
+  }
+  if (contentLength > maxMessageBytes) {
+    throw new StdioJsonRpcMessageTooLargeError(contentLength, maxMessageBytes);
   }
   const bodyEnd = bodyStart + contentLength;
   if (buffer.length < bodyEnd)
@@ -958,7 +1053,8 @@ function parseContentLength(headers) {
     const value = match[1];
     if (value === undefined)
       return;
-    return Number(value);
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : undefined;
   }
   return;
 }
@@ -1128,7 +1224,7 @@ function createIdleTimer(idleTimeoutMs, log, onTimeout) {
 }
 // ../lsp-core/src/lsp/client-wrapper.ts
 import { existsSync as existsSync9, statSync as statSync4 } from "node:fs";
-import { dirname as dirname8, join as join4, resolve as resolve7 } from "node:path";
+import { dirname as dirname9, join as join5, resolve as resolve7 } from "node:path";
 
 // ../lsp-core/src/lsp/effective-extension.ts
 import { basename as basename2, extname } from "node:path";
@@ -1223,7 +1319,7 @@ function reportBestEffortCleanupError(operation, error, logger = writeCleanupErr
 
 // ../lsp-core/src/lsp/client.ts
 import { resolve as resolve6 } from "node:path";
-import { pathToFileURL as pathToFileURL3 } from "node:url";
+import { pathToFileURL as pathToFileURL4 } from "node:url";
 
 // ../lsp-core/src/lsp/connection.ts
 import { pathToFileURL } from "node:url";
@@ -1729,8 +1825,58 @@ function parseDiagnosticsParams(params) {
   const version = typeof params["version"] === "number" ? params["version"] : undefined;
   return { uri: params["uri"], diagnostics, ...version === undefined ? {} : { version } };
 }
-function createLspSpawnEnv(_root, input) {
-  return { ...input };
+function createLspSpawnEnv(_root, ambient, configured = {}) {
+  const safeAmbient = {};
+  for (const [key, value] of Object.entries(ambient)) {
+    if (value !== undefined && isAllowedAmbientEnv(key))
+      safeAmbient[key] = value;
+  }
+  return { ...safeAmbient, ...configured };
+}
+var SAFE_AMBIENT_ENV = new Set([
+  "PATH",
+  "PATHEXT",
+  "SYSTEMROOT",
+  "WINDIR",
+  "COMSPEC",
+  "HOME",
+  "USERPROFILE",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "LANG",
+  "SHELL",
+  "XDG_CACHE_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_STATE_HOME",
+  "CARGO_HOME",
+  "RUSTUP_HOME",
+  "GOPATH",
+  "GOROOT",
+  "GOMODCACHE",
+  "GOCACHE",
+  "GOTOOLCHAIN",
+  "GOENV",
+  "VIRTUAL_ENV",
+  "PYENV_ROOT",
+  "CONDA_PREFIX",
+  "NVM_BIN",
+  "VOLTA_HOME",
+  "BUN_INSTALL",
+  "DENO_INSTALL",
+  "JAVA_HOME",
+  "GRADLE_USER_HOME",
+  "MAVEN_HOME",
+  "DOTNET_ROOT",
+  "NUGET_PACKAGES",
+  "GEM_HOME",
+  "GEM_PATH",
+  "RBENV_ROOT"
+]);
+function isAllowedAmbientEnv(key) {
+  const normalized = key.toUpperCase();
+  return SAFE_AMBIENT_ENV.has(normalized) || normalized.startsWith("LC_");
 }
 function isDiagnostic(value) {
   return isRecord2(value) && isRange(value["range"]) && typeof value["message"] === "string";
@@ -1794,10 +1940,7 @@ class LspClientTransport {
     this.diagnosticsStore.set(params.uri, [...params.diagnostics]);
   }
   async start() {
-    const env = createLspSpawnEnv(this.root, {
-      ...process.env,
-      ...this.server.env
-    });
+    const env = createLspSpawnEnv(this.root, process.env, this.server.env);
     this.proc = spawnProcess(this.server.command, {
       cwd: this.root,
       env
@@ -2530,7 +2673,19 @@ function workspaceApplyEditConcurrentFailureReason(phase) {
 }
 
 // ../lsp-core/src/lsp/workspace-edit-commit.ts
-import { existsSync as existsSync4, lstatSync as lstatSync3, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync as closeSync3,
+  constants as constants2,
+  existsSync as existsSync4,
+  lstatSync as lstatSync3,
+  openSync as openSync3,
+  realpathSync as realpathSync4,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
+import { basename as basename3, dirname as dirname5, join as join3 } from "node:path";
+import { pathToFileURL as pathToFileURL3 } from "node:url";
 
 // ../lsp-core/src/lsp/workspace-edit-path.ts
 import { existsSync as existsSync3, lstatSync as lstatSync2, readFileSync as readFileSync3, readdirSync, realpathSync as realpathSync3 } from "node:fs";
@@ -2621,7 +2776,14 @@ function snapshotPath(path2, includeChildren) {
 // ../lsp-core/src/lsp/workspace-edit-commit.ts
 var DEFAULT_IO = {
   writeFile(path2, content) {
-    writeFileSync(path2, content, "utf-8");
+    const noFollow = constants2.O_NOFOLLOW ?? 0;
+    const flags = existsSync4(path2) ? constants2.O_WRONLY | constants2.O_TRUNC | noFollow : constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL | noFollow;
+    const descriptor = openSync3(path2, flags, 438);
+    try {
+      writeFileSync(descriptor, content, "utf-8");
+    } finally {
+      closeSync3(descriptor);
+    }
   },
   rename(oldPath, newPath) {
     renameSync(oldPath, newPath);
@@ -2647,7 +2809,14 @@ function firstOperationIndex(plan) {
   return plan.operations[0]?.changeIndex ?? 0;
 }
 function failedCommit(plan, failure) {
-  const { message, changeIndex, mutations = [], filesModified = [], totalEdits = 0, lateAbort = false } = failure;
+  const {
+    message,
+    changeIndex,
+    mutations = [],
+    filesModified = [],
+    totalEdits = 0,
+    lateAbort = false
+  } = failure;
   return {
     result: {
       success: false,
@@ -2669,11 +2838,17 @@ function verifySnapshots(plan) {
     } catch (error) {
       const changeIndex = plan.firstChangeByPath.get(path2) ?? firstOperationIndex(plan);
       const detail = error instanceof Error ? error.message : String(error);
-      return failedCommit(plan, { message: `cannot verify snapshot for ${path2}: ${detail}`, changeIndex });
+      return failedCommit(plan, {
+        message: `cannot verify snapshot for ${path2}: ${detail}`,
+        changeIndex
+      });
     }
     if (!snapshotsEqual(expected, actual)) {
       const changeIndex = plan.firstChangeByPath.get(path2) ?? firstOperationIndex(plan);
-      return failedCommit(plan, { message: `workspace state changed before commit: ${path2}`, changeIndex });
+      return failedCommit(plan, {
+        message: `workspace state changed before commit: ${path2}`,
+        changeIndex
+      });
     }
   }
   return null;
@@ -2708,7 +2883,7 @@ function commitOperation(context, operation) {
   if (operation.kind === "noop")
     return;
   if (operation.kind === "text") {
-    io.writeFile(operation.path, operation.afterText);
+    withBoundCommitPath(plan, operation.path, (path2) => io.writeFile(path2, operation.afterText));
     accumulator.mutations.push({
       kind: "text",
       path: operation.path,
@@ -2720,19 +2895,29 @@ function commitOperation(context, operation) {
     return;
   }
   if (operation.kind === "create") {
-    io.writeFile(operation.path, "");
-    accumulator.mutations.push({ kind: "create", path: operation.path, replaced: operation.replaced });
+    withBoundCommitPath(plan, operation.path, (path2) => io.writeFile(path2, ""));
+    accumulator.mutations.push({
+      kind: "create",
+      path: operation.path,
+      replaced: operation.replaced
+    });
     addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.path));
     return;
   }
   if (operation.kind === "rename") {
-    if (operation.replaceDestination) {
-      const targetKind = existsSync4(operation.newPath) && lstatSync3(operation.newPath).isDirectory() ? "directory" : "file";
-      io.remove(operation.newPath, targetKind === "directory");
-      accumulator.mutations.push({ kind: "delete", path: operation.newPath, targetKind });
-      addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.newPath));
-    }
-    io.rename(operation.oldPath, operation.newPath);
+    withBoundCommitPath(plan, operation.oldPath, (oldPath) => withBoundCommitPath(plan, operation.newPath, (newPath) => {
+      if (operation.replaceDestination) {
+        const targetKind = existsSync4(newPath) && lstatSync3(newPath).isDirectory() ? "directory" : "file";
+        io.remove(newPath, targetKind === "directory");
+        accumulator.mutations.push({
+          kind: "delete",
+          path: operation.newPath,
+          targetKind
+        });
+        addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.newPath));
+      }
+      io.rename(oldPath, newPath);
+    }));
     accumulator.mutations.push({
       kind: "rename",
       oldPath: operation.oldPath,
@@ -2742,7 +2927,7 @@ function commitOperation(context, operation) {
     addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.newPath));
     return;
   }
-  io.remove(operation.path, operation.recursive);
+  withBoundCommitPath(plan, operation.path, (path2) => io.remove(path2, operation.recursive));
   accumulator.mutations.push({
     kind: "delete",
     path: operation.path,
@@ -2750,18 +2935,49 @@ function commitOperation(context, operation) {
   });
   addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.path));
 }
+function withBoundCommitPath(plan, path2, mutate) {
+  const resolved = uriToCanonicalWorkspacePath(pathToFileURL3(path2).href, plan.workspaceRoot);
+  if (!resolved.success || resolved.followedSymbolicLink || resolved.path !== path2) {
+    const detail = resolved.success ? `path identity changed before commit: ${path2}` : resolved.error;
+    throw new Error(detail);
+  }
+  if (process.platform !== "linux") {
+    throw new Error("workspace mutation requires Linux descriptor anchoring");
+  }
+  const parent = dirname5(path2);
+  const descriptor = openSync3(parent, constants2.O_RDONLY | (constants2.O_DIRECTORY ?? 0) | (constants2.O_NOFOLLOW ?? 0));
+  try {
+    const descriptorParent = `/proc/self/fd/${descriptor}`;
+    if (realpathSync4(descriptorParent) !== parent) {
+      throw new Error(`parent identity changed before commit: ${parent}`);
+    }
+    return mutate(join3(descriptorParent, basename3(path2)));
+  } finally {
+    closeSync3(descriptor);
+  }
+}
 function commitWorkspaceEditPlan(plan, options = {}) {
   if (options.signal?.aborted) {
-    return failedCommit(plan, { message: "cancelled before commit", changeIndex: firstOperationIndex(plan) });
+    return failedCommit(plan, {
+      message: "cancelled before commit",
+      changeIndex: firstOperationIndex(plan)
+    });
   }
   const stale = verifySnapshots(plan);
   if (stale)
     return stale;
   if (options.signal?.aborted) {
-    return failedCommit(plan, { message: "cancelled before commit", changeIndex: firstOperationIndex(plan) });
+    return failedCommit(plan, {
+      message: "cancelled before commit",
+      changeIndex: firstOperationIndex(plan)
+    });
   }
   const io = resolveIo(options.io);
-  const accumulator = { mutations: [], filesModified: [], totalEdits: 0 };
+  const accumulator = {
+    mutations: [],
+    filesModified: [],
+    totalEdits: 0
+  };
   const context = { plan, io, accumulator };
   let lateAbort = false;
   for (const operation of plan.operations) {
@@ -2788,7 +3004,11 @@ function commitWorkspaceEditPlan(plan, options = {}) {
     errors: [],
     ...lateAbort ? { lateAbort: true } : {}
   };
-  return { result, delta: mutationDelta(accumulator.mutations), fingerprint: plan.fingerprint };
+  return {
+    result,
+    delta: mutationDelta(accumulator.mutations),
+    fingerprint: plan.fingerprint
+  };
 }
 
 // ../lsp-core/src/lsp/workspace-edit-fingerprint.ts
@@ -3093,7 +3313,7 @@ function parseDocumentChange(input) {
 }
 
 // ../lsp-core/src/lsp/workspace-edit-simulation.ts
-import { dirname as dirname5, relative as relative4, resolve as resolve4 } from "node:path";
+import { dirname as dirname6, relative as relative4, resolve as resolve4 } from "node:path";
 
 // ../lsp-core/src/lsp/workspace-edit-text.ts
 function comparePosition(left, right) {
@@ -3217,7 +3437,7 @@ function virtualDirectoryHasChildren(virtual, path2) {
   return false;
 }
 function requireVirtualParent(virtual, path2, changeIndex) {
-  if (virtual.get(dirname5(path2))?.kind !== "directory") {
+  if (virtual.get(dirname6(path2))?.kind !== "directory") {
     throw new WorkspaceEditValidationError(changeIndex, `parent directory does not exist for ${path2}`);
   }
 }
@@ -3338,7 +3558,7 @@ function simulateDelete(operation, virtual) {
 
 // ../lsp-core/src/lsp/workspace-edit-snapshot.ts
 import { existsSync as existsSync5, lstatSync as lstatSync4, readdirSync as readdirSync2 } from "node:fs";
-import { dirname as dirname6, resolve as resolve5 } from "node:path";
+import { dirname as dirname7, resolve as resolve5 } from "node:path";
 class WorkspaceSnapshotBuilder {
   workspaceRoot;
   snapshots = new Map;
@@ -3373,7 +3593,7 @@ class WorkspaceSnapshotBuilder {
       }
       if (candidate === this.workspaceRoot)
         break;
-      candidate = dirname6(candidate);
+      candidate = dirname7(candidate);
     }
     if (!includeChildren || !existsSync5(path2) || !lstatSync4(path2).isDirectory())
       return;
@@ -3635,7 +3855,7 @@ class LspClient extends LspClientConnection {
     await this.openFile(absPath);
     const options = signal === undefined ? {} : { signal };
     return this.sendRequest("textDocument/definition", {
-      textDocument: { uri: pathToFileURL3(absPath).href },
+      textDocument: { uri: pathToFileURL4(absPath).href },
       position: { line: line - 1, character }
     }, options);
   }
@@ -3644,7 +3864,7 @@ class LspClient extends LspClientConnection {
     await this.openFile(absPath);
     const options = signal === undefined ? {} : { signal };
     return this.sendRequest("textDocument/references", {
-      textDocument: { uri: pathToFileURL3(absPath).href },
+      textDocument: { uri: pathToFileURL4(absPath).href },
       position: { line: line - 1, character },
       context: { includeDeclaration }
     }, options);
@@ -3654,7 +3874,7 @@ class LspClient extends LspClientConnection {
     await this.openFile(absPath);
     const options = signal === undefined ? {} : { signal };
     return this.sendRequest("textDocument/documentSymbol", {
-      textDocument: { uri: pathToFileURL3(absPath).href }
+      textDocument: { uri: pathToFileURL4(absPath).href }
     }, options);
   }
   async workspaceSymbols(query, signal) {
@@ -3694,7 +3914,7 @@ class LspClient extends LspClientConnection {
   async diagnostics(filePath, signal) {
     signal?.throwIfAborted();
     const absPath = this.resolveWorkspacePath(filePath);
-    const uri = pathToFileURL3(absPath).href;
+    const uri = pathToFileURL4(absPath).href;
     await this.openFile(absPath);
     const deadlineAt = Date.now() + this.diagnosticsFreshnessTimeoutMs;
     for (;; ) {
@@ -3761,7 +3981,7 @@ class LspClient extends LspClientConnection {
     await this.openFile(absPath);
     const options = signal === undefined ? {} : { signal };
     return this.sendRequest("textDocument/prepareRename", {
-      textDocument: { uri: pathToFileURL3(absPath).href },
+      textDocument: { uri: pathToFileURL4(absPath).href },
       position: { line: line - 1, character }
     }, options);
   }
@@ -3774,7 +3994,7 @@ class LspClient extends LspClientConnection {
     const preCommitSignal = createPreCommitAbortSignal(signal, () => this.workspaceMutations.isBeforeCommit(acquired.lease));
     try {
       const renameParams = {
-        textDocument: { uri: pathToFileURL3(absPath).href },
+        textDocument: { uri: pathToFileURL4(absPath).href },
         position: { line: line - 1, character },
         newName
       };
@@ -3788,7 +4008,11 @@ class LspClient extends LspClientConnection {
     }
   }
   resolveWorkspacePath(filePath) {
-    return resolve6(this.root, filePath);
+    const canonical = canonicalizeExistingOrNearestAncestor(resolve6(this.root, filePath));
+    if (!isPathInside(this.root, canonical)) {
+      throw new LspInvalidPathError(`LSP file path must be inside workspace root: ${filePath}`);
+    }
+    return canonical;
   }
 }
 function waitForDiagnosticsActivity(wait, signal) {
@@ -3930,8 +4154,8 @@ class LspManager {
       this.reaperHandle.unref();
     }
   }
-  getKey(root, serverId) {
-    return `${root}::${serverId}`;
+  getKey(root, server2) {
+    return JSON.stringify([root, requestContextIdentity(), serverIdentity(server2)]);
   }
   reapStale() {
     const t = this.now();
@@ -3958,7 +4182,7 @@ class LspManager {
       throw new Error("LspManager has been disposed");
     }
     signal?.throwIfAborted();
-    const key = this.getKey(root, server2.id);
+    const key = this.getKey(root, server2);
     let managed = this.clients.get(key);
     if (managed) {
       const t = this.now();
@@ -4001,6 +4225,8 @@ class LspManager {
     })();
     const newManaged = {
       client,
+      root,
+      serverId: server2.id,
       refCount: 0,
       pendingWaiters: 1,
       lastUsedAt: initStartedAt,
@@ -4031,16 +4257,16 @@ class LspManager {
     newManaged.lastUsedAt = this.now();
     return client;
   }
-  releaseClient(root, serverId) {
-    const key = this.getKey(root, serverId);
+  releaseClient(root, server2) {
+    const key = this.getKey(root, server2);
     const managed = this.clients.get(key);
     if (managed && managed.refCount > 0) {
       managed.refCount--;
       managed.lastUsedAt = this.now();
     }
   }
-  invalidateClient(root, serverId, client) {
-    const key = this.getKey(root, serverId);
+  invalidateClient(root, server2, client) {
+    const key = this.getKey(root, server2);
     const managed = this.clients.get(key);
     if (!managed)
       return;
@@ -4052,7 +4278,7 @@ class LspManager {
   warmupClient(root, server2) {
     if (this.disposed)
       return;
-    const key = this.getKey(root, server2.id);
+    const key = this.getKey(root, server2);
     if (this.clients.has(key))
       return;
     const client = this.clientFactory(root, server2);
@@ -4063,6 +4289,8 @@ class LspManager {
     })();
     const managed = {
       client,
+      root,
+      serverId: server2.id,
       refCount: 0,
       pendingWaiters: 0,
       lastUsedAt: initStartedAt,
@@ -4083,17 +4311,16 @@ class LspManager {
       stopClientBestEffort(client);
     });
   }
-  isServerInitializing(root, serverId) {
-    const managed = this.clients.get(this.getKey(root, serverId));
+  isServerInitializing(root, server2) {
+    const managed = this.clients.get(this.getKey(root, server2));
     return managed?.isInitializing ?? false;
   }
   getSnapshot() {
     const snapshots = [];
-    for (const [key, managed] of this.clients) {
-      const [root, serverId] = key.split("::");
+    for (const managed of this.clients.values()) {
       snapshots.push({
-        root,
-        serverId,
+        root: managed.root,
+        serverId: managed.serverId,
         refCount: managed.refCount,
         pendingWaiters: managed.pendingWaiters,
         lastUsedAt: managed.lastUsedAt,
@@ -4104,8 +4331,8 @@ class LspManager {
     }
     return snapshots;
   }
-  hasClient(root, serverId) {
-    return this.clients.has(this.getKey(root, serverId));
+  hasClient(root, server2) {
+    return this.clients.has(this.getKey(root, server2));
   }
   clientCount() {
     return this.clients.size;
@@ -4128,6 +4355,39 @@ class LspManager {
     await Promise.allSettled(stopPromises);
   }
 }
+function requestContextIdentity() {
+  try {
+    const context = lspRequestContext();
+    return [
+      context.cwd,
+      context.projectConfigPaths,
+      context.userConfigPath,
+      context.installDecisionsPath,
+      context.capabilities.installDecisionTool
+    ];
+  } catch (error) {
+    if (error instanceof LspRequestContextUnavailableError)
+      return null;
+    throw error;
+  }
+}
+function serverIdentity(server2) {
+  return [
+    server2.id,
+    server2.command,
+    server2.extensions,
+    server2.priority,
+    Object.entries(server2.env ?? {}).sort(([left], [right]) => left.localeCompare(right)),
+    canonicalJson(server2.initialization ?? null)
+  ];
+}
+function canonicalJson(value) {
+  if (Array.isArray(value))
+    return value.map(canonicalJson);
+  if (typeof value !== "object" || value === null)
+    return value;
+  return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, entry]) => [key, canonicalJson(entry)]));
+}
 var _defaultInstance = null;
 function getLspManager() {
   if (!_defaultInstance) {
@@ -4145,7 +4405,7 @@ async function disposeDefaultLspManager() {
 
 // ../lsp-core/src/lsp/server-install-state.ts
 import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync4, renameSync as renameSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { dirname as dirname7 } from "node:path";
+import { dirname as dirname8 } from "node:path";
 function getInstallDecisionsPath() {
   return lspRequestContext().installDecisionsPath;
 }
@@ -4173,7 +4433,7 @@ function isInstallDecision(value) {
 }
 function writeInstallDecisions(decisions) {
   const path2 = getInstallDecisionsPath();
-  mkdirSync3(dirname7(path2), { recursive: true });
+  mkdirSync3(dirname8(path2), { recursive: true });
   const tmpPath = `${path2}.tmp`;
   writeFileSync2(tmpPath, `${JSON.stringify(decisions, null, 2)}
 `, "utf8");
@@ -4538,7 +4798,7 @@ function getDisabledServerIds() {
 
 // ../lsp-core/src/lsp/server-installation.ts
 import { existsSync as existsSync8 } from "node:fs";
-import { delimiter as delimiter3, join as join3 } from "node:path";
+import { delimiter as delimiter3, join as join4 } from "node:path";
 function isServerInstalled(command, _workingDirectory) {
   if (command.length === 0)
     return false;
@@ -4567,7 +4827,7 @@ function isServerInstalled(command, _workingDirectory) {
   const paths = pathEnv.split(delimiter3);
   for (const p of paths) {
     for (const suffix of exts) {
-      if (existsSync8(join3(p, cmd + suffix))) {
+      if (existsSync8(join4(p, cmd + suffix))) {
         return true;
       }
     }
@@ -4673,21 +4933,22 @@ function isDirectoryPath(filePath) {
 }
 function findWorkspaceRoot(filePath) {
   const abs = resolvePathInsideContext(filePath);
+  const cwd = contextCwd();
   let dir = abs;
   if (!isDirectoryPath(dir)) {
-    dir = dirname8(dir);
+    dir = dirname9(dir);
   }
-  let prevDir = "";
-  while (dir !== prevDir) {
+  while (isPathInside(cwd, dir)) {
     for (const marker of WORKSPACE_MARKERS) {
-      if (existsSync9(join4(dir, marker))) {
+      if (existsSync9(join5(dir, marker))) {
         return dir;
       }
     }
-    prevDir = dir;
-    dir = dirname8(dir);
+    if (dir === cwd)
+      break;
+    dir = dirname9(dir);
   }
-  return dirname8(abs);
+  return cwd;
 }
 function resolvePathInsideContext(filePath) {
   const cwd = contextCwd();
@@ -4795,17 +5056,17 @@ async function withLspClient(filePath, fn, toolName, options = {}) {
       return await fn(client, root);
     } catch (err) {
       if (allowRetry && READ_ONLY_RETRY_TOOLS.has(toolName) && isLspDeadConnectionError(err)) {
-        manager.invalidateClient(root, server2.id, client);
+        manager.invalidateClient(root, server2, client);
         return acquireAndCall(false);
       }
       if (err instanceof LspRequestTimeoutError) {
-        if (manager.isServerInitializing(root, server2.id)) {
+        if (manager.isServerInitializing(root, server2)) {
           throw new LspServerInitializingError(err);
         }
       }
       throw err;
     } finally {
-      manager.releaseClient(root, server2.id);
+      manager.releaseClient(root, server2);
     }
   };
   return acquireAndCall(true);
@@ -4813,7 +5074,7 @@ async function withLspClient(filePath, fn, toolName, options = {}) {
 
 // ../lsp-core/src/lsp/directory-diagnostics.ts
 import { existsSync as existsSync10, lstatSync as lstatSync5, readdirSync as readdirSync3 } from "node:fs";
-import { join as join5, resolve as resolve8 } from "node:path";
+import { join as join6, resolve as resolve8 } from "node:path";
 
 // ../lsp-core/src/lsp/formatters.ts
 import { fileURLToPath as fileURLToPath3 } from "node:url";
@@ -4943,7 +5204,7 @@ function collectFilesWithExtension(dir, extension, maxFiles) {
     for (const entry of entries) {
       if (files.length >= maxFiles)
         return;
-      const fullPath = join5(currentDir, entry);
+      const fullPath = join6(currentDir, entry);
       let stat;
       try {
         stat = lstatSync5(fullPath);
@@ -5024,7 +5285,7 @@ async function aggregateDiagnosticsForDirectory(directory, extension, severity, 
     });
     await Promise.all(workers);
   } finally {
-    manager.releaseClient(root, server2.id);
+    manager.releaseClient(root, server2);
   }
   const displayDiagnostics = allDiagnostics.slice(0, DEFAULT_MAX_DIAGNOSTICS);
   const wasDiagCapped = allDiagnostics.length > DEFAULT_MAX_DIAGNOSTICS;
@@ -5056,7 +5317,7 @@ async function aggregateDiagnosticsForDirectory(directory, extension, severity, 
 
 // ../lsp-core/src/lsp/infer-extension.ts
 import { lstatSync as lstatSync6, readdirSync as readdirSync4 } from "node:fs";
-import { join as join6 } from "node:path";
+import { join as join7 } from "node:path";
 var SKIP_DIRECTORIES2 = new Set(["node_modules", ".git", "dist", "build", ".next", "out"]);
 var MAX_SCAN_ENTRIES = 500;
 function inferExtensionFromDirectory(directory) {
@@ -5074,7 +5335,7 @@ function inferExtensionFromDirectory(directory) {
     for (const entry of entries) {
       if (scanned >= MAX_SCAN_ENTRIES)
         return;
-      const fullPath = join6(dir, entry);
+      const fullPath = join7(dir, entry);
       let stat;
       try {
         stat = lstatSync6(fullPath);
@@ -5878,9 +6139,9 @@ function currentRequestContext(env = process.env) {
   const home = env["HOME"] ?? homedir3();
   return parseLspRequestContext({
     cwd,
-    projectConfigPaths: [join7(cwd, ".codex", "lsp-client.json")],
-    userConfigPath: join7(home, ".codex", "lsp-client.json"),
-    installDecisionsPath: join7(home, ".codex", "lsp-install-decisions.json"),
+    projectConfigPaths: [join8(cwd, ".codex", "lsp-client.json")],
+    userConfigPath: join8(home, ".codex", "lsp-client.json"),
+    installDecisionsPath: join8(home, ".codex", "lsp-install-decisions.json"),
     capabilities: { installDecisionTool: true }
   });
 }
@@ -5970,6 +6231,9 @@ function sendToolCall(paths, token, name, args, options) {
         finish(() => resolve9(result));
       else
         finish(() => reject(new DaemonRequestError("invalid daemon response", requestWritten)));
+    }, (_raw, error) => {
+      const message = error instanceof Error ? error.message : "invalid daemon response";
+      finish(() => reject(new DaemonRequestError(message, requestWritten)));
     });
     socket.once("connect", () => {
       const payload = encodeJsonLine({
@@ -6013,8 +6277,6 @@ function isRetryableTool(name) {
 }
 
 // src/client.ts
-import { statSync as statSync5 } from "node:fs";
-import { isAbsolute as isAbsolute4 } from "node:path";
 var OMO_LSP_DAEMON_DIR2 = "OMO_LSP_DAEMON_DIR";
 var OMO_LSP_DAEMON_CLI2 = "OMO_LSP_DAEMON_CLI";
 var OMO_LSP_DAEMON_VERSION2 = "OMO_LSP_DAEMON_VERSION";

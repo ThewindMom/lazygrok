@@ -1,54 +1,103 @@
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import type { PreToolUsePayload } from "./codex-hook.js";
 import { parsePreToolUsePayload } from "./codex-hook.js";
+import { safeReadWorkspaceTextFile, safeWorkspacePath, safeWriteWorkspaceTextFileSync } from "./file-safety.js";
 import { isFinalRunCompletionCandidate } from "./goal-status.js";
-import { ulwLoopAttemptEvidenceDir, ulwLoopDir } from "./paths.js";
+import { withInterprocessLockSync } from "./interprocess-lock.js";
+import { ulwLoopAttemptEvidenceDir, ulwLoopDir, ulwLoopEvidenceRoot } from "./paths.js";
 import type { UlwLoopPlan } from "./types.js";
 
 // spawn_agent = v1; collaborationspawn_agent = the delimiter-free flattened v2
 // hook token from codex-rs hook_names.rs; collaboration.spawn_agent = the
 // dotted token observed live in the task-1 probe (hook-tool-tokens.txt).
-const SPAWN_TOOL_TOKENS = new Set(["spawn_agent", "collaborationspawn_agent", "collaboration.spawn_agent"]);
+const SPAWN_TOOL_TOKENS = new Set([
+	"spawn_subagent",
+	"spawn_agent",
+	"collaborationspawn_agent",
+	"collaboration.spawn_agent",
+	"task",
+]);
 const DEFAULT_FANOUT_LIMIT = 60;
+const MAX_HOOK_INPUT_BYTES = 10 * 1024 * 1024;
 const GATE_MESSAGE_PATTERN = /lazycodex-gate-reviewer|final gate review/i;
 
 export function applySpawnGuards(payload: PreToolUsePayload): string {
 	if (payload.hook_event_name !== "PreToolUse" || !SPAWN_TOOL_TOKENS.has(payload.tool_name)) return "";
-	const stateDir = ulwLoopDir(payload.cwd, { sessionId: payload.session_id });
-	const plan = readPlan(join(stateDir, "goals.json"));
+	let stateDir: string;
+	try {
+		stateDir = ulwLoopDir(payload.cwd, { sessionId: payload.session_id });
+	} catch (error) {
+		if (error instanceof Error) return deny("unsafe ulw-loop state path");
+		throw error;
+	}
+	const plan = readPlan(payload.cwd, join(stateDir, "goals.json"));
 	if (plan === null) return "";
-	const fanOutDenial = consumeFanOutBudget(stateDir);
-	if (fanOutDenial !== null) return deny(fanOutDenial);
 	const missingArtifact = missingGateArtifact(payload, plan);
 	if (missingArtifact !== null)
 		return deny(`spawn code-review + QA first; gate audits their artifacts: missing ${missingArtifact}`);
+	const fanOutDenial = consumeFanOutBudget(payload.cwd, stateDir);
+	if (fanOutDenial !== null) return deny(fanOutDenial);
 	return "";
 }
 
 export async function runSpawnGuardCli(stdin: NodeJS.ReadableStream, stdout: NodeJS.WritableStream): Promise<void> {
+	let payload: PreToolUsePayload | null;
 	try {
 		const chunks: Buffer[] = [];
-		for await (const chunk of stdin) chunks.push(Buffer.from(chunk));
-		const payload = parsePreToolUsePayload(Buffer.concat(chunks).toString("utf8"));
-		if (payload === null) return;
+		let totalBytes = 0;
+		let oversized = false;
+		for await (const chunk of stdin) {
+			const bytes = Buffer.from(chunk);
+			totalBytes += bytes.length;
+			if (totalBytes > MAX_HOOK_INPUT_BYTES) {
+				oversized = true;
+				continue;
+			}
+			if (!oversized) chunks.push(bytes);
+		}
+		if (oversized) {
+			stdout.write(deny("ulw-loop spawn guard denied oversized hook input"));
+			return;
+		}
+		payload = parsePreToolUsePayload(Buffer.concat(chunks).toString("utf8"));
+	} catch (error) {
+		if (error instanceof Error) {
+			stdout.write(deny("ulw-loop spawn guard denied invalid hook input"));
+			return;
+		}
+		throw error;
+	}
+	if (payload === null) {
+		stdout.write(deny("ulw-loop spawn guard denied invalid hook input"));
+		return;
+	}
+	try {
 		const output = applySpawnGuards(payload);
 		if (output.length > 0) stdout.write(output);
 	} catch (error) {
-		if (error instanceof Error) return;
+		if (error instanceof Error) {
+			stdout.write(deny("ulw-loop spawn guard denied because budget could not be reserved safely"));
+			return;
+		}
+		throw error;
 	}
 }
 
 // Per-session spawn counter; depth/lineage tracking is descoped — this is a
 // total-volume backstop against fan-out explosions, not a recursion tracker.
-function consumeFanOutBudget(stateDir: string): string | null {
-	const counterPath = join(stateDir, "spawn-count.json");
-	const count = readCount(counterPath) + 1;
-	writeFileSync(counterPath, JSON.stringify({ count }));
-	const limit = fanOutLimit();
-	if (count <= limit) return null;
-	return `ulw-loop spawn fan-out cap reached (${count}/${limit}). Consolidate work into the agents already running, or raise OMO_SPAWN_FANOUT_LIMIT if this volume is intentional.`;
+function consumeFanOutBudget(repoRoot: string, stateDir: string): string | null {
+	return withInterprocessLockSync(repoRoot, join(stateDir, ".spawn-count.lock"), () => {
+		const counterPath = join(stateDir, "spawn-count.json");
+		const count = readCount(repoRoot, counterPath) + 1;
+		const limit = fanOutLimit();
+		if (count > limit) {
+			return `ulw-loop spawn fan-out cap reached (${count}/${limit}). Consolidate work into the agents already running, or raise OMO_SPAWN_FANOUT_LIMIT if this volume is intentional.`;
+		}
+		safeWriteWorkspaceTextFileSync(repoRoot, counterPath, JSON.stringify({ count }));
+		return null;
+	});
 }
 
 function missingGateArtifact(payload: PreToolUsePayload, plan: UlwLoopPlan): string | null {
@@ -58,18 +107,19 @@ function missingGateArtifact(payload: PreToolUsePayload, plan: UlwLoopPlan): str
 	if (!goal.successCriteria.every((criterion) => criterion.status === "pass")) return null;
 	const scope = { sessionId: payload.session_id } as const;
 	if (plan.evidenceLayoutVersion === 2) {
-		const attemptDir = ulwLoopAttemptEvidenceDir(goal.id, goal.attempt, scope);
+		const attemptDir = ulwLoopAttemptEvidenceDir(payload.cwd, goal.id, goal.attempt, scope);
 		for (const name of [`${goal.id}-code-review.md`, `${goal.id}-manual-qa.md`]) {
 			const relative = `${attemptDir}/${name}`;
-			if (!isNonEmptyFile(join(payload.cwd, relative))) return relative;
+			if (!isNonEmptyFile(payload.cwd, join(payload.cwd, relative))) return relative;
 		}
 		return null;
 	}
-	const flatReport = `.omo/evidence/${goal.id}-code-review.md`;
-	if (!isNonEmptyFile(join(payload.cwd, flatReport))) return flatReport;
+	const evidenceRoot = ulwLoopEvidenceRoot(payload.cwd, scope);
+	const flatReport = `${evidenceRoot}/${goal.id}-code-review.md`;
+	if (!isNonEmptyFile(payload.cwd, join(payload.cwd, flatReport))) return flatReport;
 	// v1 manual-QA approximation: any other non-empty evidence file counts.
-	if (!hasOtherEvidenceFile(join(payload.cwd, ".omo", "evidence"), `${goal.id}-code-review.md`))
-		return `.omo/evidence/<any manual-QA artifact besides ${goal.id}-code-review.md>`;
+	if (!hasOtherEvidenceFile(payload.cwd, join(payload.cwd, evidenceRoot), `${goal.id}-code-review.md`))
+		return `${evidenceRoot}/<any manual-QA artifact besides ${goal.id}-code-review.md>`;
 	return null;
 }
 
@@ -100,37 +150,44 @@ function fanOutLimit(): number {
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_FANOUT_LIMIT;
 }
 
-function isNonEmptyFile(path: string): boolean {
+function isNonEmptyFile(repoRoot: string, path: string): boolean {
 	try {
-		return existsSync(path) && statSync(path).size > 0;
+		return safeReadWorkspaceTextFile(repoRoot, path, 1024 * 1024).length > 0;
 	} catch (error) {
 		if (error instanceof Error) return false;
 		throw error;
 	}
 }
 
-function hasOtherEvidenceFile(evidenceDir: string, excludedName: string): boolean {
+function hasOtherEvidenceFile(repoRoot: string, evidenceDir: string, excludedName: string): boolean {
 	try {
-		return readdirSync(evidenceDir).some((name) => name !== excludedName && isNonEmptyFile(join(evidenceDir, name)));
+		const safeEvidenceDir = safeWorkspacePath(repoRoot, evidenceDir);
+		return readdirSync(safeEvidenceDir).some(
+			(name) => name !== excludedName && isNonEmptyFile(repoRoot, join(safeEvidenceDir, name)),
+		);
 	} catch (error) {
 		if (error instanceof Error) return false;
 		throw error;
 	}
 }
 
-function readCount(counterPath: string): number {
+function readCount(repoRoot: string, counterPath: string): number {
 	try {
-		const parsed = JSON.parse(readFileSync(counterPath, "utf8")) as Record<string, unknown>;
-		return typeof parsed["count"] === "number" && parsed["count"] >= 0 ? parsed["count"] : 0;
+		const parsed = JSON.parse(safeReadWorkspaceTextFile(repoRoot, counterPath, 64 * 1024)) as Record<string, unknown>;
+		const count = parsed["count"];
+		if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
+			throw new Error("invalid ulw-loop spawn counter");
+		}
+		return count;
 	} catch (error) {
-		if (error instanceof Error) return 0;
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") return 0;
 		throw error;
 	}
 }
 
-function readPlan(goalsPath: string): UlwLoopPlan | null {
+function readPlan(repoRoot: string, goalsPath: string): UlwLoopPlan | null {
 	try {
-		return JSON.parse(readFileSync(goalsPath, "utf8")) as UlwLoopPlan;
+		return JSON.parse(safeReadWorkspaceTextFile(repoRoot, goalsPath)) as UlwLoopPlan;
 	} catch (error) {
 		if (error instanceof Error) return null;
 		throw error;

@@ -5,8 +5,16 @@
 
 [CODE RED] Maximum precision. Outcome-first. Evidence-driven.
 
-# Trigger
-`ulw` or `ultrawork` in the prompt is enough. Do not require `/goal` or other slash commands.
+# Trigger (user-facing — this is the whole UX)
+`ulw` or `ultrawork` in the prompt is enough. That is the **only** switch.
+
+- Light / casual work → user does **not** say `ulw` (normal chat).
+- Serious / multi-file / evidence-bound work → user says **`ulw …`** once.
+
+Do **not** require `/goal`, `/workflow`, `/ulw-discover`, hybrid modes, or any second command.
+**Never** ask the user to run a workflow, name a panel, or open `/workflows`.
+If multi-agent orchestration uses Grok’s `workflow` tool, that is an **internal** detail —
+user-visible language stays “discovery”, “review”, “working”, evidence paths. Not “workflow mode”.
 
 # Grok harness map
 Upstream LazyCodex ultrawork on Grok tools:
@@ -15,11 +23,89 @@ Upstream LazyCodex ultrawork on Grok tools:
 | --- | --- |
 | Live checklist | `todo_write` |
 | Spawn / wait / stop | `spawn_subagent` / `get_command_or_subagent_output` / `kill_command_or_subagent` |
+| Forced discover/review fan-out (internal) | `workflow` tool → named scripts `ulw-discover` / `ulw-review` (silent; part of ULW) |
 | Edit / shell / read | `search_replace`·`write` / `run_terminal_command` / `read_file` |
 | Binding goal | ulw-loop ledger (`create-goals`) always; host `create_goal`/`update_goal` only if in tool list; always `# Goal` mirror |
 | Workers / review / explore | `lazygrok:lazygrok-worker-{low,medium,high}` · `lazygrok-code-reviewer` · `explore` · `librarian` · `prometheus` |
 
-Spawn prompts: `TASK:` + `DELIVERABLE` `SCOPE` `VERIFY` `STOP WHEN`. `background: true` unless full history required. Never invent Codex multi_agent APIs.
+Spawn prompts: `TASK:` + `DELIVERABLE` `SCOPE` `VERIFY` `STOP WHEN`. `background: true` unless full history required. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
+
+# Worktree boundary
+
+Ordinary ULW does not create a worktree solely because `ulw` was requested.
+Use a task-owned worktree when the user requests isolation, when work will be
+delivered as a PR/branch, or when parallel writers could conflict.
+
+- Whole-session isolation must be selected before Grok starts. Hooks cannot
+  change the cwd of an already-running host process.
+- Grok Build `0.2.114` parses `--worktree` in headless `-p` mode but does not
+  materialize it. For a headless isolated run, the reliable host sequence is
+  `git worktree add --detach <absolute-path> HEAD`, then
+  `grok --cwd <absolute-path> -p "ulw <task>"`.
+- If an active session reaches an isolation boundary, create or select the
+  task-owned worktree first, verify it with `git worktree list --porcelain`,
+  record its absolute path in the notepad/Boulder state, and run every later
+  edit, shell command, test, and evidence capture inside it.
+- Never claim worktree isolation merely because a flag was present. Prove the
+  effective cwd is listed as a worktree and that the source checkout stayed
+  unchanged.
+
+# CODING MULTI-AGENT (NON-NEGOTIABLE — LazyCodex feel on Grok + Grok workflows)
+
+This is how LazyCodex parallel coding works on Grok. Violating it is a defect.
+Grok’s strength is the native `workflow` tool (deterministic multi-agent panels with budget + phase rail). Codex/LazyCodex has no equivalent — LazyGrok uses it **under** ULW so the user only says `ulw`.
+
+## Parent owns the job; panels are automatic
+
+**Parent always owns** goals, notepad, RED→GREEN, SURFACE QA, cleanup, implementation
+workers, commits, and the done claim.
+
+**Automatic internal fan-out** (when the `workflow` tool is in the session tool list):
+
+| When (agent decides — user never chooses) | Internal call | User sees |
+| --- | --- | --- |
+| Multi-file / unfamiliar / unclear ownership before product edits | `workflow({ name: "ulw-discover", args: { brief, scope?, need_external? } })` | “Discovering…” / findings in notepad — never `/workflow` |
+| External docs/API needed | same with `need_external: true` | research facts folded into findings |
+| HEAVY (or user asked rigorous review) after evidence | prepare `diff_path`, then `workflow({ name: "ulw-review", args: { goal, criteria, diff_path, … } })` | “Review…” / blockers fixed — never panel names |
+
+Silent resolution order for scripts:
+1. `name: "ulw-discover"` / `"ulw-review"` (installed under `~/.grok/workflows/`)
+2. Else `script_path: "${GROK_PLUGIN_ROOT}/docs/examples/ulw-discover.rhai"` (or `ulw-review.rhai`)
+3. Else fall back to same-turn `spawn_subagent` explore/review waves (below)
+
+Never treat a panel finish as product shipped. Never narrate “I will run a workflow”
+or invite the user to `/workflows` unless they asked about harness internals.
+
+## Tools
+Only this session's tools. Multi-agent: internal `workflow` panels and/or
+`spawn_subagent` / `get_command_or_subagent_output` / `kill_command_or_subagent`
+(`subagent_type` + `prompt` + `background: true`). Depth max 1. Full allowlist: rules/15-grok-tools-only.
+
+## When fan-out is required (coding)
+| Situation | Same-turn action |
+| --- | --- |
+| Unfamiliar module / multi-file / unclear ownership | **MUST** run discovery **before** product edits: auto `ulw-discover` via `workflow` if available; else `spawn_subagent(… explore …)` |
+| Needs external docs/API/lib versions | **MUST** include librarian path: `need_external: true` on discover, or same-turn `lazygrok:librarian` |
+| Independent implementation slices | **MUST** one worker per slice (`lazygrok:lazygrok-worker-*` / `hephaestus`) via `spawn_subagent` — not a second user command |
+| HEAVY tier or user demanded rigorous review | **MUST** review after evidence: auto `ulw-review` via `workflow` if available; else code-reviewer spawn |
+| LIGHT one-spot known fix (single file, obvious) | Parent alone — record `no fan-out: trivial` in notepad (rare inside ULW; light work usually skips the `ulw` keyword) |
+
+## Wave discipline
+1. Launch **every** independent discovery/review/implement child for the wave **first**, same turn.
+2. Keep doing non-dependent root work while they run (goal/notepad ok; not product GREEN).
+3. Wait until each is terminal (workflow run done, or `get_command_or_subagent_output` / explicitly inconclusive).
+4. **Barrier:** no product `search_replace`/`write`, no plan that depends on discovery, no “done” while discovery/review for that step is open.
+
+## Child prompt (required shape)
+```
+TASK: <imperative>
+DELIVERABLE: <what parent will integrate>
+SCOPE: <paths / limits>
+VERIFY: <how parent checks>
+STOP WHEN: <terminal condition>
+```
+
+Skipping the discovery wave on multi-file or unfamiliar coding is the same class of defect as LazyCodex skipping explore.
 
 
 # Role
@@ -125,7 +211,9 @@ execute its workflow — via `read_file` on the **absolute** catalog path
 workspace-relative `skills/…` for LazyGrok plugin skills. Skills a
 delegated session needs are named with absolute paths in its prompt and
 read there, not here.
-Next, fire the first discovery wave under Finding things below.
+Next, fire the first discovery wave under Finding things below — **automatically**
+via internal `ulw-discover` when multi-file/unfamiliar and `workflow` exists
+(do not ask the user; do not mention `/workflow`).
 Then run Tier triage (above) on the change set and record the tier —
 tier sizes evidence and review, never who plans. Size planning by
 what the wave left UNDECIDED, not by how many steps you can list:
@@ -145,7 +233,17 @@ NOT the notepad alone, NOT the plan alone. Skipping it is a defect.
 Upstream LazyCodex uses `create_goal`. On Grok the host may omit that tool
 (workflows on). The **ulw-loop ledger** is the durable binding contract:
 
-1. Always: `node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals --brief "<objective>" --json`
+1. Always: copy the literal from `Exact Grok hook session ID for this turn: "..."` in
+   conversational hook context and run
+   `node "${GROK_PLUGIN_ROOT}/vendor/lazygrok-hooks/ulw-loop/dist/cli.js" create-goals --session-id "<exact-hook-id>" --brief "<objective>" --json`.
+   The hook ID is not a shell environment variable. Never inspect `printenv`, process
+   trees, active-session files, `/tmp`, or filenames to derive it. If the literal is not
+   visible, omit `--session-id`; the CLI resolves the sole recent private hook binding
+   for this workspace and rejects ambiguity. Never supply a guessed or fallback ID.
+   Use the exact value on every later ulw-loop CLI call. Only if `create-goals`
+   explicitly rejects an already-complete aggregate may a continued conversation derive
+   `<exact-hook-id>-<short-purpose>` for the new run.
+   Never derive Grok scope from ambient `CODEX_SESSION_ID` or `CODEX_THREAD_ID`.
    Prefer `.lazygrok/ulw-loop/`; keep `.omo/ulw-loop/` if that run already uses it.
    Evidence: `record-evidence`. LIGHT complete: `light-quality-gate` then `checkpoint`. HEAVY: reviewer gate below.
 2. Always: open with a markdown `# Goal` block treated as binding (objective, tier, criteria, when-to-stop).
@@ -255,10 +353,12 @@ or native artifacts / citations must be preserved.
 - Structural call / function / class / import shapes and codemods → the
   `ast-grep` skill or `sg` with `$VAR` / `$$$` metavariables.
 When discovery needs multiple angles or the module layout is
-unfamiliar, delegate to the `explorer` subagent (read-only codebase
-search, absolute-path results). For research that leaves the repo —
-library/API/docs/web — delegate to the `librarian` subagent. Spawn them
-`background: true` and keep doing root work while they run.
+unfamiliar: **first** auto-launch internal `ulw-discover` (Grok `workflow`
+tool) if available; otherwise delegate to the `explorer` subagent
+(read-only, absolute-path results). For research that leaves the repo —
+library/API/docs/web — set `need_external: true` on discover or spawn
+`librarian`. Keep doing root work while they run. Never ask the user to
+start discovery.
 
 # Execution loop (PIN → RED → GREEN → SURFACE → CLEAN)
 Until every success criterion PASSES with its evidence captured:
@@ -421,7 +521,7 @@ diff, run diagnostics, confirm each criterion's evidence, and state in
 one line why the tier held.
 
 Procedure (NON-NEGOTIABLE):
-1. **Parent prepares review payload BEFORE spawn** (do not dump this on
+1. **Parent prepares review payload BEFORE any review panel/spawn** (do not dump this on
    the child to reverse-engineer):
    - Write the full merge/base diff to a file, e.g.
      `git diff --stat origin/main...HEAD > /tmp/ulw-review-stat.txt`
@@ -432,16 +532,15 @@ Procedure (NON-NEGOTIABLE):
    - Absolute skill paths for reviewers:
      `$PLUGIN_ROOT/skills/remove-ai-slops/SKILL.md` and
      `$PLUGIN_ROOT/vendor/lazygrok-skills/programming/SKILL.md`.
-2. Spawn a child with `background: true` and a self-contained reviewer
-   assignment in `prompt`. Prefer
-   `subagent_type: "lazygrok:lazygrok-code-reviewer"` when available;
-   otherwise paste reviewer requirements into the prompt.
-   **Must pass in `prompt`:** goal, success-criteria, scenario evidence
-   paths, **full diff path** (or inlined diff if small), changed-file
-   list, notepad path, report path under `.lazygrok/evidence/`, and the
-   absolute skill paths above. State that the child has
-   `run_terminal_command` for read-only git if the diff file is missing
-   — never require inventing MCP shell tools.
+2. **Auto review (user never opts in):** if `workflow` is available, call
+   `workflow({ name: "ulw-review", args: { goal, criteria, diff_path, stat_path, changed_files, evidence_paths, notepad_path, plugin_root: PLUGIN_ROOT } })`
+   (or `script_path` to plugin `docs/examples/ulw-review.rhai`). Barrier until complete.
+   Treat `approved: true` only as “no criterion blockers.” Do not mention
+   `/workflow` to the user. Else fall back: spawn `background: true` reviewer
+   (`lazygrok:lazygrok-code-reviewer` when available) with goal, criteria,
+   evidence paths, full diff path, changed files, notepad path, report path
+   under `.lazygrok/evidence/`, and absolute skill paths above. Child may use
+   `run_terminal_command` for read-only git — never invent MCP shell tools.
 3. Verify each reviewer concern yourself. A concern blocks only when
    it names a success criterion the evidence fails; record concerns
    that cite no criterion as notes with a one-line reason — fixed or
@@ -449,11 +548,11 @@ Procedure (NON-NEGOTIABLE):
 4. Fix every criterion-cited blocker. Re-run ONLY the scenario QA
    affected by the fix; capture fresh evidence for the delta. Update
    notepad.
-5. Re-submit to the SAME reviewer at most twice, passing only the
+5. Re-submit to the SAME panel/reviewer at most twice, passing only the
    delta diff, the blockers it cited, and the already-approved criteria
    marked out-of-scope. An approval whose only remaining items are
    notes counts as approval.
-6. On approval, declare done. If criterion-cited blockers remain after
+6. On approval, declare done only if stop rules + evidence also hold. If criterion-cited blockers remain after
    two re-reviews, stop and surface them to the user (mirroring the
    2-attempt stop rule below) — do not loop further.
 
@@ -496,6 +595,8 @@ commits this session — then stage + draft the message instead.
 - After bootstrap: 1-2 paragraph plan summary + notepad path.
 - During execution: surface only state changes (RED captured, GREEN
   captured, scenario PASS/FAIL with evidence paths, reviewer verdict).
+- **Do not** narrate harness internals (`workflow`, Rhai, panel names,
+  `/workflows`) unless the user asked how LazyGrok works.
 - Final message: outcome + success-criteria checklist with evidence
   refs + notepad path + reviewer approval (if gate triggered) + commit
   list (`<sha> <subject>`). No file-by-file changelog unless asked.

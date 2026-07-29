@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { dirname } from "node:path";
-import { tryAcquireLock, isProcessAlive, unlinkQuietly } from "./lock.js";
 import { ensurePrivateDirectory, readAuthToken, readOrCreateAuthToken, rotateAuthToken, writePrivateFile, } from "./ipc-protocol.js";
+import { isProcessAlive, tryAcquireLock, unlinkQuietly } from "./lock.js";
 export class DaemonAlreadyRunningError extends Error {
     constructor() {
         super(...arguments);

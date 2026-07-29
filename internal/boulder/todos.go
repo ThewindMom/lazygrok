@@ -8,14 +8,15 @@ import (
 	"time"
 
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 const (
-	todoEnforcerDir          = "todo-enforcer"
-	continuationCooldownMs   = 5000
-	maxConsecutiveFailures   = 5
-	abortWindowMs            = 3000
-	todoMirrorDir            = ".lazygrok/todos"
+	todoEnforcerDir        = "todo-enforcer"
+	continuationCooldownMs = 5000
+	maxConsecutiveFailures = 5
+	abortWindowMs          = 3000
+	todoMirrorDir          = ".lazygrok/todos"
 )
 
 var incompleteStatuses = map[string]struct{}{
@@ -121,11 +122,17 @@ func stringField(m map[string]any, key string) string {
 }
 
 func enforcerStatePath(sessionID string) string {
+	if _, err := hookenv.ParseSessionID(sessionID); err != nil || sessionID == "" {
+		return ""
+	}
 	return filepath.Join(hookenv.GrokHome(), "state", todoEnforcerDir, sessionID, "state.json")
 }
 
 func readEnforcerState(sessionID string) map[string]any {
-	b, err := os.ReadFile(enforcerStatePath(sessionID))
+	if sessionID == "" {
+		return map[string]any{}
+	}
+	b, err := safestate.ReadFileBelow(hookenv.GrokHome(), enforcerStatePath(sessionID))
 	if err != nil {
 		return map[string]any{}
 	}
@@ -137,11 +144,13 @@ func readEnforcerState(sessionID string) map[string]any {
 }
 
 func writeEnforcerState(sessionID string, state map[string]any) {
+	if sessionID == "" {
+		return
+	}
 	state["updated_at"] = nowISO()
 	path := enforcerStatePath(sessionID)
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	b, _ := json.MarshalIndent(state, "", "  ")
-	_ = os.WriteFile(path, append(b, '\n'), 0o644)
+	_ = safestate.WriteFileBelow(hookenv.GrokHome(), path, append(b, '\n'), 0o600)
 }
 
 // ShouldSkipTodoContinuation returns a skip reason or "" if continuation is allowed.
@@ -183,17 +192,16 @@ func recordTodoContinuationFire(sessionID string) {
 }
 
 // MirrorTodos writes .lazygrok/todos/<session>.json.
-func MirrorTodos(workspace, sessionID string, todos []map[string]any) {
+func MirrorTodos(workspace, sessionID string, todos []map[string]any) error {
 	if workspace == "" {
-		return
+		return nil
 	}
 	dest := filepath.Join(workspace, todoMirrorDir, sessionID+".json")
-	_ = os.MkdirAll(filepath.Dir(dest), 0o755)
 	payload := map[string]any{
 		"session_id": sessionID,
 		"updated_at": nowISO(),
 		"todos":      todos,
 	}
 	b, _ := json.MarshalIndent(payload, "", "  ")
-	_ = os.WriteFile(dest, append(b, '\n'), 0o644)
+	return safestate.WriteFile(dest, append(b, '\n'), 0o600)
 }

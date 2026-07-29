@@ -7,23 +7,34 @@ import (
 	"strings"
 
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 	"lazygrok/internal/skillgate"
 )
 
 func stateDir(sessionID string) string {
 	if sessionID == "" {
-		sessionID = "unknown"
+		return ""
+	}
+	if _, err := hookenv.ParseSessionID(sessionID); err != nil {
+		return ""
 	}
 	return filepath.Join(hookenv.GrokHome(), "state", "using-superpowers", sessionID)
 }
 
 func doneFile(sessionID string) string {
-	return filepath.Join(stateDir(sessionID), "first_prompt_done")
+	dir := stateDir(sessionID)
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "first_prompt_done")
 }
 
 // ResetSession clears first-prompt state for a session (session-start).
 func ResetSession(sessionID string) {
-	_ = os.RemoveAll(stateDir(sessionID))
+	path := doneFile(sessionID)
+	if path != "" {
+		_ = safestate.RemoveBelow(hookenv.GrokHome(), path)
+	}
 }
 
 // CleanupSession removes first-prompt state (session-end).
@@ -75,15 +86,18 @@ func buildContext(skillPath string) string {
 
 // Collect returns first-prompt LazyGrok skill-gate context or "".
 func Collect(sessionID string) string {
-	if _, err := os.Stat(doneFile(sessionID)); err == nil {
+	path := doneFile(sessionID)
+	if path == "" {
+		return ""
+	}
+	if _, err := safestate.ReadFileBelow(hookenv.GrokHome(), path); err == nil {
 		return ""
 	}
 	skillPath := resolveSkillPath()
 	if skillPath == "" {
 		return ""
 	}
-	_ = os.MkdirAll(stateDir(sessionID), 0o755)
-	_ = os.WriteFile(doneFile(sessionID), []byte{}, 0o644)
+	_ = safestate.WriteFileBelow(hookenv.GrokHome(), path, []byte{}, 0o600)
 	_ = skillgate.MarkSkillLoaded(sessionID, "agent-skill-gate")
 	return buildContext(skillPath)
 }

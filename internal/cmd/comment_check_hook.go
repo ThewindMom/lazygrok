@@ -1,15 +1,14 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
+	corehashline "lazygrok/internal/core/hashline"
 	commentchecker "lazygrok/internal/core/policy"
 	"lazygrok/internal/hookenv"
 	"lazygrok/internal/hookio"
-	"github.com/spf13/cobra"
 )
 
 // postToolCommentCheckCmd checks for AI-generated comments after edits.
@@ -29,12 +28,7 @@ func postToolCommentCheckCmd() *cobra.Command {
 				return nil
 			}
 
-			absPath := filePath
-			if !filepath.IsAbs(absPath) && ev.WorkspaceRoot != "" {
-				absPath = filepath.Join(ev.WorkspaceRoot, filePath)
-			}
-
-			data, err := os.ReadFile(absPath)
+			data, err := readCommentCheckFile(workspace(ev), filePath)
 			if err != nil {
 				return nil
 			}
@@ -61,4 +55,6 @@ func pickFilePath(input map[string]any) string {
 	return ""
 }
 
-var _ = fmt.Sprintf
+func readCommentCheckFile(workspaceRoot, path string) ([]byte, error) {
+	return corehashline.ReadWorkspaceFileBytes(path, workspaceRoot)
+}

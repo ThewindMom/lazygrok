@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Build the repository-level lsp-tools-mcp package used by codex-lsp.
 import { execSync } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,7 +30,7 @@ for (const dir of candidates) {
 	const packageJson = join(dir, "package.json");
 	if (existsSync(packageJson)) {
 		const outputs = requiredOutputs(dir);
-		if (!force && isBuildFresh(packageJson, outputs)) {
+		if (!force && isBuildFresh(dir, outputs)) {
 			process.exit(0);
 		}
 		console.log("Installing repository lsp-tools-mcp dependencies...");
@@ -61,9 +61,19 @@ console.error(
 console.error(`probed: ${probedPaths}`);
 process.exit(1);
 
-function isBuildFresh(inputPath, outputPaths) {
-	if (!existsSync(inputPath)) return false;
+function isBuildFresh(inputRoot, outputPaths) {
 	if (outputPaths.some((path) => !existsSync(path))) return false;
-	const inputMtime = statSync(inputPath).mtimeMs;
+	const inputMtime = newestInputMtime(inputRoot);
 	return outputPaths.every((path) => statSync(path).mtimeMs >= inputMtime);
+}
+
+function newestInputMtime(directory) {
+	let newest = 0;
+	for (const entry of readdirSync(directory, { withFileTypes: true })) {
+		if (entry.name === "dist" || entry.name === "node_modules") continue;
+		const path = join(directory, entry.name);
+		if (entry.isDirectory()) newest = Math.max(newest, newestInputMtime(path));
+		else if (entry.isFile()) newest = Math.max(newest, statSync(path).mtimeMs);
+	}
+	return newest;
 }

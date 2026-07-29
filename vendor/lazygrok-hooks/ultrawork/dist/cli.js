@@ -8,8 +8,8 @@ import { readFileSync as readFileSync2 } from "node:fs";
 
 // src/skill-pointer.ts
 import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // src/directive.ts
 import { readFileSync } from "node:fs";

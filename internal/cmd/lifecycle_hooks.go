@@ -2,13 +2,12 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
 	"lazygrok/internal/hookenv"
 	"lazygrok/internal/hookio"
-	"github.com/spf13/cobra"
+	"lazygrok/internal/safestate"
 )
 
 // postToolFailureCmd records tool failures for diagnostics.
@@ -19,7 +18,7 @@ func postToolFailureCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ev, err := readEvent()
 			if err != nil {
-				return nil
+				return err
 			}
 			hookenv.ApplyEvent(ev)
 			recordDiagnostic(ev, "post_tool_failure")
@@ -36,7 +35,7 @@ func permissionDeniedCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ev, err := readEvent()
 			if err != nil {
-				return nil
+				return err
 			}
 			hookenv.ApplyEvent(ev)
 			recordDiagnostic(ev, "permission_denied")
@@ -53,7 +52,7 @@ func stopFailureCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ev, err := readEvent()
 			if err != nil {
-				return nil
+				return err
 			}
 			hookenv.ApplyEvent(ev)
 			recordDiagnostic(ev, "stop_failure")
@@ -70,7 +69,7 @@ func notificationCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ev, err := readEvent()
 			if err != nil {
-				return nil
+				return err
 			}
 			hookenv.ApplyEvent(ev)
 			recordDiagnostic(ev, "notification")
@@ -87,7 +86,7 @@ func subagentStartCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ev, err := readEvent()
 			if err != nil {
-				return nil
+				return err
 			}
 			hookenv.ApplyEvent(ev)
 			recordSubagentEvent(ev, "start")
@@ -104,7 +103,7 @@ func subagentStopCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ev, err := readEvent()
 			if err != nil {
-				return nil
+				return err
 			}
 			hookenv.ApplyEvent(ev)
 			recordSubagentEvent(ev, "stop")
@@ -121,7 +120,7 @@ func preCompactCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ev, err := readEvent()
 			if err != nil {
-				return nil
+				return err
 			}
 			hookenv.ApplyEvent(ev)
 			recordDiagnostic(ev, "pre_compact")
@@ -138,7 +137,7 @@ func postCompactCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ev, err := readEvent()
 			if err != nil {
-				return nil
+				return err
 			}
 			hookenv.ApplyEvent(ev)
 			recordDiagnostic(ev, "post_compact")
@@ -154,7 +153,6 @@ func recordDiagnostic(ev hookenv.Event, eventType string) {
 		return
 	}
 	logDir := filepath.Join(grokHome, "state", "lazygrok", "diagnostics", ev.SessionID)
-	_ = os.MkdirAll(logDir, 0o755)
 	entry := map[string]any{
 		"event":      eventType,
 		"timestamp":  ev.HookEventName,
@@ -163,12 +161,7 @@ func recordDiagnostic(ev hookenv.Event, eventType string) {
 	}
 	data, _ := json.Marshal(entry)
 	logPath := filepath.Join(logDir, "events.jsonl")
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	fmt.Fprintln(f, string(data))
+	_ = safestate.AppendFileBelow(grokHome, logPath, append(data, '\n'), 0o600)
 }
 
 // recordSubagentEvent records subagent start/stop for lifecycle tracking.
@@ -178,19 +171,13 @@ func recordSubagentEvent(ev hookenv.Event, phase string) {
 		return
 	}
 	stateDir := filepath.Join(grokHome, "state", "lazygrok", "subagents", ev.SessionID)
-	_ = os.MkdirAll(stateDir, 0o755)
 	entry := map[string]any{
 		"phase":     phase,
 		"timestamp": ev.HookEventName,
 	}
 	data, _ := json.Marshal(entry)
 	logPath := filepath.Join(stateDir, "lifecycle.jsonl")
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	fmt.Fprintln(f, string(data))
+	_ = safestate.AppendFileBelow(grokHome, logPath, append(data, '\n'), 0o600)
 }
 
 // silence unused import warning

@@ -26,7 +26,7 @@ HOME = Path.home()
 PLUGIN = Path(
     os.environ.get(
         "GROK_PLUGIN_ROOT",
-        str(HOME / ".grok/installed-plugins/lazygrok-85b8f856"),
+        str(Path(__file__).resolve().parent.parent),
     )
 )
 PLUGIN_HOOKS = PLUGIN / "hooks/hooks.json"
@@ -148,7 +148,7 @@ def dry_run():
         seen.add(cmd_s)
         # Build minimal stdin per event family
         event = r["event"]
-        stdin_obj = {
+        stdin_obj: dict[str, object] = {
             "hookEventName": _snake(event),
             "sessionId": "audit-dry-run",
             "cwd": str(HOME / ".grok"),
@@ -209,6 +209,7 @@ def dry_run():
     out = STATE / "hook-audit-dry-run.json"
     STATE.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({"at": time.time(), "results": results}, indent=2))
+    out.chmod(0o600)
     failed = [x for x in results if not x.get("ok")]
     print(f"\nDRY_RUN_TOTAL={len(results)} FAIL={len(failed)} report={out}")
     return 1 if failed else 0
@@ -273,6 +274,7 @@ def parse_debug(path: Path):
             indent=2,
         )
     )
+    out.chmod(0o600)
     print(f"report={out}")
     # success if we saw any lazygrok fires
     return 0 if lazy else 1
@@ -326,7 +328,6 @@ def session_inspect(session_id: str | None):
             for k in markers:
                 markers[k] = blob.count(k)
         print(f"chat_markers={markers}")
-    # probe
     probe = STATE / "ups-probe-latest.json"
     if probe.exists():
         j = json.loads(probe.read_text())
@@ -340,7 +341,7 @@ def full():
     rc |= cmd(True)
     print("\n======== DRY-RUN ========")
     rc |= dry_run()
-    print("\n======== PROBE / LAST RESULT ========")
+    print("\n======== LEGACY DIAGNOSTICS / DRY-RUN ========")
     for name in ("ups-probe-latest.json", "last-ups-result.json", "hook-audit-dry-run.json"):
         p = STATE / name
         if p.exists():

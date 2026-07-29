@@ -6,7 +6,7 @@ HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HOOKS_DIR}/test-support.sh"
 
 export GROK_HOME="${GROK_HOME:-$(resolve_grok_home)}"
-export GROK_PLUGIN_ROOT="${GROK_PLUGIN_ROOT:-$(plugin_root)}"
+export GROK_PLUGIN_ROOT="${GROK_PLUGIN_ROOT:-$(cd "${HOOKS_DIR}/.." && pwd)}"
 export GROK_WORKSPACE_ROOT="$(mktemp -d)"
 export GROK_SESSION_ID="test-ralph-env-$$"
 trap 'rm -rf "$GROK_WORKSPACE_ROOT"' EXIT

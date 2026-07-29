@@ -3,26 +3,31 @@ package hashline
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
+	coreconfig "lazygrok/internal/core/config"
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 var hashRefRE = regexp.MustCompile(`([0-9]+)#([ZPMQVRWSNKTXJBYH]{2})`)
 
 var mutationTools = map[string]struct{}{
 	"strreplace": {}, "str_replace": {}, "edit": {},
-	"multiedit": {}, "multi_edit": {},
+	"multiedit": {}, "multi_edit": {}, "search_replace": {}, "write": {},
 }
 
 // ValidatePreTool returns a deny reason when LINE#ID anchors are stale, or "" to allow.
 func ValidatePreTool(ev hookenv.Event) string {
-	if !Enabled() {
+	mode, err := resolveMode(ev.WorkspaceRoot, hookenv.GrokHome())
+	if err != nil {
+		return "Hashline: invalid configuration; run lazygrok-hook doctor and fix the reported config error."
+	}
+	if mode == coreconfig.HashlineOff {
 		return ""
 	}
 	tool := strings.ToLower(strings.TrimSpace(ev.ToolName))
@@ -36,6 +41,9 @@ func ValidatePreTool(ev hookenv.Event) string {
 	filePath := pickString(block, "path", "file_path", "filePath", "target_file", "targetFile")
 	if filePath == "" {
 		return ""
+	}
+	if mode == coreconfig.HashlineStrict && !isLazygrokStatePath(filePath, ev.WorkspaceRoot) {
+		return "Hashline strict mode: use the hashline MCP edit tool for workspace mutations."
 	}
 	oldString, _ := block["old_string"].(string)
 	if oldString == "" {
@@ -55,8 +63,14 @@ func ValidatePreTool(ev hookenv.Event) string {
 	if absPath == "" {
 		return ""
 	}
+	if relWorkspacePath(absPath, ev.WorkspaceRoot) == "" {
+		return "Hashline: mutation target must stay inside the workspace."
+	}
 	cacheFile := cacheFilePath(hookenv.GrokHome(), ev.SessionID, absPath)
-	data, err := os.ReadFile(cacheFile)
+	if cacheFile == "" {
+		return "Hashline: LINE#ID anchors require a valid session. Re-read the file in an active session before editing."
+	}
+	data, err := safestate.ReadFileBelow(hookenv.GrokHome(), cacheFile)
 	if err != nil {
 		return fmt.Sprintf(
 			"Hashline: LINE#ID anchors in old_string but no read cache for this file. Read %s first, then retry with current tags.",
@@ -99,7 +113,7 @@ func ValidatePreTool(ev hookenv.Event) string {
 	if rel == "" {
 		rel = absPath
 	}
-	liveLines, _ := readLines(absPath)
+	liveLines, _ := readLines(ev.WorkspaceRoot, absPath)
 	var parts []string
 	parts = append(parts, fmt.Sprintf(
 		"Hashline: stale LINE#ID in StrReplace for %s. File changed since last Read — re-read and copy fresh tags.",
@@ -144,17 +158,29 @@ func resolvePath(raw, workspace string) string {
 	return abs
 }
 
-func readLines(path string) ([]string, error) {
-	b, err := os.ReadFile(path)
+func readLines(workspace, path string) ([]string, error) {
+	b, err := safestate.ReadFileBelow(workspace, path)
 	if err != nil {
 		return nil, err
 	}
 	return strings.Split(strings.ReplaceAll(string(b), "\r\n", "\n"), "\n"), nil
 }
 
+func isLazygrokStatePath(path, workspace string) bool {
+	absPath := resolvePath(path, workspace)
+	if absPath == "" {
+		return false
+	}
+	rel := relWorkspacePath(absPath, workspace)
+	return rel == ".lazygrok" || strings.HasPrefix(rel, ".lazygrok/")
+}
+
 func cacheFilePath(grokHome, sessionID, absPath string) string {
 	if sessionID == "" {
-		sessionID = "unknown"
+		return ""
+	}
+	if _, err := hookenv.ParseSessionID(sessionID); err != nil {
+		return ""
 	}
 	digest := sha256Hex(absPath)
 	return filepath.Join(grokHome, "state", "hashline", sessionID, digest+".json")

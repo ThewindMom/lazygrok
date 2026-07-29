@@ -4,9 +4,9 @@ import (
 	"io"
 	"os"
 
+	"github.com/spf13/cobra"
 	"lazygrok/internal/hookenv"
 	"lazygrok/internal/hookio"
-	"github.com/spf13/cobra"
 )
 
 // NewRoot returns the lazygrok-hook cobra root command.
@@ -31,6 +31,7 @@ func NewRoot() *cobra.Command {
 		postCompactCmd(),
 		postToolCommentCheckCmd(),
 		doctorCmd(),
+		recordSessionBindingCmd(),
 		stopContinuationCmd(),
 		resumeContinuationCmd(),
 		startLoopCmd(),
@@ -46,7 +47,17 @@ func Execute() {
 }
 
 func readEvent() (hookenv.Event, error) {
-	return hookenv.ReadEvent(os.Stdin)
+	ev, err := hookenv.ReadEvent(os.Stdin)
+	if err != nil {
+		return hookenv.Event{}, err
+	}
+	if ev.SessionID == "" {
+		ev.SessionID, err = hookenv.ParseSessionID(os.Getenv("GROK_SESSION_ID"))
+		if err != nil {
+			return hookenv.Event{}, err
+		}
+	}
+	return ev, nil
 }
 
 func sessionID(ev hookenv.Event) string {
@@ -56,7 +67,7 @@ func sessionID(ev hookenv.Event) string {
 	if s := os.Getenv("GROK_SESSION_ID"); s != "" {
 		return s
 	}
-	return "unknown"
+	return ""
 }
 
 func workspace(ev hookenv.Event) string {

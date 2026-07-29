@@ -2,23 +2,26 @@ package spawnguard
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 const defaultFanoutLimit = 60
 
 // SpawnToolTokens are the tool names that spawn subagents.
 var SpawnToolTokens = map[string]bool{
-	"spawn_subagent":             true,
-	"spawn_agent":                true,
-	"collaborationspawn_agent":   true,
-	"collaboration.spawn_agent":  true,
-	"task":                       true,
+	"spawn_subagent":            true,
+	"spawn_agent":               true,
+	"collaborationspawn_agent":  true,
+	"collaboration.spawn_agent": true,
+	"task":                      true,
 }
 
 // EvaluatePreToolUse checks if a spawn_subagent call exceeds the fan-out limit.
@@ -30,21 +33,32 @@ func EvaluatePreToolUse(ev hookenv.Event) string {
 	}
 
 	sid := ev.SessionID
-	if sid == "" {
-		sid = "unknown"
+	if _, err := hookenv.ParseSessionID(sid); err != nil || sid == "" {
+		return ""
 	}
 
 	gh := hookenv.GrokHome()
-	stateDir := filepath.Join(gh, "state", "spawn-count")
-	countPath := filepath.Join(stateDir, sid+".json")
-
-	_ = os.MkdirAll(stateDir, 0o755)
-
-	count := readCount(countPath) + 1
-	writeCount(countPath, count)
-
+	countPath := filepath.Join(gh, "state", "spawn-count", sid+".json")
 	limit := fanoutLimit()
-	if count <= limit {
+	count := 0
+	denied := false
+	lockPath := filepath.Join(gh, "state", "spawn-count", sid+".lock")
+	err := safestate.WithFileLockBelow(gh, lockPath, func() error {
+		current, readErr := readCount(gh, countPath)
+		if readErr != nil {
+			return readErr
+		}
+		count = current + 1
+		if count > limit {
+			denied = true
+			return nil
+		}
+		return writeCount(gh, countPath, count)
+	})
+	if err != nil {
+		return "Spawn guard: denied because the fan-out budget could not be reserved safely."
+	}
+	if !denied {
 		return ""
 	}
 
@@ -52,25 +66,34 @@ func EvaluatePreToolUse(ev hookenv.Event) string {
 		"). Too many subagents spawned this session. Consolidate work or cancel the loop with /cancel-ralph."
 }
 
-func readCount(path string) int {
-	b, err := os.ReadFile(path)
+func readCount(root, path string) (int, error) {
+	b, err := safestate.ReadFileBelow(root, path)
 	if err != nil {
-		return 0
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, err
 	}
 	var data struct {
 		Count int `json:"count"`
 	}
-	if json.Unmarshal(b, &data) != nil {
-		return 0
+	if err := json.Unmarshal(b, &data); err != nil {
+		return 0, fmt.Errorf("parse spawn counter: %w", err)
 	}
-	return data.Count
+	if data.Count < 0 {
+		return 0, errors.New("parse spawn counter: count must be non-negative")
+	}
+	return data.Count, nil
 }
 
-func writeCount(path string, count int) {
-	data, _ := json.MarshalIndent(struct {
+func writeCount(root, path string, count int) error {
+	data, err := json.MarshalIndent(struct {
 		Count int `json:"count"`
 	}{Count: count}, "", "  ")
-	_ = os.WriteFile(path, append(data, '\n'), 0o644)
+	if err != nil {
+		return err
+	}
+	return safestate.WriteFileBelow(root, path, append(data, '\n'), 0o600)
 }
 
 func fanoutLimit() int {
@@ -89,5 +112,7 @@ func CleanupSession(sessionID string) {
 	}
 	gh := hookenv.GrokHome()
 	countPath := filepath.Join(gh, "state", "spawn-count", sessionID+".json")
-	_ = os.Remove(countPath)
+	lockPath := filepath.Join(gh, "state", "spawn-count", sessionID+".lock")
+	_ = safestate.RemoveBelow(gh, countPath)
+	_ = safestate.RemoveBelow(gh, lockPath)
 }

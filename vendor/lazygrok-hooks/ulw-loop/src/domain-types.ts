@@ -108,6 +108,11 @@ export interface UlwLoopManualQaAdversarialCase {
 }
 
 export interface UlwLoopQualityGate {
+	readonly provenance?: {
+		readonly mode: "root-self-review";
+		readonly producer: "lazygrok-root";
+		readonly sessionId: string;
+	};
 	readonly codeReview: {
 		readonly by: string;
 		readonly recommendation: "APPROVE";

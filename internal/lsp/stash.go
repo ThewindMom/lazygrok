@@ -2,7 +2,6 @@ package lsp
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -10,16 +9,22 @@ import (
 
 	"lazygrok/internal/config"
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 var errorPattern = regexp.MustCompile(`(?m)^(?:error|warning|information|hint)\[[^\]\r\n]+\] \(\d+:\d+:`)
 
 // StashPath returns ~/.grok/state/lsp-diagnostics/<session>.json
 func StashPath(sessionID string) string {
-	if sessionID == "" {
-		sessionID = "unknown"
+	validated, err := hookenv.ParseSessionID(sessionID)
+	if err != nil || validated == "" {
+		return ""
 	}
-	return filepath.Join(hookenv.GrokHome(), "state", "lsp-diagnostics", sessionID+".json")
+	return filepath.Join(stashRoot(), "state", "lsp-diagnostics", validated+".json")
+}
+
+func stashRoot() string {
+	return hookenv.GrokHome()
 }
 
 // EnforceEnabled reports whether LSP stop enforcement is on (LAZYGROK_LSP_ENFORCE, default on).
@@ -39,11 +44,19 @@ type stashFileEntry struct {
 
 // EvaluateStop blocks when the LSP stash has unresolved errors.
 func EvaluateStop(sessionID string) (bool, string) {
-	if !EnforceEnabled() {
+	return EvaluateStopWithPolicy(sessionID, EnforceEnabled())
+}
+
+// EvaluateStopWithPolicy blocks when enabled and the LSP stash has unresolved errors.
+func EvaluateStopWithPolicy(sessionID string, enabled bool) (bool, string) {
+	if !enabled {
 		return false, ""
 	}
 	path := StashPath(sessionID)
-	b, err := os.ReadFile(path)
+	if path == "" {
+		return false, ""
+	}
+	b, err := safestate.ReadFileBelow(stashRoot(), path)
 	if err != nil {
 		return false, ""
 	}

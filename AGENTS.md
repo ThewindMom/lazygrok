@@ -12,7 +12,7 @@ Inspired by [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent). 
 |----|--------|
 | A **Grok plugin** (`plugin.json`, `hooks/hooks.json`, bundled skills/rules) | A standalone CLI or application users run from this repo |
 | Go hook binary (`bin/lazygrok-hook-*`) + thin `hooks/run-hook.sh` | User application code |
-| Install target: `grok plugin install github:ThewindMom/lazygrok --trust` | Global copies under `~/.grok/hooks/` (deprecated; plugin-only) |
+| Install target: `grok plugin install ThewindMom/lazygrok@v0.4.4 --trust` | Undocumented global hook copies |
 
 After install, Grok loads hooks from `GROK_PLUGIN_ROOT` (installed copy under `~/.grok/installed-plugins/lazygrok-*`, often symlinked to a local clone).
 
@@ -32,13 +32,16 @@ cmd/lazygrok-hook + internal/  → all hook logic (see docs/superpowers/plans/20
   internal/prometheus/    → /plan, plan-mode PreTool guard
   internal/hashline/      → read cache, LINE#ID PreTool guard
   internal/lsp/           → diagnostics stash, post-tool + Stop
-  internal/ralph/         → /ralph-loop, /ulw-loop, /cancel-ralph
+  internal/ralph/         → /ralph-loop, /cancel-ralph
   internal/boulder/       → boulder + todo continuation + todo enforcer state
 skills/*/SKILL.md         → user-invocable workflows (discovered by grok inspect)
 rules/*.md                → injected on every UserPromptSubmit (with workspace AGENTS.md)
 ```
 
-**superpowers** skills are **bundled** at `vendor/superpowers/skills/` (`plugin.json` `skills` paths). Do not register duplicate lazygrok hooks globally. Refresh vendor: `task vendor:superpowers`.
+`plugin.json` registers only `skills/`, `vendor/lazygrok-skills/`, and
+`vendor/lazygrok-hooks/`. Retained upstream source outside those roots is not
+an active skill surface. Do not register duplicate LazyGrok hooks globally;
+use the documented first-install bridge.
 
 ---
 
@@ -59,9 +62,11 @@ Analogous to omo’s **`.omo/`** in OpenCode workspaces. Never store plugin sour
 |-------|---------|------------------|
 | `agent-skill-gate` | (meta; Read before mutating) | `session-start`, `user-prompt`, `pre-tool-use`, `post-tool-read` |
 | `ralph-loop` | `/ralph-loop "task"` | `user-prompt`, `stop` |
-| `ulw-loop` | `/ulw-loop "task"` | same + Oracle verification pending |
+| `ultrawork` | `ulw`, `/ulw`, `ultrawork`, `/ultrawork` | Native skill activation + ULW goal ledger |
+| `ulw-loop` | `/ulw-loop "task"` | Durable ULW goals/evidence/checkpoints; never Ralph state |
+| `ulw-ralph-loop` | `/ulw-ralph-loop "task"` | Explicit Ralph-family promise + verifier loop only |
 | `ulw-workflow` | (internal) | silent panels under `ulw` — user never runs `/workflow` |
-| `cancel-ralph` | `/cancel-ralph` | clears `.lazygrok/ralph-loop.local.md` |
+| `cancel-ralph` | `/cancel-ralph` | clears an explicit Ralph-family promise loop |
 | `handoff` | `/handoff` | `user-prompt` injects PHASE 0–4 instructions |
 | `prometheus-plan` | `/plan`, `/prometheus` | `user-prompt` + `pre-tool-use` |
 | `hashline-edit` | (workflow) | `hashline` package, `post-tool-read` |
@@ -81,7 +86,8 @@ Full event map and stop priority: **`hooks/README.md`** (read when touching Stop
 | Install / publish / repo URL | `README.md`, `docs/installation.md` |
 | Hook events, stop chain, `.lazygrok/` layout | `hooks/README.md` |
 | Skill-gate behavior | `skills/agent-skill-gate/SKILL.md`, `rules/00-agent-skill-gate.md` |
-| Ralph / ultrawork | `skills/ralph-loop/SKILL.md`, `skills/ulw-loop/SKILL.md`, `rules/10-ralph-loop.md` |
+| Ralph | `skills/ralph-loop/SKILL.md`, `rules/10-ralph-loop.md`, `internal/ralph/` |
+| ULW | `skills/ultrawork/SKILL.md`, `skills/ulw-loop/SKILL.md`, `docs/ulw-workflow.md` |
 | Boulder + todos | `rules/12-todo-boulder.md`, `internal/boulder/` |
 | Handoff format | `skills/handoff/SKILL.md`, `rules/11-handoff.md` |
 | IntentGate / Prometheus / hashline / LSP | `hooks/lib/{intent-gate,prometheus,hashline,lsp}.sh`, `docs/configuration.md` |

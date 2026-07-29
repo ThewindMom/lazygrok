@@ -5,10 +5,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"lazygrok/internal/safestate"
 )
 
 func sha256Hex(s string) string {
@@ -24,10 +25,11 @@ func IsSkillPath(path string) bool {
 
 // UpdateCacheFromRead populates the session hashline cache for a workspace file read.
 func UpdateCacheFromRead(grokHome, sessionID, workspace, readPath string) error {
-	if !Enabled() {
+	mode, err := resolveMode(workspace, grokHome)
+	if err != nil || mode == "off" {
 		return nil
 	}
-	if readPath == "" {
+	if sessionID == "" || readPath == "" {
 		return nil
 	}
 	if IsSkillPath(readPath) {
@@ -37,15 +39,11 @@ func UpdateCacheFromRead(grokHome, sessionID, workspace, readPath string) error 
 	if absPath == "" {
 		return nil
 	}
-	info, err := os.Stat(absPath)
-	if err != nil || info.IsDir() {
-		return nil
-	}
 	relPath := relWorkspacePath(absPath, workspace)
-	if relPath != "" && IsSkillPath(relPath) {
+	if relPath == "" || IsSkillPath(relPath) {
 		return nil
 	}
-	text, err := os.ReadFile(absPath)
+	text, err := safestate.ReadFileBelow(workspace, absPath)
 	if err != nil {
 		return nil
 	}
@@ -58,9 +56,6 @@ func UpdateCacheFromRead(grokHome, sessionID, workspace, readPath string) error 
 	for i, line := range lines {
 		lineHashes[fmt.Sprintf("%d", i+1)] = ComputeLineHash(i+1, line)
 	}
-	if relPath == "" {
-		relPath = absPath
-	}
 	payload := map[string]any{
 		"path":       absPath,
 		"rel_path":   relPath,
@@ -68,14 +63,11 @@ func UpdateCacheFromRead(grokHome, sessionID, workspace, readPath string) error 
 		"lines":      lineHashes,
 	}
 	cacheFile := cacheFilePath(grokHome, sessionID, absPath)
-	if err := os.MkdirAll(filepath.Dir(cacheFile), 0o755); err != nil {
-		return err
-	}
 	b, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(cacheFile, append(b, '\n'), 0o644)
+	return safestate.WriteFileBelow(grokHome, cacheFile, append(b, '\n'), 0o600)
 }
 
 func relWorkspacePath(absPath, workspace string) string {
@@ -92,6 +84,9 @@ func relWorkspacePath(absPath, workspace string) string {
 	}
 	rel, err := filepath.Rel(ws, abs)
 	if err != nil {
+		return ""
+	}
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return ""
 	}
 	return strings.ReplaceAll(rel, "\\", "/")

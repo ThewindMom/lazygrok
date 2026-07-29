@@ -2,13 +2,22 @@ package hookenv
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+)
+
+const MaxEventBytes int64 = 1 << 20
+
+var (
+	ErrEventTooLarge    = errors.New("hook event exceeds size limit")
+	ErrInvalidSessionID = errors.New("invalid session ID")
 )
 
 // Event is the subset of Grok hook stdin JSON used across subcommands.
 type Event struct {
 	SessionID            string
-	WorkspaceRoot      string
+	WorkspaceRoot        string
 	ToolName             string
 	ToolInput            map[string]any
 	Prompt               string
@@ -22,12 +31,34 @@ type Event struct {
 type rawEvent map[string]any
 
 func ReadEvent(r io.Reader) (Event, error) {
+	limited := &io.LimitedReader{R: r, N: MaxEventBytes + 1}
+	decoder := json.NewDecoder(limited)
 	var raw rawEvent
-	if err := json.NewDecoder(r).Decode(&raw); err != nil {
+	if err := decoder.Decode(&raw); err != nil {
+		if limited.N == 0 {
+			return Event{}, ErrEventTooLarge
+		}
+		return Event{}, err
+	}
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if limited.N == 0 {
+			return Event{}, ErrEventTooLarge
+		}
+		if err == nil {
+			return Event{}, errors.New("hook event contains multiple JSON values")
+		}
+		return Event{}, err
+	}
+	if limited.N == 0 {
+		return Event{}, ErrEventTooLarge
+	}
+	sessionID, err := ParseSessionID(pickString(raw, "sessionId", "session_id"))
+	if err != nil {
 		return Event{}, err
 	}
 	return Event{
-		SessionID:            pickString(raw, "sessionId", "session_id"),
+		SessionID:            sessionID,
 		WorkspaceRoot:        WorkspaceFromRaw(raw),
 		ToolName:             pickString(raw, "toolName", "tool_name", "tool"),
 		ToolInput:            pickMap(raw, "toolInput", "tool_input", "input", "arguments", "rawInput"),
@@ -38,6 +69,26 @@ func ReadEvent(r io.Reader) (Event, error) {
 		StopHookActive:       pickBool(raw, "stop_hook_active", "stopHookActive"),
 		BackgroundTasks:      pickTaskList(raw, "background_tasks", "backgroundTasks"),
 	}, nil
+}
+
+func ParseSessionID(value string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	if len(value) > 128 {
+		return "", fmt.Errorf("%w: length exceeds 128 bytes", ErrInvalidSessionID)
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			r == '-' ||
+			r == '_' {
+			continue
+		}
+		return "", fmt.Errorf("%w: unsupported character %q", ErrInvalidSessionID, r)
+	}
+	return value, nil
 }
 
 func pickBool(m map[string]any, keys ...string) bool {

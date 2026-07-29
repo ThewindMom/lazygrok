@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"lazygrok/internal/config"
+	coreconfig "lazygrok/internal/core/config"
 	"lazygrok/internal/hookenv"
 )
 
@@ -26,7 +26,8 @@ type mode struct {
 
 // Collect returns intent-gate context for the user prompt or "".
 func Collect(ev hookenv.Event) string {
-	if !config.IntentGateEnabled() {
+	cfg, err := coreconfig.Load(hookenv.Workspace(ev), hookenv.GrokHome())
+	if err != nil || !cfg.IntentGateEnabled {
 		return ""
 	}
 	prompt := strings.TrimSpace(ev.Prompt)

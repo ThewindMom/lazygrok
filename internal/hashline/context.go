@@ -7,27 +7,31 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
-	"lazygrok/internal/config"
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 type cachePayload struct {
 	RelPath string            `json:"rel_path"`
 	Path    string            `json:"path"`
+	Updated string            `json:"updated_at"`
 	Lines   map[string]string `json:"lines"`
 }
 
 // CollectContext returns hashline cache summary for UserPromptSubmit.
-func CollectContext(sessionID string) string {
-	if !config.HashlineEnabled() {
+func CollectContext(sessionID, workspace string) string {
+	mode, err := resolveMode(workspace, hookenv.GrokHome())
+	if err != nil || mode == "off" {
 		return ""
 	}
 	if sessionID == "" {
-		sessionID = "unknown"
+		return ""
 	}
+	root := hookenv.GrokHome()
 	cacheDir := filepath.Join(hookenv.GrokHome(), "state", "hashline", sessionID)
-	entries, err := os.ReadDir(cacheDir)
+	names, err := safestate.ListFileNamesBelow(root, cacheDir)
 	if err != nil {
 		return ""
 	}
@@ -46,11 +50,11 @@ func CollectContext(sessionID string) string {
 	}
 	var items []item
 
-	for _, ent := range entries {
-		if ent.IsDir() || !strings.HasSuffix(ent.Name(), ".json") {
+	for _, name := range names {
+		if !strings.HasSuffix(name, ".json") {
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(cacheDir, ent.Name()))
+		b, err := safestate.ReadFileBelow(root, filepath.Join(cacheDir, name))
 		if err != nil {
 			continue
 		}
@@ -58,12 +62,9 @@ func CollectContext(sessionID string) string {
 		if json.Unmarshal(b, &data) != nil || len(data.Lines) == 0 {
 			continue
 		}
-		rel := data.RelPath
-		if rel == "" {
-			rel = data.Path
-		}
-		if rel == "" {
-			rel = ent.Name()
+		rel := strings.ReplaceAll(data.RelPath, "\\", "/")
+		if rel == "" || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, "../") {
+			continue
 		}
 		var lineNos []int
 		for k := range data.Lines {
@@ -79,10 +80,9 @@ func CollectContext(sessionID string) string {
 				break
 			}
 		}
-		info, _ := ent.Info()
 		var mtime int64
-		if info != nil {
-			mtime = info.ModTime().Unix()
+		if updated, err := time.Parse(time.RFC3339, data.Updated); err == nil {
+			mtime = updated.Unix()
 		}
 		items = append(items, item{mtime, rel, samples, len(data.Lines)})
 	}

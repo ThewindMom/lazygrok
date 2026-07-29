@@ -2,25 +2,27 @@
 name: init-deep
 description: "(builtin) Initialize hierarchical AGENTS.md knowledge base"
 ---
-## Grok tools only
+## Grok Harness Tool Compatibility
 
-| Need | Tool |
+This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools:
+
+| OpenCode example | Grok tool to use |
 | --- | --- |
-| Spawn | `spawn_subagent({ subagent_type, prompt, background: true })` |
-| Wait | `get_command_or_subagent_output({ task_ids, timeout_ms })` |
-| Kill | `kill_command_or_subagent({ task_id })` |
-| Todos | `todo_write` |
-| Shell | `run_terminal_command` |
-| Edit | `search_replace` / `write` |
-| Read | `read_file` |
+| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as an explorer. ...","agent_type":"explorer","background":false})` |
+| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as a librarian. ...","agent_type":"librarian","background":false})` |
+| `task(subagent_type="plan", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as a planning agent. ...","agent_type":"plan","background":false})` |
+| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent.spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazygrok-gate-reviewer","background":false})` |
+| `task(category="...", ...)` for implementation or QA | `spawn_subagent.spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":false})` |
+| `background_output(task_id="...")` | `spawn_subagent.get_command_or_subagent_output(...)` for mailbox signals |
+| `team_*(...)` | Use Grok native subagents via `spawn_subagent.spawn_subagent` and `spawn_subagent.get_command_or_subagent_output`; use `spawn_subagent.send_input` and `spawn_subagent.kill_command_or_subagent` only when exposed in the active tools list |
 
-Only call tools from this session's tool list. See plugin `rules/15-grok-tools-only.md`.
+Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into `~/.grok/agents/`: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `agent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `agent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
 
+Grok exposes ONE of two subagent tool surfaces per session; check your own tool list and route accordingly. If `spawn_subagent` tools exist, use the table above as written. If instead a flat `spawn_subagent` with a required `task_name` exists (`spawn_subagent`), rewrite every `spawn_subagent` example: `spawn_subagent.spawn_subagent({...,"background":false})` becomes `spawn_subagent({"task_name":"<lowercase_digits_underscores>","message":...,"agent_type":...,"fork_turns":"none"})` (`"all"` only when full parent history is truly required); `send_input` becomes `spawn_subagent (message-only follow-up)`; do not call `kill_command_or_subagent`/`resume_agent` (finished agents end on their own; `spawn_subagent (re-task: new prompt to same role)` re-tasks one, `kill_command_or_subagent` stops one); `get_command_or_subagent_output` takes only `timeout_ms` and returns on any child mailbox activity. On the v2 surface `agent_type` may be ABSENT from the spawn schema (verified 2026-07-11: only `fork_turns`/`message`/`task_name`) — when absent, omit it and describe the role inside `message`; installed role TOMLs cannot be selected on that surface. If a code block below conflicts with this section, this section wins.
 
-## Grok tools only
+When translating `load_skills=[...]`, include the requested skill names in the spawned agent's `message`. If a code block below conflicts with this section, this section wins.
 
-Use this session’s tool list. Spawn with `spawn_subagent({ subagent_type, prompt, background: true })`; wait with `get_command_or_subagent_output`; kill with `kill_command_or_subagent`. Todos: `todo_write`. Shell: `run_terminal_command`. Edit: `search_replace` / `write`. See `rules/15-grok-tools-only.md`.
-
+For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `spawn_subagent.get_command_or_subagent_output` timeout only means no new mailbox update arrived; back off between waits (double the timeout up to ~5 minutes) instead of spinning short cycles. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
 
 # /init-deep
 
@@ -88,12 +90,12 @@ Don't wait-these run async while main session works. **Equip every agent with th
 
 ```
 // Fire all at once, collect results later
-spawn_subagent(subagent_type="explore", description="Explore project structure", background=true, prompt="Project structure: map real layout via codegraph_explore/codegraph_files → REPORT deviations from standard patterns")
-spawn_subagent(subagent_type="explore", description="Find entry points", background=true, prompt="Entry points: FIND main files, trace reach via codegraph_callees + lsp_symbols → REPORT non-standard organization")
-spawn_subagent(subagent_type="explore", description="Find conventions", background=true, prompt="Conventions: FIND config files (.eslintrc, pyproject.toml, .editorconfig) → REPORT project-specific rules")
-spawn_subagent(subagent_type="explore", description="Find anti-patterns", background=true, prompt="Anti-patterns: FIND 'DO NOT', 'NEVER', 'ALWAYS', 'DEPRECATED' comments → LIST forbidden patterns")
-spawn_subagent(subagent_type="explore", description="Explore build/CI", background=true, prompt="Build/CI: FIND .github/workflows, Makefile → REPORT non-standard patterns")
-spawn_subagent(subagent_type="explore", description="Find test patterns", background=true, prompt="Test patterns: FIND test configs/structure; codegraph_callers on core modules to see what is covered → REPORT unique conventions")
+task(subagent_type="explore", load_skills=[], description="Explore project structure", run_in_background=true, prompt="Project structure: map real layout via codegraph_explore/codegraph_files → REPORT deviations from standard patterns")
+task(subagent_type="explore", load_skills=[], description="Find entry points", run_in_background=true, prompt="Entry points: FIND main files, trace reach via codegraph_callees + lsp_symbols → REPORT non-standard organization")
+task(subagent_type="explore", load_skills=[], description="Find conventions", run_in_background=true, prompt="Conventions: FIND config files (.eslintrc, pyproject.toml, .editorconfig) → REPORT project-specific rules")
+task(subagent_type="explore", load_skills=[], description="Find anti-patterns", run_in_background=true, prompt="Anti-patterns: FIND 'DO NOT', 'NEVER', 'ALWAYS', 'DEPRECATED' comments → LIST forbidden patterns")
+task(subagent_type="explore", load_skills=[], description="Explore build/CI", run_in_background=true, prompt="Build/CI: FIND .github/workflows, Makefile → REPORT non-standard patterns")
+task(subagent_type="explore", load_skills=[], description="Find test patterns", run_in_background=true, prompt="Test patterns: FIND test configs/structure; codegraph_callers on core modules to see what is covered → REPORT unique conventions")
 ```
 
 <dynamic-agents>
@@ -119,9 +121,9 @@ max_depth=$(find . -type d -not -path '*/node_modules/*' -not -path '*/.git/*' |
 Example spawning:
 ```
 // 500 files, 50k lines, depth 6, 15 large files → spawn 5+5+2+1 = 13 additional agents
-spawn_subagent(subagent_type="explore", description="Analyze large files", background=true, prompt="Large file analysis: FIND files >500 lines, REPORT complexity hotspots")
-spawn_subagent(subagent_type="explore", description="Explore deep modules", background=true, prompt="Deep modules at depth 4+: FIND hidden patterns, internal conventions")
-spawn_subagent(subagent_type="explore", description="Find shared utilities", background=true, prompt="Cross-cutting concerns: FIND shared utilities across directories")
+task(subagent_type="explore", load_skills=[], description="Analyze large files", run_in_background=true, prompt="Large file analysis: FIND files >500 lines, REPORT complexity hotspots")
+task(subagent_type="explore", load_skills=[], description="Explore deep modules", run_in_background=true, prompt="Deep modules at depth 4+: FIND hidden patterns, internal conventions")
+task(subagent_type="explore", load_skills=[], description="Find shared utilities", run_in_background=true, prompt="Cross-cutting concerns: FIND shared utilities across directories")
 // ... more based on calculation
 ```
 </dynamic-agents>
@@ -173,7 +175,7 @@ Only if NEITHER exists: explore agents + the ast-grep skill (`sg`), and mark cen
 
 ```
 // After main session analysis done, collect all task results
-for each background task ID (`bg_...`): get_command_or_subagent_output(task_id="bg_...")
+for each background task ID (`bg_...`): background_output(task_id="bg_...")
 ```
 
 **Merge: bash + LSP/codegraph + existing + explore findings. Mark "discovery" as completed.**
@@ -283,7 +285,7 @@ Launch writing tasks for each location:
 
 ```
 for loc in AGENTS_LOCATIONS (except root):
-  spawn_subagent(subagent_type="writing", background=false, description="Generate AGENTS.md", prompt=`
+  task(category="writing", load_skills=[], run_in_background=false, description="Generate AGENTS.md", prompt=`
     Generate AGENTS.md for: ${loc.path}
     - Reason: ${loc.reason}
     - 30-80 lines max

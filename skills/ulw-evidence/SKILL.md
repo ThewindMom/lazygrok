@@ -43,8 +43,16 @@ using that run's root (do not fork state mid-run).
 
 At the start of an ultrawork task, create structured goals:
 
+Copy `CURRENT_GROK_SESSION_ID` from the ultrawork hook context and pass that
+exact value explicitly on every command. Do not generate, rename, timestamp,
+or suffix it. Only if `create-goals` explicitly rejects an already-complete
+aggregate may a continued conversation derive
+`<CURRENT_GROK_SESSION_ID>-<short-purpose>` for the new run. Do not use ambient
+`CODEX_SESSION_ID` or `CODEX_THREAD_ID`; a Grok process launched from Codex can
+inherit the wrong parent identity.
+
 ```bash
-$ULW_CLI create-goals --brief "Add user authentication" --json <<'EOF'
+$ULW_CLI create-goals --session-id "<CURRENT_GROK_SESSION_ID>" --brief "Add user authentication" --json <<'EOF'
 [
   {
     "objective": "Implement login endpoint",

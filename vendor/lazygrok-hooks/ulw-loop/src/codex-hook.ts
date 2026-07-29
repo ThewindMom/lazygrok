@@ -41,6 +41,7 @@ interface PreToolUseHookOutput {
 }
 
 const CREATE_GOAL_TOOL_NAME = "create_goal";
+const MAX_HOOK_INPUT_BYTES = 10 * 1024 * 1024;
 const CREATE_GOAL_PAYLOAD_WARNING =
 	"Use create_goal with objective only. Omit token_budget so the goal stays unlimited, and put lifecycle status changes on update_goal.";
 
@@ -123,7 +124,9 @@ export async function runUlwLoopHookCli(
 	options: UserPromptSubmitHookOptions = {},
 ): Promise<void> {
 	try {
-		const payload = parseUserPromptSubmitPayload(await readAll(stdin));
+		const raw = await readAll(stdin);
+		if (raw === null) return;
+		const payload = parseUserPromptSubmitPayload(raw);
 		if (payload === null) return;
 		const output = await applyUserPromptUlwLoopSteering(payload, options);
 		if (output.length > 0) stdout.write(output);
@@ -138,7 +141,9 @@ export async function runPreToolUseGoalBudgetGuardCli(
 	stdout: NodeJS.WritableStream,
 ): Promise<void> {
 	try {
-		const payload = parsePreToolUsePayload(await readAll(stdin));
+		const raw = await readAll(stdin);
+		if (raw === null) return;
+		const payload = parsePreToolUsePayload(raw);
 		if (payload === null) return;
 		const output = applyPreToolUseGoalBudgetGuard(payload);
 		if (output.length > 0) stdout.write(output);
@@ -190,14 +195,14 @@ function optionalString(value: unknown): boolean {
 	return value === undefined || typeof value === "string";
 }
 
-function readAll(stdin: NodeJS.ReadableStream): Promise<string> {
-	return new Promise((resolve, reject) => {
-		let data = "";
-		stdin.setEncoding("utf8");
-		stdin.on("data", (chunk: unknown) => {
-			data += chunk instanceof Buffer ? chunk.toString() : String(chunk);
-		});
-		stdin.once("error", reject);
-		stdin.once("end", () => resolve(data));
-	});
+async function readAll(stdin: NodeJS.ReadableStream): Promise<string | null> {
+	const chunks: Buffer[] = [];
+	let totalBytes = 0;
+	for await (const chunk of stdin) {
+		const bytes = Buffer.from(chunk);
+		totalBytes += bytes.length;
+		if (totalBytes > MAX_HOOK_INPUT_BYTES) return null;
+		chunks.push(bytes);
+	}
+	return Buffer.concat(chunks).toString("utf8");
 }

@@ -2,24 +2,31 @@
 name: review-work
 description: "Post-implementation review orchestrator. Launches 5 parallel background sub-agents: Oracle (goal/constraint verification), Oracle (code quality), Oracle (security), unspecified-high (hands-on QA execution), unspecified-high (context mining from GitHub/git/Slack/Notion). All must pass for review to pass. MUST USE before a PR handoff or when the user explicitly asks to review completed work. Triggers: 'review work', 'review my work', 'review changes', 'QA my work', 'verify implementation', 'check my work', 'validate changes', 'post-implementation review'."
 ---
-## Grok tools only
+## Grok Harness Tool Compatibility
 
-| Need | Tool |
+This skill may include examples copied from the OpenCode harness. In Grok, do not call OpenCode-only tools such as `call_omo_agent(...)`, `task(...)`, `background_output(...)`, or `team_*(...)` literally. Translate those examples to Grok native tools:
+
+| OpenCode example | Grok tool to use |
 | --- | --- |
-| Spawn | `spawn_subagent({ subagent_type, prompt, background: true })` |
-| Wait | `get_command_or_subagent_output({ task_ids, timeout_ms })` |
-| Kill | `kill_command_or_subagent({ task_id })` |
-| Todos | `todo_write` |
-| Shell | `run_terminal_command` |
-| Edit | `search_replace` / `write` |
-| Read | `read_file` |
+| `call_omo_agent(subagent_type="explore", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as an explorer. ...","agent_type":"explorer","background":false})` |
+| `call_omo_agent(subagent_type="librarian", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as a librarian. ...","agent_type":"librarian","background":false})` |
+| `task(subagent_type="plan", ...)` | `spawn_subagent.spawn_subagent({"message":"TASK: act as a planning agent. ...","agent_type":"plan","background":false})` |
+| `task(subagent_type="oracle", ...)` for final verification | `spawn_subagent.spawn_subagent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazygrok-gate-reviewer","background":false})` |
+| `task(category="...", ...)` for implementation or QA | `spawn_subagent.spawn_subagent({"message":"TASK: act as an implementation or QA worker. ...","background":false})` |
+| `background_output(task_id="...")` | `spawn_subagent.get_command_or_subagent_output(...)` for mailbox signals |
+| `team_*(...)` | Use Grok native subagents via `spawn_subagent.spawn_subagent` and `spawn_subagent.get_command_or_subagent_output`; use `spawn_subagent.send_input` and `spawn_subagent.kill_command_or_subagent` only when exposed in the active tools list |
 
-Only call tools from this session's tool list. See plugin `rules/15-grok-tools-only.md`.
+Role-specific behavior must be described in a self-contained `message`. Use `background: true` to start the child with only the initial prompt (no parent history); use `background: true` only when full parent history is truly required. Include any required conversation context, files, diffs, constraints, and requested skill names directly in the spawned agent's `message`. OMO installs these selectable agent roles into `~/.grok/agents/`: `explorer`, `librarian`, `plan`, `momus`, `metis`, `lazygrok-code-reviewer`, `lazygrok-qa-executor`, and `lazygrok-gate-reviewer` - pass the matching name as `agent_type` so the child gets that role's model and instructions. If the spawn tool exposes no `agent_type` parameter, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
 
+Grok exposes ONE of two subagent tool surfaces per session; check your own tool list and route accordingly. If `spawn_subagent` tools exist, use the table above as written. If instead a flat `spawn_subagent` with a required `task_name` exists (`spawn_subagent`), rewrite every `spawn_subagent` example: `spawn_subagent.spawn_subagent({...,"background":false})` becomes `spawn_subagent({"task_name":"<lowercase_digits_underscores>","message":...,"agent_type":...,"fork_turns":"none"})` (`"all"` only when full parent history is truly required); `send_input` becomes `spawn_subagent (message-only follow-up)`; do not call `kill_command_or_subagent`/`resume_agent` (finished agents end on their own; `spawn_subagent (re-task: new prompt to same role)` re-tasks one, `kill_command_or_subagent` stops one); `get_command_or_subagent_output` takes only `timeout_ms` and returns on any child mailbox activity. On the v2 surface `agent_type` may be ABSENT from the spawn schema (verified 2026-07-11: only `fork_turns`/`message`/`task_name`) — when absent, omit it and describe the role inside `message`; installed role TOMLs cannot be selected on that surface. If a code block below conflicts with this section, this section wins.
+
+When translating `load_skills=[...]`, include the requested skill names in the spawned agent's `message`. If a code block below conflicts with this section, this section wins.
+
+For work likely to exceed one wait cycle, require the child to send `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. A `spawn_subagent.get_command_or_subagent_output` timeout only means no new mailbox update arrived; back off between waits (double the timeout up to ~5 minutes) instead of spinning short cycles. Treat a running child as alive. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running.
 
 ## Grok Subagent Reliability
 
-Every `spawn_subagent` message must be self-contained. Start with
+Every `spawn_subagent.spawn_subagent` message must be self-contained. Start with
 `TASK: <imperative assignment>`, then name `DELIVERABLE`, `SCOPE`, and
 `VERIFY`. State that it is an executable assignment, not a context
 handoff. Role or specialty instructions belong inside `message`.
@@ -32,7 +39,7 @@ one-shot: a lane ends at its verdict; a re-review after fixes is a fresh
 spawn scoped to the delta plus current evidence, never a `spawn_subagent (re-task: new prompt to same role)`
 to a long-lived reviewer carrying stale context.
 
-Plan and reviewer agents may run for a long time; spawn them in the background and keep doing independent root work. Between `get_command_or_subagent_output` calls, back off — double the timeout up to ~5 minutes — instead of spinning short cycles.
+Plan and reviewer agents may run for a long time; spawn them in the background and keep doing independent root work. Between `spawn_subagent.get_command_or_subagent_output` calls, back off — double the timeout up to ~5 minutes — instead of spinning short cycles.
 
 Treat child status as a progress signal, not a timeout counter. For
 work likely to exceed one wait cycle, require the child to send
@@ -41,7 +48,7 @@ review passes, and `BLOCKED: <reason>` only when it cannot progress.
 While any child is active, keep the parent visibly alive with active
 subagent count, agent names, latest `WORKING:` phase, and whether the
 parent is waiting for mailbox updates. Track spawned agent names
-locally. Use `get_command_or_subagent_output` for mailbox signals, not proof of completion.
+locally. Use `spawn_subagent.get_command_or_subagent_output` for mailbox signals, not proof of completion.
 A timeout only means no new mailbox update arrived. Treat a running child as alive.
 Fallback only when the child is
 completed without the deliverable, ack-only after followup, explicitly
@@ -52,7 +59,13 @@ deliverable. Preserve completed lane results immediately. If the retry
 budget is exhausted, keep the lane `INCONCLUSIVE` and still emit a final
 aggregate result.
 
-# Review Work - 5-Agent Parallel Review Orchestrator
+## Phase -1: Mandatory branch-review isolation gate
+
+For every PR or branch review, complete this gate before reading the changed
+branch, collecting its diff or files, running tests, or spawning reviewers:
+
+```bash
+# List trusted local refs first, then copy only the object ID from the matching
 
 ## Grok Tool Mapping
 
@@ -65,17 +78,137 @@ aggregate result.
 | Edit files | `search_replace` / `write` |
 | Shell | `run_terminal_command` |
 | Read files | `read_file` |
-| Binding goal | `# Goal` + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
+| Binding goal | `# Goal` block + ulw-loop CLI (`ulw-evidence`); host `create_goal`/`update_goal` only if present |
 | Worker tiers | `lazygrok:lazygrok-worker-low` / `-medium` / `-high` (or `lazygrok-executor`) |
 | Reviewers | `lazygrok:lazygrok-code-reviewer`, `lazygrok-qa-executor`, `lazygrok-gate-reviewer` |
-| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` |
+| Explorer / librarian / plan | `lazygrok:explore` / `lazygrok:librarian` / `lazygrok:prometheus` or `lazygrok-plan` |
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
-Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
 
-If an example uses a foreign tool name, use the Grok tools table above instead.
+# row. Never interpolate a user-supplied ref into shell syntax.
+git for-each-ref --format='%(refname)%09%(objectname)' refs/heads refs/remotes
+REVIEW_HEAD='<hex-object-id-from-the-matching-row>'
+case "$REVIEW_HEAD" in
+  ''|*[!0-9a-f]*) echo "invalid review object ID" >&2; exit 1 ;;
+esac
+git cat-file -e "${REVIEW_HEAD}^{commit}" || exit 1
+REVIEW_ROOT="$(mktemp -d)" || exit 1
+REVIEW_WT="${REVIEW_ROOT}/review"
+if ! git worktree add --detach --no-checkout "$REVIEW_WT" "$REVIEW_HEAD"; then
+  rmdir "$REVIEW_ROOT" 2>/dev/null || true
+  exit 1
+fi
+if ! REVIEW_GIT_DIR="$(git -C "$REVIEW_WT" rev-parse --absolute-git-dir)"; then
+  git worktree remove --force "$REVIEW_WT"
+  rmdir "$REVIEW_ROOT" 2>/dev/null || true
+  exit 1
+fi
+printf 'REVIEW_HEAD=%s
+REVIEW_ROOT=%s
+REVIEW_WT=%s
+REVIEW_GIT_DIR=%s
+'   "$REVIEW_HEAD" "$REVIEW_ROOT" "$REVIEW_WT" "$REVIEW_GIT_DIR"
+```
 
+`git worktree add --no-checkout` registers an empty worktree without
+materializing reviewed files. Materialization can invoke Git filters, so run
+the following command inside the same effective sandbox required for tests,
+with cwd set to the printed `REVIEW_WT`. Grok terminal calls may use separate
+shells: copy the four exact printed values into every later command and never
+assume shell variables persist. Never run this on the unsandboxed host:
 
+```bash
+REVIEW_HEAD='<literal-printed-hex-object-id>'
+git -c core.hooksPath=/dev/null checkout --detach "$REVIEW_HEAD" || exit 1
+git rev-parse HEAD
+git worktree list --porcelain
+```
+
+The `git worktree list --porcelain` output must contain the exact
+`$REVIEW_WT` path at `$REVIEW_HEAD`. Run every changed-branch read, diff, test,
+QA command, and filesystem-capable review lane from `$REVIEW_WT`; tell every
+subagent that this exact path is its required cwd. The original checkout is
+read-only context.
+
+`git archive`, `git show`, copied files, and extracted temporary trees are not
+substitutes for this gate. A detached review worktree does not modify either
+branch. If the worktree cannot be created or verified, return a blocking review
+failure instead of continuing in the original checkout.
+
+A worktree isolates Git checkout state; it does not sandbox processes. Treat
+reviewed code as untrusted. Both the checkout that materializes reviewed files
+and every repository-provided command require the user's applicable
+permissions and an effective host/container sandbox that denies credentials,
+network, and writes outside `$REVIEW_WT`, except for the exact printed
+`REVIEW_GIT_DIR` that Git must update for this linked worktree. No other part of
+the parent repository or host is writable. If safe materialization or execution
+is not available, clean the empty worktree, perform static review, and report
+hands-on QA as blocking or `INCONCLUSIVE`.
+
+Once `$REVIEW_ROOT` is allocated, cleanup is a mandatory invariant. Before
+**every** blocking or successful return, including verification failure,
+collection failure, reviewer timeout, or interruption, preserve any evidence
+worth retaining and then run:
+
+```bash
+if git worktree list --porcelain | grep -Fqx "worktree $REVIEW_WT"; then
+  git worktree remove --force "$REVIEW_WT"
+fi
+rmdir "$REVIEW_ROOT" 2>/dev/null || true
+```
+
+Do not rely on a shell `trap`: Grok terminal calls may use separate shells.
+Set `REVIEW_WT` and `REVIEW_ROOT` to their exact printed literal values, then
+run the cleanup block explicitly on every exit path after allocation. Any
+artifact path cited in the final report must still resolve after cleanup; copy
+worktree-local evidence to a registered stable path outside `$REVIEW_ROOT` and
+cite that preserved path before removing the worktree.
+
+# Review Work - 5-Agent Parallel Review Orchestrator
+
+Launch 5 specialized sub-agents in parallel to review completed implementation work from every angle. All 5 must pass for the review to pass. If even ONE fails, the review fails.
+
+When `review-work` is used as a final implementation, PR, or `$start-work`
+gate, it is blocking. A timeout, missing deliverable, ack-only response,
+explicit `BLOCKED:`, or inconclusive lane is not a pass. Treat that lane as
+failed, investigate the underlying uncertainty with the `debugging` skill when
+runtime behavior may be wrong, fix with evidence, and rerun the affected lane
+before claiming completion, creating or handing off a PR, or merging.
+
+After each lane reaches PASS, immediately append a durable task-evidence record
+to the active ledger with the lane name, exact full commit SHA, PASS verdict,
+and report artifact/source. Before reusing coverage after continuation or
+compaction, re-read that record and require the exact lane/SHA pair. Memory,
+chat history, or an unstamped report is not coverage; a new commit requires
+fresh applicable lane records.
+
+A rejecting lane must name its blockers inline in its final message — each
+blocker cites the violated goal criterion or requirement plus an evidence
+pointer. A bare REJECT/FAIL token without findings is not a verdict; treat it
+as an inconclusive lane (one bounded respawn, then record it inconclusive with
+that reason).
+
+When reviewing a PR or branch, collect diff, file contents, and verification
+results from a dedicated review worktree attached to that branch. Never
+checkout, test, or edit the review branch in the main worktree.
+
+Review evidence must be safe to share. Redact or mask secrets and sensitive
+user data before including evidence in logs, PR bodies, or handoffs. Never
+include raw tokens, credentials, auth headers, cookies, API keys, env dumps,
+private logs, or PII; summarize with lengths, hashes, and short non-sensitive
+prefixes when identity is needed.
+
+The 5 agents cover complementary concerns - together they form a comprehensive review that no single reviewer could match:
+
+| # | Agent | Type | Role | Focus Level |
+|---|-------|------|------|-------------|
+| 1 | Goal Verifier | Oracle | Did we build what was asked? | MAIN |
+| 2 | QA Executor | unspecified-high | Does it actually work? | MAIN |
+| 3 | Code Reviewer | Oracle | Is the code well-written? | MAIN |
+| 4 | Security Auditor | Oracle | Is it secure? | SUB |
+| 5 | Context Miner | unspecified-high | Did we miss any context? | MAIN |
+
+---
 
 ## Phase 0: Gather Review Context
 
@@ -94,7 +227,7 @@ Before launching agents, collect these inputs. Extract from conversation history
 </required_inputs>
 
 
-Review PRs and branches from a dedicated review worktree only: create or attach one with `git worktree add <path> <branch>` before collecting changed files, diff, file contents, or running checks. The main worktree is read-only context; never checkout, test, or edit the review branch there.
+Review PRs and branches only through the mandatory Phase -1 isolation gate above. Do not create, attach, or materialize a review worktree through any alternate command. The main worktree is read-only context; never checkout, test, or edit the review branch there.
 
 **Auto-collection sequence:**
 
@@ -117,7 +250,7 @@ For GOAL, CONSTRAINTS, BACKGROUND - review the full conversation history. The us
 
 ## Phase 1: Launch 5 Agents
 
-Launch ALL 5 in a single turn. Every agent uses `background=true`. No sequential launches. No waiting between them.
+Launch ALL 5 in a single turn. Every agent uses `run_in_background=true`. No sequential launches. No waiting between them.
 
 **Oracle agents receive everything in the prompt** (they cannot read files or run commands). Include DIFF + FILE_CONTENTS + all context directly in the prompt text.
 
@@ -130,8 +263,10 @@ Launch ALL 5 in a single turn. Every agent uses `background=true`. No sequential
 This agent answers: "Did we build exactly what was asked, within the rules we were given?"
 
 ```
-spawn_subagent(subagent_type="oracle",
-  background=true,
+task(
+  subagent_type="oracle",
+  run_in_background=true,
+  load_skills=[],
   description="Verify implementation against original goal and constraints",
   prompt="""
 <review_type>GOAL & CONSTRAINT VERIFICATION</review_type>
@@ -207,8 +342,10 @@ This agent answers: "Does it actually work when you run it?"
 The QA agent follows a structured process: brainstorm scenarios exhaustively first, then self-review and augment, then create a task list, then execute systematically.
 
 ```
-spawn_subagent(subagent_type="unspecified-high",
-  background=true,
+task(
+  category="unspecified-high",
+  run_in_background=true,
+  load_skills=["playwright MCP tools", "playwright", "dev-browser"],
   description="QA by actually running and using the application",
   prompt="""
 <review_type>QA - HANDS-ON APP EXECUTION</review_type>
@@ -317,8 +454,10 @@ OUTPUT FORMAT:
 This agent answers: "Is the code well-written, maintainable, and consistent with the codebase?"
 
 ```
-spawn_subagent(subagent_type="oracle",
-  background=true,
+task(
+  subagent_type="oracle",
+  run_in_background=true,
+  load_skills=[],
   description="Review overall code quality, patterns, and architecture",
   prompt="""
 <review_type>CODE QUALITY REVIEW</review_type>
@@ -392,8 +531,10 @@ This agent answers: "Are there security vulnerabilities in these changes?"
 This is supplementary - it focuses exclusively on security. It does NOT comment on code style, architecture, or functionality unless those directly create a security risk.
 
 ```
-spawn_subagent(subagent_type="oracle",
-  background=true,
+task(
+  subagent_type="oracle",
+  run_in_background=true,
+  load_skills=[],
   description="Security-focused review of implementation changes",
   prompt="""
 <review_type>SECURITY REVIEW (supplementary)</review_type>
@@ -446,8 +587,10 @@ OUTPUT FORMAT:
 This agent answers: "Did we miss any context that should have informed this implementation?"
 
 ```
-spawn_subagent(subagent_type="unspecified-high",
-  background=true,
+task(
+  category="unspecified-high",
+  run_in_background=true,
+  load_skills=["git-master"],
   description="Mine all accessible contexts for missed requirements or background knowledge",
   prompt="""
 <review_type>CONTEXT MINING - MISSED REQUIREMENTS & BACKGROUND</review_type>
@@ -532,7 +675,7 @@ After launching all 5 agents in one turn, wait for completions in bounded
 cycles. Do not treat a timeout, ack-only reply, or empty child result as
 a PASS.
 
-As each completes, collect via the Grok mapping above (`get_command_or_subagent_output`,
+As each completes, collect via the Grok mapping above (`spawn_subagent.get_command_or_subagent_output`,
 then the child's substantive final result). Preserve completed lane
 results immediately; never lose a PASS/FAIL because another lane is
 still running. Store each verdict independently:
@@ -552,7 +695,7 @@ inconclusive and respawn a smaller reviewer/worker for that exact lane.
 If it still remains unfinished after that retry, close the still-running
 agent if safe, keep the lane INCONCLUSIVE, and emit the final aggregate
 review result with the incomplete lane named. Do not spin in repeated
-wait/followup cycles. Do not use `re-prompt via spawn_subagent` as an interrupt; queued
+wait/followup cycles. Do not use `spawn_subagent.send_input` as an interrupt; queued
 followups are not cancellation.
 
 ---

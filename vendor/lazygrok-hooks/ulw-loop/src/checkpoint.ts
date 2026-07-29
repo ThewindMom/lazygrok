@@ -1,6 +1,5 @@
 // biome-ignore-all format: checkpoint stays under the pure LOC ceiling.
-import { existsSync, statSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { existsSync, lstatSync, realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import {
 	buildTaskScopedAggregateReconciliationHint,
@@ -13,15 +12,15 @@ import {
 	reconcileCodexGoalSnapshot,
 } from "./codex-goal-snapshot.js";
 import { requireAllCriteriaPass, requireAllPlanCriteriaPass, requireEssentialCriteriaPass } from "./evidence.js";
+import { safeReadWorkspaceTextFile } from "./file-safety.js";
 import {
 	codexGoalMode,
 	compatibleCodexObjectives,
 	expectedCodexObjective,
 	isFinalRunCompletionCandidate,
 } from "./goal-status.js";
-import type { UlwLoopScope } from "./paths.js";
-import { ulwLoopAttemptEvidenceDir } from "./paths.js";
-import { appendLedger, readUlwLoopPlan, withUlwLoopMutationLock, writePlan } from "./plan-io.js";
+import { type UlwLoopScope, ulwLoopAttemptEvidenceDir } from "./paths.js";
+import { commitPlanAndLedgerEntries, readUlwLoopPlan, withUlwLoopMutationLock } from "./plan-io.js";
 import {
 	classifyExternalAuthorizationBlocker,
 	clearGoalBlockerFields,
@@ -52,7 +51,7 @@ export interface CheckpointUlwLoopResult {
 	readonly aggregateCompletion?: UlwLoopAggregateCompletion;
 }
 
-const QUALITY_GATE_FS = { existsSync, statSync } as const;
+const QUALITY_GATE_FS = { existsSync, lstatSync, realpathSync, statSync } as const;
 
 function ulwLoopFail(message: string, code: string): never {
 	throw new UlwLoopError(message, code);
@@ -77,11 +76,8 @@ async function readJsonInput(raw: string | undefined, repoRoot: string): Promise
 	} catch (error) {
 		if (!(error instanceof SyntaxError)) throw error;
 	}
-	const path = resolve(repoRoot, trimmed);
-	if (!existsSync(path))
-		return ulwLoopFail("Quality gate JSON is neither valid JSON nor a readable path.", "ulw_loop_json_input_invalid");
 	try {
-		return JSON.parse(await readFile(path, "utf8"));
+		return JSON.parse(safeReadWorkspaceTextFile(repoRoot, resolve(repoRoot, trimmed)));
 	} catch (error) {
 		return ulwLoopFail(
 			`Quality gate path does not contain valid JSON${error instanceof Error ? `: ${error.message}` : "."}`,
@@ -231,7 +227,7 @@ export async function checkpointUlwLoop(
 					repoRoot,
 					fs: QUALITY_GATE_FS,
 					...(plan.evidenceLayoutVersion === 2
-						? { currentAttemptDir: ulwLoopAttemptEvidenceDir(goal.id, goal.attempt, scope) }
+						? { currentAttemptDir: ulwLoopAttemptEvidenceDir(repoRoot, goal.id, goal.attempt, scope) }
 						: {}),
 				});
 				requireBatchGate(plan, goal, qualityGate);
@@ -247,11 +243,16 @@ export async function checkpointUlwLoop(
 		goal.updatedAt = now;
 		if (aggregateCompletion !== undefined) plan.aggregateCompletion = aggregateCompletion;
 		plan.updatedAt = now;
-		await writePlan(repoRoot, plan, scope);
 		const ledgerEntry = buildLedger(now, args, goal, qualityGate, codexGoal, aggregateCompletion);
-		await appendLedger(repoRoot, ledgerEntry, scope);
 		const closedBatch = args.status === "complete" ? batchClosedBy(plan, goal.id) : undefined;
-		if (closedBatch !== undefined) await appendLedger(repoRoot, { at: now, kind: "batch_closed", goalId: goal.id, message: closedBatch.batchId }, scope);
+		await commitPlanAndLedgerEntries(
+			repoRoot,
+			plan,
+			closedBatch === undefined
+				? [ledgerEntry]
+				: [ledgerEntry, { at: now, kind: "batch_closed", goalId: goal.id, message: closedBatch.batchId }],
+			scope,
+		);
 		return aggregateCompletion === undefined
 			? { plan, goal, ledgerEntry }
 			: { plan, goal, ledgerEntry, aggregateCompletion };

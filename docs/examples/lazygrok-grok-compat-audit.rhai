@@ -161,7 +161,7 @@ let shards = [
         id: "review-verify",
         paths: [
             "skills/code-review/SKILL.md",
-            "skills/review-work/SKILL.md",
+            "vendor/lazygrok-skills/review-work/SKILL.md",
             "vendor/superpowers/skills/receiving-code-review/SKILL.md",
             "vendor/superpowers/skills/requesting-code-review/SKILL.md",
             "vendor/superpowers/skills/verification-before-completion/SKILL.md",

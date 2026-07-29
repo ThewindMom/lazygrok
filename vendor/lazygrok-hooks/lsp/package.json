@@ -47,11 +47,11 @@
     "lint": "biome check src test",
     "lint:fix": "biome check --write src test",
     "precheck": "node scripts/build-lsp-tools.mjs && node scripts/build-lsp-daemon.mjs",
-    "check": "tsc --noEmit && biome check src test && tsc -p tsconfig.build.json"
+    "check": "tsc --noEmit && biome check src test && npm run build"
   },
   "dependencies": {
-    "@oh-my-opencode/lsp-core": "file:../../../../lsp-core",
-    "@code-yeongyu/lsp-daemon": "file:../../../../lsp-daemon"
+    "@oh-my-opencode/lsp-core": "file:../lsp-core",
+    "@code-yeongyu/lsp-daemon": "file:../lsp-daemon"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.16",

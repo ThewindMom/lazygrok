@@ -94,7 +94,7 @@ func TestEmitDenyWritesReason(t *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /home/thewind/Projects/00_Random_Coding/lazygrok
+cd <plugin-root>
 go test ./internal/hookio/... -count=1
 ```
 

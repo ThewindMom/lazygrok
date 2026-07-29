@@ -27,8 +27,9 @@ function strings(value: object, key: string): readonly string[] | undefined {
 export async function parseValidationBatches(
 	input: string | undefined,
 	goals: readonly UlwLoopItem[],
+	repoRoot = process.cwd(),
 ): Promise<readonly UlwLoopValidationBatch[] | undefined> {
-	const raw = await readJsonInput(input);
+	const raw = await readJsonInput(input, repoRoot);
 	if (raw === undefined) return undefined;
 	if (!Array.isArray(raw)) fail("--validation-batch-json must be a JSON array.");
 	const batches = raw.map(batchFromObject);

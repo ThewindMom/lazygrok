@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"lazygrok/internal/safestate"
 )
 
 // CurrentSchemaVersion is the latest state schema version.
@@ -52,8 +54,12 @@ func Write(path string, data []byte) error {
 	mu.Lock()
 	defer mu.Unlock()
 
+	if safestate.IsPath(path) {
+		return safestate.WriteFile(path, data, 0o600)
+	}
+
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create dir: %w", err)
 	}
 
@@ -99,12 +105,15 @@ func WriteJSON(path string, v any) error {
 
 // Read reads and returns the raw bytes from path.
 func Read(path string) ([]byte, error) {
+	if safestate.IsPath(path) {
+		return safestate.ReadFile(path)
+	}
 	return os.ReadFile(path)
 }
 
 // ReadJSON reads path and unmarshals into v.
 func ReadJSON(path string, v any) error {
-	data, err := os.ReadFile(path)
+	data, err := Read(path)
 	if err != nil {
 		return err
 	}
@@ -115,7 +124,7 @@ func ReadJSON(path string, v any) error {
 // corrupt file with a timestamp suffix and returns the backup path so the
 // caller can report it. The returned error is the original parse error.
 func ReadWithBackup(path string) (data []byte, backupPath string, err error) {
-	data, err = os.ReadFile(path)
+	data, err = Read(path)
 	if err != nil {
 		return nil, "", err
 	}
@@ -123,7 +132,11 @@ func ReadWithBackup(path string) (data []byte, backupPath string, err error) {
 	var probe any
 	if jerr := json.Unmarshal(data, &probe); jerr != nil {
 		backupPath = path + ".corrupt." + time.Now().UTC().Format("20060102-150405")
-		_ = os.WriteFile(backupPath, data, 0o644)
+		if safestate.IsPath(backupPath) {
+			_ = safestate.WriteFile(backupPath, data, 0o600)
+		} else {
+			_ = os.WriteFile(backupPath, data, 0o600)
+		}
 		return data, backupPath, fmt.Errorf("corrupt JSON (backed up to %s): %w", backupPath, jerr)
 	}
 	return data, "", nil
@@ -137,7 +150,7 @@ func Migrate(path string, migrations map[int]func(map[string]any) map[string]any
 	mu.Lock()
 	defer mu.Unlock()
 
-	data, err := os.ReadFile(path)
+	data, err := Read(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -180,9 +193,16 @@ func Migrate(path string, migrations map[int]func(map[string]any) map[string]any
 
 	// Backup before overwriting
 	backup := path + ".pre-migration." + time.Now().UTC().Format("20060102-150405")
-	_ = os.WriteFile(backup, data, 0o644)
+	if safestate.IsPath(backup) {
+		_ = safestate.WriteFile(backup, data, 0o600)
+	} else {
+		_ = os.WriteFile(backup, data, 0o600)
+	}
 
-	return os.WriteFile(path, out, 0o644)
+	if safestate.IsPath(path) {
+		return safestate.WriteFile(path, out, 0o600)
+	}
+	return os.WriteFile(path, out, 0o600)
 }
 
 // LockPath returns the lock file path for a given state file.

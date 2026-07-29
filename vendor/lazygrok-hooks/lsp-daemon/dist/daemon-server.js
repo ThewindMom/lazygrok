@@ -27,6 +27,9 @@ export async function startDaemonServer(paths, options = {}) {
         const decoder = createLineDecoder((message) => {
             touch();
             void respond(socket, message, lease.token, routeOwner, activeRequests);
+        }, (_raw, error) => {
+            logServerError(error);
+            socket.destroy();
         });
         socket.on("data", (chunk) => decoder.push(chunk));
         socket.on("error", () => socket.destroy());

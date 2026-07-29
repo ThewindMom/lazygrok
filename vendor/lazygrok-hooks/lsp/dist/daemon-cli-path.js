@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { OMO_LSP_DAEMON_CLI, OMO_LSP_DAEMON_VERSION, resolveDaemonRuntime, } from "@code-yeongyu/lsp-daemon/client";
+import { OMO_LSP_DAEMON_CLI, OMO_LSP_DAEMON_VERSION, resolveDaemonRuntime } from "@code-yeongyu/lsp-daemon/client";
 const requireFromHere = createRequire(import.meta.url);
 const PACKAGE_LSP_DAEMON_CLI = "@code-yeongyu/lsp-daemon/cli";
 export function ensureLspDaemonCliEnv(env = process.env) {

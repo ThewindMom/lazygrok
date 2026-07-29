@@ -75,7 +75,7 @@ else
 fi
 
 # Latest skill-gate state for this workspace session
-LATEST="$(find "$STATE_ROOT" -name all-skills.json -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)"
+LATEST="$(find "$STATE_ROOT" -name all-skills.json -printf '%T@ %p\n' 2>/dev/null | sort -rn | sed -n '1p' | cut -d' ' -f2-)"
 if [ -n "$LATEST" ]; then
   python3 - "$LATEST" <<'PY' | tee -a "$LOG"
 import json, sys

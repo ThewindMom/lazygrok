@@ -85,6 +85,27 @@ func TestLoadWorkspaceConfig(t *testing.T) {
 	}
 }
 
+func TestWorkspaceCanDisableDefaultEnabledPolicy(t *testing.T) {
+	ws := t.TempDir()
+	lazygrokDir := filepath.Join(ws, ".lazygrok")
+	os.MkdirAll(lazygrokDir, 0o755)
+	os.WriteFile(filepath.Join(lazygrokDir, "config.jsonc"), []byte(`{
+		"lspStopEnforcement": false,
+		"continuationEnabled": false
+	}`), 0o644)
+
+	cfg, err := Load(ws, t.TempDir())
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.LSPStopEnforcement {
+		t.Error("workspace should disable LSP stop enforcement")
+	}
+	if cfg.ContinuationEnabled {
+		t.Error("workspace should disable continuation")
+	}
+}
+
 func TestLoadUserConfig(t *testing.T) {
 	userHome := t.TempDir()
 	userCfgDir := filepath.Join(userHome, "lazygrok")
@@ -185,6 +206,31 @@ func TestJSONCComments(t *testing.T) {
 	}
 }
 
+func TestJSONCCommentDelimitersInsideStrings(t *testing.T) {
+	ws := t.TempDir()
+	lazygrokDir := filepath.Join(ws, ".lazygrok")
+	os.MkdirAll(lazygrokDir, 0o755)
+	os.WriteFile(filepath.Join(lazygrokDir, "config.jsonc"), []byte(`{
+		"logPath": "/tmp//lazygrok/*active*/.log",
+		"lspStopEnforcement": false,
+		"cooldownSeconds": 0,
+	}`), 0o644)
+
+	cfg, err := Load(ws, t.TempDir())
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.LogPath != "/tmp//lazygrok/*active*/.log" {
+		t.Errorf("logPath = %q", cfg.LogPath)
+	}
+	if cfg.LSPStopEnforcement {
+		t.Error("workspace should disable LSP stop enforcement")
+	}
+	if cfg.CooldownSeconds != 0 {
+		t.Errorf("cooldownSeconds = %d, want 0", cfg.CooldownSeconds)
+	}
+}
+
 func TestTrailingComma(t *testing.T) {
 	ws := t.TempDir()
 	lazygrokDir := filepath.Join(ws, ".lazygrok")
@@ -209,12 +255,8 @@ func TestInvalidValue(t *testing.T) {
 	os.MkdirAll(lazygrokDir, 0o755)
 	os.WriteFile(filepath.Join(lazygrokDir, "config.jsonc"), []byte(`{"hashlineMode": "bogus"}`), 0o644)
 
-	cfg, err := Load(ws, t.TempDir())
-	if err != nil {
-		t.Fatalf("Load should not fail on invalid value (validate separately): %v", err)
-	}
-	if verr := cfg.Validate(); verr == nil {
-		t.Error("Validate should reject bogus hashlineMode")
+	if _, err := Load(ws, t.TempDir()); err == nil {
+		t.Error("Load should reject bogus hashlineMode")
 	}
 }
 
@@ -238,5 +280,69 @@ func TestDeprecatedEnvCompat(t *testing.T) {
 	}
 	if cfg.HashlineMode != HashlineOff {
 		t.Errorf("LAZYGROK_HASHLINE=off should set mode to off: got %q", cfg.HashlineMode)
+	}
+}
+
+func TestHashlineEnvironmentModes(t *testing.T) {
+	for _, test := range []struct {
+		value string
+		want  HashlineMode
+	}{
+		{value: "1", want: HashlinePrefer},
+		{value: "strict", want: HashlineStrict},
+		{value: "false", want: HashlineOff},
+	} {
+		t.Run(test.value, func(t *testing.T) {
+			t.Setenv("LAZYGROK_HASHLINE", test.value)
+			cfg, err := Load(t.TempDir(), t.TempDir())
+			if err != nil {
+				t.Fatalf("Load failed: %v", err)
+			}
+			if cfg.HashlineMode != test.want {
+				t.Fatalf("hashlineMode = %q, want %q", cfg.HashlineMode, test.want)
+			}
+		})
+	}
+}
+
+func TestHashlineEnvironmentOverridesWorkspace(t *testing.T) {
+	ws := t.TempDir()
+	lazygrokDir := filepath.Join(ws, ".lazygrok")
+	if err := os.MkdirAll(lazygrokDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(lazygrokDir, "config.jsonc"),
+		[]byte(`{"hashlineMode":"strict"}`),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LAZYGROK_HASHLINE", "off")
+
+	cfg, err := Load(ws, t.TempDir())
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.HashlineMode != HashlineOff {
+		t.Fatalf("environment did not override workspace: got %q", cfg.HashlineMode)
+	}
+}
+
+func TestInvalidSecurityEnvironmentFailsClosed(t *testing.T) {
+	t.Setenv("LAZYGROK_LSP_ENFORCE", "typo")
+	if _, err := Load(t.TempDir(), t.TempDir()); err == nil {
+		t.Fatal("invalid LSP enforcement environment value was accepted")
+	}
+}
+
+func TestInvalidNumericEnvironmentIsRejected(t *testing.T) {
+	for _, name := range []string{"LAZYGROK_MAX_CONTINUATIONS", "LAZYGROK_COOLDOWN_SECONDS"} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv(name, "invalid")
+			if _, err := Load(t.TempDir(), t.TempDir()); err == nil {
+				t.Fatalf("invalid %s was accepted", name)
+			}
+		})
 	}
 }

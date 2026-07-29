@@ -8,11 +8,13 @@ import { argv, execPath as execPath2, stderr } from "node:process";
 import { stdin as processStdin } from "node:process";
 
 // src/codex-hook.ts
-import { readFileSync as readFileSync9, realpathSync as realpathSync6 } from "node:fs";
+import { readFileSync as readFileSync9, realpathSync as realpathSync7 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
-import { join as join11, resolve as resolve11 } from "node:path";
+import { join as join12, resolve as resolve11 } from "node:path";
 
-// ../../../../lsp-daemon/dist/client.js
+// ../lsp-daemon/dist/client.js
+import { statSync as statSync5 } from "node:fs";
+import { isAbsolute as isAbsolute4 } from "node:path";
 import { connect } from "node:net";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { existsSync, realpathSync, statSync } from "node:fs";
@@ -43,10 +45,10 @@ import { fileURLToPath } from "node:url";
 import { statSync as statSync2 } from "node:fs";
 import { isAbsolute as isAbsolute2 } from "node:path";
 import { existsSync as existsSync9, statSync as statSync4 } from "node:fs";
-import { dirname as dirname8, join as join4, resolve as resolve7 } from "node:path";
+import { dirname as dirname9, join as join5, resolve as resolve7 } from "node:path";
 import { basename as basename2, extname } from "node:path";
 import { resolve as resolve6 } from "node:path";
-import { pathToFileURL as pathToFileURL3 } from "node:url";
+import { pathToFileURL as pathToFileURL4 } from "node:url";
 import { pathToFileURL } from "node:url";
 import { spawn as spawn2, spawnSync } from "node:child_process";
 import { existsSync as existsSync2, statSync as statSync3 } from "node:fs";
@@ -54,26 +56,36 @@ import { delimiter as delimiter2, join as join2 } from "node:path";
 import { readFileSync as readFileSync2, realpathSync as realpathSync2 } from "node:fs";
 import { relative as relative2, resolve as resolve2 } from "node:path";
 import { pathToFileURL as pathToFileURL2 } from "node:url";
-import { existsSync as existsSync4, lstatSync as lstatSync3, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync as closeSync3,
+  constants as constants2,
+  existsSync as existsSync4,
+  lstatSync as lstatSync3,
+  openSync as openSync3,
+  realpathSync as realpathSync4,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
+import { basename as basename3, dirname as dirname5, join as join3 } from "node:path";
+import { pathToFileURL as pathToFileURL3 } from "node:url";
 import { existsSync as existsSync3, lstatSync as lstatSync2, readFileSync as readFileSync3, readdirSync, realpathSync as realpathSync3 } from "node:fs";
 import { dirname as dirname4, isAbsolute as isAbsolute3, relative as relative3, resolve as resolve3 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { createHash as createHash2 } from "node:crypto";
-import { dirname as dirname5, relative as relative4, resolve as resolve4 } from "node:path";
+import { dirname as dirname6, relative as relative4, resolve as resolve4 } from "node:path";
 import { existsSync as existsSync5, lstatSync as lstatSync4, readdirSync as readdirSync2 } from "node:fs";
-import { dirname as dirname6, resolve as resolve5 } from "node:path";
+import { dirname as dirname7, resolve as resolve5 } from "node:path";
 import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync4, renameSync as renameSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { dirname as dirname7 } from "node:path";
+import { dirname as dirname8 } from "node:path";
 import { existsSync as existsSync7, readFileSync as readFileSync5 } from "node:fs";
 import { existsSync as existsSync8 } from "node:fs";
-import { delimiter as delimiter3, join as join3 } from "node:path";
+import { delimiter as delimiter3, join as join4 } from "node:path";
 import { existsSync as existsSync10, lstatSync as lstatSync5, readdirSync as readdirSync3 } from "node:fs";
-import { join as join5, resolve as resolve8 } from "node:path";
+import { join as join6, resolve as resolve8 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 import { lstatSync as lstatSync6, readdirSync as readdirSync4 } from "node:fs";
-import { join as join6 } from "node:path";
-import { statSync as statSync5 } from "node:fs";
-import { isAbsolute as isAbsolute4 } from "node:path";
+import { join as join7 } from "node:path";
 
 class LspRequestContextParseError extends Error {
   code;
@@ -458,16 +470,48 @@ function encodeJsonLine(message) {
   return `${JSON.stringify(message)}
 `;
 }
-function createLineDecoder(onMessage, onParseError) {
-  let buffer = "";
+
+class JsonRpcLineTooLargeError extends Error {
+  actualBytes;
+  maxBytes;
+  name = "JsonRpcLineTooLargeError";
+  constructor(actualBytes, maxBytes) {
+    super(`JSON-RPC line exceeds ${maxBytes} bytes (received ${actualBytes} bytes)`);
+    this.actualBytes = actualBytes;
+    this.maxBytes = maxBytes;
+  }
+}
+var DEFAULT_MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
+function createLineDecoder(onMessage, onParseError, options = {}) {
+  let buffer = Buffer.alloc(0);
+  let rejected = false;
+  const maxMessageBytes = options.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES;
+  const rejectOversized = (actualBytes) => {
+    buffer = Buffer.alloc(0);
+    rejected = true;
+    const error = new JsonRpcLineTooLargeError(actualBytes, maxMessageBytes);
+    if (onParseError) {
+      onParseError("", error);
+      return;
+    }
+    throw error;
+  };
   return {
     push(chunk) {
-      buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
-      let index = buffer.indexOf(`
-`);
+      if (rejected)
+        return;
+      const input = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+      let offset = 0;
+      let index = input.indexOf(10, offset);
       while (index !== -1) {
-        const raw = buffer.slice(0, index).trim();
-        buffer = buffer.slice(index + 1);
+        const segment = input.subarray(offset, index);
+        const lineBytes = buffer.length + segment.length;
+        if (lineBytes > maxMessageBytes) {
+          rejectOversized(lineBytes);
+          return;
+        }
+        const raw = (buffer.length === 0 ? segment.toString("utf8") : Buffer.concat([buffer, segment], lineBytes).toString("utf8")).replace(/\r$/, "").trim();
+        buffer = Buffer.alloc(0);
         if (raw.length > 0) {
           try {
             onMessage(JSON.parse(raw));
@@ -479,8 +523,17 @@ function createLineDecoder(onMessage, onParseError) {
             }
           }
         }
-        index = buffer.indexOf(`
-`);
+        offset = index + 1;
+        index = input.indexOf(10, offset);
+      }
+      const trailing = input.subarray(offset);
+      const pendingBytes = buffer.length + trailing.length;
+      if (pendingBytes > maxMessageBytes) {
+        rejectOversized(pendingBytes);
+        return;
+      }
+      if (trailing.length > 0) {
+        buffer = buffer.length === 0 ? Buffer.from(trailing) : Buffer.concat([buffer, trailing], pendingBytes);
       }
     }
   };
@@ -541,7 +594,7 @@ function pingDaemon(paths, token, timeoutMs = PROBE_TIMEOUT_MS, signal) {
     const onAbort = () => finish(null);
     const decoder = createLineDecoder((message) => {
       finish(parsePingResponse(message));
-    });
+    }, () => finish(null));
     socket.once("connect", () => {
       socket.write(encodeJsonLine({ jsonrpc: "2.0", id: 1, method: "omo/ping", params: { _omo: authEnvelope(token) } }));
     });
@@ -662,6 +715,8 @@ function parsePingResponse(message) {
 var HEADER_SEPARATOR = Buffer.from(`\r
 \r
 `);
+var DEFAULT_MAX_MESSAGE_BYTES2 = 8 * 1024 * 1024;
+var DEFAULT_MAX_HEADER_BYTES = 8 * 1024;
 var DEFAULT_IDLE_TIMEOUT_MS = 10 * 60000;
 var BASENAME_EXTENSIONS = {
   Dockerfile: ".dockerfile",
@@ -1239,8 +1294,58 @@ function parseDiagnosticsParams(params) {
   const version = typeof params["version"] === "number" ? params["version"] : undefined;
   return { uri: params["uri"], diagnostics, ...version === undefined ? {} : { version } };
 }
-function createLspSpawnEnv(_root, input) {
-  return { ...input };
+function createLspSpawnEnv(_root, ambient, configured = {}) {
+  const safeAmbient = {};
+  for (const [key, value] of Object.entries(ambient)) {
+    if (value !== undefined && isAllowedAmbientEnv(key))
+      safeAmbient[key] = value;
+  }
+  return { ...safeAmbient, ...configured };
+}
+var SAFE_AMBIENT_ENV = new Set([
+  "PATH",
+  "PATHEXT",
+  "SYSTEMROOT",
+  "WINDIR",
+  "COMSPEC",
+  "HOME",
+  "USERPROFILE",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "LANG",
+  "SHELL",
+  "XDG_CACHE_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_STATE_HOME",
+  "CARGO_HOME",
+  "RUSTUP_HOME",
+  "GOPATH",
+  "GOROOT",
+  "GOMODCACHE",
+  "GOCACHE",
+  "GOTOOLCHAIN",
+  "GOENV",
+  "VIRTUAL_ENV",
+  "PYENV_ROOT",
+  "CONDA_PREFIX",
+  "NVM_BIN",
+  "VOLTA_HOME",
+  "BUN_INSTALL",
+  "DENO_INSTALL",
+  "JAVA_HOME",
+  "GRADLE_USER_HOME",
+  "MAVEN_HOME",
+  "DOTNET_ROOT",
+  "NUGET_PACKAGES",
+  "GEM_HOME",
+  "GEM_PATH",
+  "RBENV_ROOT"
+]);
+function isAllowedAmbientEnv(key) {
+  const normalized = key.toUpperCase();
+  return SAFE_AMBIENT_ENV.has(normalized) || normalized.startsWith("LC_");
 }
 function isDiagnostic(value) {
   return isRecord2(value) && isRange(value["range"]) && typeof value["message"] === "string";
@@ -1303,10 +1408,7 @@ class LspClientTransport {
     this.diagnosticsStore.set(params.uri, [...params.diagnostics]);
   }
   async start() {
-    const env = createLspSpawnEnv(this.root, {
-      ...process.env,
-      ...this.server.env
-    });
+    const env = createLspSpawnEnv(this.root, process.env, this.server.env);
     this.proc = spawnProcess(this.server.command, {
       cwd: this.root,
       env
@@ -2107,7 +2209,14 @@ function snapshotPath(path2, includeChildren) {
 }
 var DEFAULT_IO = {
   writeFile(path2, content) {
-    writeFileSync(path2, content, "utf-8");
+    const noFollow = constants2.O_NOFOLLOW ?? 0;
+    const flags = existsSync4(path2) ? constants2.O_WRONLY | constants2.O_TRUNC | noFollow : constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL | noFollow;
+    const descriptor = openSync3(path2, flags, 438);
+    try {
+      writeFileSync(descriptor, content, "utf-8");
+    } finally {
+      closeSync3(descriptor);
+    }
   },
   rename(oldPath, newPath) {
     renameSync(oldPath, newPath);
@@ -2133,7 +2242,14 @@ function firstOperationIndex(plan) {
   return plan.operations[0]?.changeIndex ?? 0;
 }
 function failedCommit(plan, failure) {
-  const { message, changeIndex, mutations = [], filesModified = [], totalEdits = 0, lateAbort = false } = failure;
+  const {
+    message,
+    changeIndex,
+    mutations = [],
+    filesModified = [],
+    totalEdits = 0,
+    lateAbort = false
+  } = failure;
   return {
     result: {
       success: false,
@@ -2155,11 +2271,17 @@ function verifySnapshots(plan) {
     } catch (error) {
       const changeIndex = plan.firstChangeByPath.get(path2) ?? firstOperationIndex(plan);
       const detail = error instanceof Error ? error.message : String(error);
-      return failedCommit(plan, { message: `cannot verify snapshot for ${path2}: ${detail}`, changeIndex });
+      return failedCommit(plan, {
+        message: `cannot verify snapshot for ${path2}: ${detail}`,
+        changeIndex
+      });
     }
     if (!snapshotsEqual(expected, actual)) {
       const changeIndex = plan.firstChangeByPath.get(path2) ?? firstOperationIndex(plan);
-      return failedCommit(plan, { message: `workspace state changed before commit: ${path2}`, changeIndex });
+      return failedCommit(plan, {
+        message: `workspace state changed before commit: ${path2}`,
+        changeIndex
+      });
     }
   }
   return null;
@@ -2194,7 +2316,7 @@ function commitOperation(context, operation) {
   if (operation.kind === "noop")
     return;
   if (operation.kind === "text") {
-    io.writeFile(operation.path, operation.afterText);
+    withBoundCommitPath(plan, operation.path, (path2) => io.writeFile(path2, operation.afterText));
     accumulator.mutations.push({
       kind: "text",
       path: operation.path,
@@ -2206,19 +2328,29 @@ function commitOperation(context, operation) {
     return;
   }
   if (operation.kind === "create") {
-    io.writeFile(operation.path, "");
-    accumulator.mutations.push({ kind: "create", path: operation.path, replaced: operation.replaced });
+    withBoundCommitPath(plan, operation.path, (path2) => io.writeFile(path2, ""));
+    accumulator.mutations.push({
+      kind: "create",
+      path: operation.path,
+      replaced: operation.replaced
+    });
     addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.path));
     return;
   }
   if (operation.kind === "rename") {
-    if (operation.replaceDestination) {
-      const targetKind = existsSync4(operation.newPath) && lstatSync3(operation.newPath).isDirectory() ? "directory" : "file";
-      io.remove(operation.newPath, targetKind === "directory");
-      accumulator.mutations.push({ kind: "delete", path: operation.newPath, targetKind });
-      addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.newPath));
-    }
-    io.rename(operation.oldPath, operation.newPath);
+    withBoundCommitPath(plan, operation.oldPath, (oldPath) => withBoundCommitPath(plan, operation.newPath, (newPath) => {
+      if (operation.replaceDestination) {
+        const targetKind = existsSync4(newPath) && lstatSync3(newPath).isDirectory() ? "directory" : "file";
+        io.remove(newPath, targetKind === "directory");
+        accumulator.mutations.push({
+          kind: "delete",
+          path: operation.newPath,
+          targetKind
+        });
+        addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.newPath));
+      }
+      io.rename(oldPath, newPath);
+    }));
     accumulator.mutations.push({
       kind: "rename",
       oldPath: operation.oldPath,
@@ -2228,7 +2360,7 @@ function commitOperation(context, operation) {
     addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.newPath));
     return;
   }
-  io.remove(operation.path, operation.recursive);
+  withBoundCommitPath(plan, operation.path, (path2) => io.remove(path2, operation.recursive));
   accumulator.mutations.push({
     kind: "delete",
     path: operation.path,
@@ -2236,18 +2368,49 @@ function commitOperation(context, operation) {
   });
   addModifiedPath(accumulator.filesModified, reportedPath(plan, operation.path));
 }
+function withBoundCommitPath(plan, path2, mutate) {
+  const resolved = uriToCanonicalWorkspacePath(pathToFileURL3(path2).href, plan.workspaceRoot);
+  if (!resolved.success || resolved.followedSymbolicLink || resolved.path !== path2) {
+    const detail = resolved.success ? `path identity changed before commit: ${path2}` : resolved.error;
+    throw new Error(detail);
+  }
+  if (process.platform !== "linux") {
+    throw new Error("workspace mutation requires Linux descriptor anchoring");
+  }
+  const parent = dirname5(path2);
+  const descriptor = openSync3(parent, constants2.O_RDONLY | (constants2.O_DIRECTORY ?? 0) | (constants2.O_NOFOLLOW ?? 0));
+  try {
+    const descriptorParent = `/proc/self/fd/${descriptor}`;
+    if (realpathSync4(descriptorParent) !== parent) {
+      throw new Error(`parent identity changed before commit: ${parent}`);
+    }
+    return mutate(join3(descriptorParent, basename3(path2)));
+  } finally {
+    closeSync3(descriptor);
+  }
+}
 function commitWorkspaceEditPlan(plan, options = {}) {
   if (options.signal?.aborted) {
-    return failedCommit(plan, { message: "cancelled before commit", changeIndex: firstOperationIndex(plan) });
+    return failedCommit(plan, {
+      message: "cancelled before commit",
+      changeIndex: firstOperationIndex(plan)
+    });
   }
   const stale = verifySnapshots(plan);
   if (stale)
     return stale;
   if (options.signal?.aborted) {
-    return failedCommit(plan, { message: "cancelled before commit", changeIndex: firstOperationIndex(plan) });
+    return failedCommit(plan, {
+      message: "cancelled before commit",
+      changeIndex: firstOperationIndex(plan)
+    });
   }
   const io = resolveIo(options.io);
-  const accumulator = { mutations: [], filesModified: [], totalEdits: 0 };
+  const accumulator = {
+    mutations: [],
+    filesModified: [],
+    totalEdits: 0
+  };
   const context = { plan, io, accumulator };
   let lateAbort = false;
   for (const operation of plan.operations) {
@@ -2274,7 +2437,11 @@ function commitWorkspaceEditPlan(plan, options = {}) {
     errors: [],
     ...lateAbort ? { lateAbort: true } : {}
   };
-  return { result, delta: mutationDelta(accumulator.mutations), fingerprint: plan.fingerprint };
+  return {
+    result,
+    delta: mutationDelta(accumulator.mutations),
+    fingerprint: plan.fingerprint
+  };
 }
 function canonicalFingerprint(operations) {
   const canonical = operations.map((operation) => {
@@ -2686,7 +2853,7 @@ function virtualDirectoryHasChildren(virtual, path2) {
   return false;
 }
 function requireVirtualParent(virtual, path2, changeIndex) {
-  if (virtual.get(dirname5(path2))?.kind !== "directory") {
+  if (virtual.get(dirname6(path2))?.kind !== "directory") {
     throw new WorkspaceEditValidationError(changeIndex, `parent directory does not exist for ${path2}`);
   }
 }
@@ -2839,7 +3006,7 @@ class WorkspaceSnapshotBuilder {
       }
       if (candidate === this.workspaceRoot)
         break;
-      candidate = dirname6(candidate);
+      candidate = dirname7(candidate);
     }
     if (!includeChildren || !existsSync5(path2) || !lstatSync4(path2).isDirectory())
       return;
@@ -3096,7 +3263,7 @@ class LspClient extends LspClientConnection {
     await this.openFile(absPath);
     const options = signal === undefined ? {} : { signal };
     return this.sendRequest("textDocument/definition", {
-      textDocument: { uri: pathToFileURL3(absPath).href },
+      textDocument: { uri: pathToFileURL4(absPath).href },
       position: { line: line - 1, character }
     }, options);
   }
@@ -3105,7 +3272,7 @@ class LspClient extends LspClientConnection {
     await this.openFile(absPath);
     const options = signal === undefined ? {} : { signal };
     return this.sendRequest("textDocument/references", {
-      textDocument: { uri: pathToFileURL3(absPath).href },
+      textDocument: { uri: pathToFileURL4(absPath).href },
       position: { line: line - 1, character },
       context: { includeDeclaration }
     }, options);
@@ -3115,7 +3282,7 @@ class LspClient extends LspClientConnection {
     await this.openFile(absPath);
     const options = signal === undefined ? {} : { signal };
     return this.sendRequest("textDocument/documentSymbol", {
-      textDocument: { uri: pathToFileURL3(absPath).href }
+      textDocument: { uri: pathToFileURL4(absPath).href }
     }, options);
   }
   async workspaceSymbols(query, signal) {
@@ -3155,7 +3322,7 @@ class LspClient extends LspClientConnection {
   async diagnostics(filePath, signal) {
     signal?.throwIfAborted();
     const absPath = this.resolveWorkspacePath(filePath);
-    const uri = pathToFileURL3(absPath).href;
+    const uri = pathToFileURL4(absPath).href;
     await this.openFile(absPath);
     const deadlineAt = Date.now() + this.diagnosticsFreshnessTimeoutMs;
     for (;; ) {
@@ -3222,7 +3389,7 @@ class LspClient extends LspClientConnection {
     await this.openFile(absPath);
     const options = signal === undefined ? {} : { signal };
     return this.sendRequest("textDocument/prepareRename", {
-      textDocument: { uri: pathToFileURL3(absPath).href },
+      textDocument: { uri: pathToFileURL4(absPath).href },
       position: { line: line - 1, character }
     }, options);
   }
@@ -3235,7 +3402,7 @@ class LspClient extends LspClientConnection {
     const preCommitSignal = createPreCommitAbortSignal(signal, () => this.workspaceMutations.isBeforeCommit(acquired.lease));
     try {
       const renameParams = {
-        textDocument: { uri: pathToFileURL3(absPath).href },
+        textDocument: { uri: pathToFileURL4(absPath).href },
         position: { line: line - 1, character },
         newName
       };
@@ -3249,7 +3416,11 @@ class LspClient extends LspClientConnection {
     }
   }
   resolveWorkspacePath(filePath) {
-    return resolve6(this.root, filePath);
+    const canonical = canonicalizeExistingOrNearestAncestor(resolve6(this.root, filePath));
+    if (!isPathInside(this.root, canonical)) {
+      throw new LspInvalidPathError(`LSP file path must be inside workspace root: ${filePath}`);
+    }
+    return canonical;
   }
 }
 function waitForDiagnosticsActivity(wait, signal) {
@@ -3387,8 +3558,8 @@ class LspManager {
       this.reaperHandle.unref();
     }
   }
-  getKey(root, serverId) {
-    return `${root}::${serverId}`;
+  getKey(root, server2) {
+    return JSON.stringify([root, requestContextIdentity(), serverIdentity(server2)]);
   }
   reapStale() {
     const t = this.now();
@@ -3415,7 +3586,7 @@ class LspManager {
       throw new Error("LspManager has been disposed");
     }
     signal?.throwIfAborted();
-    const key = this.getKey(root, server2.id);
+    const key = this.getKey(root, server2);
     let managed = this.clients.get(key);
     if (managed) {
       const t = this.now();
@@ -3458,6 +3629,8 @@ class LspManager {
     })();
     const newManaged = {
       client,
+      root,
+      serverId: server2.id,
       refCount: 0,
       pendingWaiters: 1,
       lastUsedAt: initStartedAt,
@@ -3488,16 +3661,16 @@ class LspManager {
     newManaged.lastUsedAt = this.now();
     return client;
   }
-  releaseClient(root, serverId) {
-    const key = this.getKey(root, serverId);
+  releaseClient(root, server2) {
+    const key = this.getKey(root, server2);
     const managed = this.clients.get(key);
     if (managed && managed.refCount > 0) {
       managed.refCount--;
       managed.lastUsedAt = this.now();
     }
   }
-  invalidateClient(root, serverId, client) {
-    const key = this.getKey(root, serverId);
+  invalidateClient(root, server2, client) {
+    const key = this.getKey(root, server2);
     const managed = this.clients.get(key);
     if (!managed)
       return;
@@ -3509,7 +3682,7 @@ class LspManager {
   warmupClient(root, server2) {
     if (this.disposed)
       return;
-    const key = this.getKey(root, server2.id);
+    const key = this.getKey(root, server2);
     if (this.clients.has(key))
       return;
     const client = this.clientFactory(root, server2);
@@ -3520,6 +3693,8 @@ class LspManager {
     })();
     const managed = {
       client,
+      root,
+      serverId: server2.id,
       refCount: 0,
       pendingWaiters: 0,
       lastUsedAt: initStartedAt,
@@ -3540,17 +3715,16 @@ class LspManager {
       stopClientBestEffort(client);
     });
   }
-  isServerInitializing(root, serverId) {
-    const managed = this.clients.get(this.getKey(root, serverId));
+  isServerInitializing(root, server2) {
+    const managed = this.clients.get(this.getKey(root, server2));
     return managed?.isInitializing ?? false;
   }
   getSnapshot() {
     const snapshots = [];
-    for (const [key, managed] of this.clients) {
-      const [root, serverId] = key.split("::");
+    for (const managed of this.clients.values()) {
       snapshots.push({
-        root,
-        serverId,
+        root: managed.root,
+        serverId: managed.serverId,
         refCount: managed.refCount,
         pendingWaiters: managed.pendingWaiters,
         lastUsedAt: managed.lastUsedAt,
@@ -3561,8 +3735,8 @@ class LspManager {
     }
     return snapshots;
   }
-  hasClient(root, serverId) {
-    return this.clients.has(this.getKey(root, serverId));
+  hasClient(root, server2) {
+    return this.clients.has(this.getKey(root, server2));
   }
   clientCount() {
     return this.clients.size;
@@ -3584,6 +3758,39 @@ class LspManager {
     this.clients.clear();
     await Promise.allSettled(stopPromises);
   }
+}
+function requestContextIdentity() {
+  try {
+    const context = lspRequestContext();
+    return [
+      context.cwd,
+      context.projectConfigPaths,
+      context.userConfigPath,
+      context.installDecisionsPath,
+      context.capabilities.installDecisionTool
+    ];
+  } catch (error) {
+    if (error instanceof LspRequestContextUnavailableError)
+      return null;
+    throw error;
+  }
+}
+function serverIdentity(server2) {
+  return [
+    server2.id,
+    server2.command,
+    server2.extensions,
+    server2.priority,
+    Object.entries(server2.env ?? {}).sort(([left], [right]) => left.localeCompare(right)),
+    canonicalJson(server2.initialization ?? null)
+  ];
+}
+function canonicalJson(value) {
+  if (Array.isArray(value))
+    return value.map(canonicalJson);
+  if (typeof value !== "object" || value === null)
+    return value;
+  return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, entry]) => [key, canonicalJson(entry)]));
 }
 var _defaultInstance = null;
 function getLspManager() {
@@ -3619,7 +3826,7 @@ function isInstallDecision(value) {
 }
 function writeInstallDecisions(decisions) {
   const path2 = getInstallDecisionsPath();
-  mkdirSync3(dirname7(path2), { recursive: true });
+  mkdirSync3(dirname8(path2), { recursive: true });
   const tmpPath = `${path2}.tmp`;
   writeFileSync2(tmpPath, `${JSON.stringify(decisions, null, 2)}
 `, "utf8");
@@ -4002,7 +4209,7 @@ function isServerInstalled(command, _workingDirectory) {
   const paths = pathEnv.split(delimiter3);
   for (const p of paths) {
     for (const suffix of exts) {
-      if (existsSync8(join3(p, cmd + suffix))) {
+      if (existsSync8(join4(p, cmd + suffix))) {
         return true;
       }
     }
@@ -4104,21 +4311,22 @@ function isDirectoryPath(filePath) {
 }
 function findWorkspaceRoot(filePath) {
   const abs = resolvePathInsideContext(filePath);
+  const cwd = contextCwd();
   let dir = abs;
   if (!isDirectoryPath(dir)) {
-    dir = dirname8(dir);
+    dir = dirname9(dir);
   }
-  let prevDir = "";
-  while (dir !== prevDir) {
+  while (isPathInside(cwd, dir)) {
     for (const marker of WORKSPACE_MARKERS) {
-      if (existsSync9(join4(dir, marker))) {
+      if (existsSync9(join5(dir, marker))) {
         return dir;
       }
     }
-    prevDir = dir;
-    dir = dirname8(dir);
+    if (dir === cwd)
+      break;
+    dir = dirname9(dir);
   }
-  return dirname8(abs);
+  return cwd;
 }
 function resolvePathInsideContext(filePath) {
   const cwd = contextCwd();
@@ -4226,17 +4434,17 @@ async function withLspClient(filePath, fn, toolName, options = {}) {
       return await fn(client, root);
     } catch (err) {
       if (allowRetry && READ_ONLY_RETRY_TOOLS.has(toolName) && isLspDeadConnectionError(err)) {
-        manager.invalidateClient(root, server2.id, client);
+        manager.invalidateClient(root, server2, client);
         return acquireAndCall(false);
       }
       if (err instanceof LspRequestTimeoutError) {
-        if (manager.isServerInitializing(root, server2.id)) {
+        if (manager.isServerInitializing(root, server2)) {
           throw new LspServerInitializingError(err);
         }
       }
       throw err;
     } finally {
-      manager.releaseClient(root, server2.id);
+      manager.releaseClient(root, server2);
     }
   };
   return acquireAndCall(true);
@@ -4365,7 +4573,7 @@ function collectFilesWithExtension(dir, extension, maxFiles) {
     for (const entry of entries) {
       if (files.length >= maxFiles)
         return;
-      const fullPath = join5(currentDir, entry);
+      const fullPath = join6(currentDir, entry);
       let stat;
       try {
         stat = lstatSync5(fullPath);
@@ -4446,7 +4654,7 @@ async function aggregateDiagnosticsForDirectory(directory, extension, severity, 
     });
     await Promise.all(workers);
   } finally {
-    manager.releaseClient(root, server2.id);
+    manager.releaseClient(root, server2);
   }
   const displayDiagnostics = allDiagnostics.slice(0, DEFAULT_MAX_DIAGNOSTICS);
   const wasDiagCapped = allDiagnostics.length > DEFAULT_MAX_DIAGNOSTICS;
@@ -4492,7 +4700,7 @@ function inferExtensionFromDirectory(directory) {
     for (const entry of entries) {
       if (scanned >= MAX_SCAN_ENTRIES)
         return;
-      const fullPath = join6(dir, entry);
+      const fullPath = join7(dir, entry);
       let stat;
       try {
         stat = lstatSync6(fullPath);
@@ -5191,6 +5399,9 @@ function sendToolCall(paths, token, name, args, options) {
         finish(() => resolve9(result));
       else
         finish(() => reject(new DaemonRequestError("invalid daemon response", requestWritten)));
+    }, (_raw, error) => {
+      const message = error instanceof Error ? error.message : "invalid daemon response";
+      finish(() => reject(new DaemonRequestError(message, requestWritten)));
     });
     socket.once("connect", () => {
       const payload = encodeJsonLine({
@@ -5281,7 +5492,7 @@ function callDiagnosticsViaDaemon2(filePath, options) {
   return callDiagnosticsViaDaemon(filePath, options);
 }
 
-// ../../../../lsp-core/src/post-edit/orchestration.ts
+// ../lsp-core/src/post-edit/orchestration.ts
 import { extname as extname2 } from "node:path";
 var DEFAULT_MAX_CONCURRENCY = 4;
 var CLEAN_DIAGNOSTICS_TEXT = "No diagnostics found";
@@ -5384,10 +5595,10 @@ function extensionKey(filePath) {
   const extension = extname2(filePath).toLowerCase();
   return extension.length === 0 ? undefined : extension;
 }
-// ../../../../lsp-core/src/request-context.ts
+// ../lsp-core/src/request-context.ts
 import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
-import { existsSync as existsSync11, realpathSync as realpathSync4, statSync as statSync6 } from "node:fs";
-import { basename as basename3, delimiter as delimiter4, dirname as dirname2, isAbsolute as isAbsolute5, join as join7, relative as relative5, resolve as resolve9 } from "node:path";
+import { existsSync as existsSync11, realpathSync as realpathSync5, statSync as statSync6 } from "node:fs";
+import { basename as basename4, delimiter as delimiter4, dirname as dirname2, isAbsolute as isAbsolute5, join as join8, relative as relative5, resolve as resolve9 } from "node:path";
 
 class LspRequestContextParseError2 extends Error {
   code;
@@ -5433,22 +5644,22 @@ function canonicalCwd2(cwd) {
   if (!existsSync11(resolved) || !statSync6(resolved).isDirectory()) {
     throw new LspRequestContextParseError2("invalid_cwd", `LSP request cwd must be an existing directory: ${cwd}`);
   }
-  return realpathSync4(resolved);
+  return realpathSync5(resolved);
 }
 function canonicalizeExistingOrNearestAncestor2(path2) {
   let current = resolve9(path2);
   const suffix = [];
   while (true) {
     try {
-      const existing = realpathSync4(current);
-      return suffix.length === 0 ? existing : join7(existing, ...suffix);
+      const existing = realpathSync5(current);
+      return suffix.length === 0 ? existing : join8(existing, ...suffix);
     } catch (error) {
       if (!isMissingPathError2(error))
         throw error;
       const parent = dirname2(current);
       if (parent === current)
         throw error;
-      suffix.unshift(basename3(current));
+      suffix.unshift(basename4(current));
       current = parent;
     }
   }
@@ -5511,7 +5722,7 @@ function errorCode2(error) {
 // src/daemon-cli-path.ts
 import { existsSync as existsSync13, readFileSync as readFileSync6 } from "node:fs";
 import { createRequire as createRequire2 } from "node:module";
-import { dirname as dirname9, join as join9 } from "node:path";
+import { dirname as dirname10, join as join10 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 var requireFromHere2 = createRequire2(import.meta.url);
 var PACKAGE_LSP_DAEMON_CLI = "@code-yeongyu/lsp-daemon/cli";
@@ -5558,7 +5769,7 @@ function resolveConfiguredLspDaemonCli(cliPath) {
 }
 function readDaemonPackageVersion(cliPath) {
   try {
-    const parsed = JSON.parse(readFileSync6(join9(dirname9(cliPath), "package.json"), "utf8"));
+    const parsed = JSON.parse(readFileSync6(join10(dirname10(cliPath), "package.json"), "utf8"));
     if (isRecord9(parsed) && typeof parsed["version"] === "string" && parsed["version"].length > 0) {
       return parsed["version"];
     }
@@ -5575,7 +5786,7 @@ function isRecord9(value) {
 // src/lsp-session-state.ts
 import { mkdirSync as mkdirSync4, readFileSync as readFileSync8, writeFileSync as writeFileSync3 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname as dirname11, join as join10 } from "node:path";
+import { dirname as dirname12, join as join11 } from "node:path";
 function sessionIdFrom(input) {
   return typeof input.session_id === "string" && input.session_id.length > 0 ? input.session_id : undefined;
 }
@@ -5601,8 +5812,8 @@ function isLspDaemonUnreachableDiagnostics(diagnostics) {
   return diagnostics.includes("LSP daemon unreachable");
 }
 function sessionStatePath(sessionId) {
-  const root = process.env["PLUGIN_DATA"] ?? join10(homedir(), ".codex", "codex-lsp");
-  return join10(root, "sessions", `${safePathSegment(sessionId)}.json`);
+  const root = process.env["PLUGIN_DATA"] ?? join11(homedir(), ".grok", "lazygrok-lsp");
+  return join11(root, "sessions", `${safePathSegment(sessionId)}.json`);
 }
 function readSessionState(path2) {
   try {
@@ -5617,7 +5828,7 @@ function readSessionState(path2) {
   }
 }
 function writeSessionState(path2, state) {
-  mkdirSync4(dirname11(path2), { recursive: true });
+  mkdirSync4(dirname12(path2), { recursive: true });
   writeFileSync3(path2, `${JSON.stringify(state)}
 `);
 }
@@ -5761,13 +5972,16 @@ function notConfiguredAvailability(details) {
   return typeof extension === "string" && extension.length > 0 ? { extension } : undefined;
 }
 function codexLspRequestContext(env = process.env, cwd = process.cwd()) {
-  const canonicalCwd3 = realpathSync6(resolve11(cwd));
-  const codexHome = resolve11(env["CODEX_HOME"]?.trim() || join11(homedir3(), ".codex"));
+  const canonicalCwd3 = realpathSync7(resolve11(cwd));
+  const grokHome = resolve11(env["GROK_HOME"]?.trim() || env["CODEX_HOME"]?.trim() || join12(homedir3(), ".grok"));
   return parseLspRequestContext2({
     cwd: canonicalCwd3,
-    projectConfigPaths: [join11(canonicalCwd3, ".codex", "lsp-client.json")],
-    userConfigPath: join11(codexHome, "lsp-client.json"),
-    installDecisionsPath: join11(codexHome, "lsp-install-decisions.json"),
+    projectConfigPaths: [
+      join12(canonicalCwd3, ".grok", "lsp-client.json"),
+      join12(canonicalCwd3, ".codex", "lsp-client.json")
+    ],
+    userConfigPath: join12(grokHome, "lsp-client.json"),
+    installDecisionsPath: join12(grokHome, "lsp-install-decisions.json"),
     capabilities: { installDecisionTool: true }
   });
 }

@@ -10,7 +10,7 @@
 
 **Prerequisites:** `export GROK_PLUGIN_ROOT="$(pwd)"`, `grok plugin validate .`, `rg`, `python3`, `node` (for Phase C+).
 
-**Reference clone (read-only):** `/tmp/omo-research` or `git clone --depth 1 -b dev https://github.com/code-yeongyu/oh-my-openagent.git`
+**Reference clone (read-only):** `<omo-reference-clone>` or `git clone --depth 1 -b dev https://github.com/code-yeongyu/oh-my-openagent.git`
 
 ---
 
@@ -95,7 +95,7 @@ echo "intent-gate: OK"
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd /home/thewind/Projects/00_Random_Coding/lazygrok
+cd <plugin-root>
 export GROK_PLUGIN_ROOT="$(pwd)"
 bash hooks/test-intent-gate.sh
 ```
@@ -510,7 +510,7 @@ git commit -m "feat(prometheus): plan mode, md-only guard, start-work boulder"
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OMO_REF="${OMO_SRC:-/tmp/omo-research}"
+OMO_REF="${OMO_SRC:-<omo-reference-clone>}"
 VENDOR="$ROOT/vendor"
 mkdir -p "$VENDOR"
 for pkg in ast-grep-mcp lsp-tools-mcp; do
@@ -579,7 +579,6 @@ git commit -m "feat(mcp): bundle ast-grep and lsp-tools MCP servers"
 Use mock runner in test:
 
 ```bash
-export LAZYGROK_LSP_MOCK_DIAG='error[typescript] (1) at 1:1: syntax error'
 ```
 
 - [ ] **Step 2: Implement `hooks/lib/lsp.sh`**
@@ -663,7 +662,7 @@ test "$result" = "1#??"  # replace ?? after golden capture
 Capture golden:
 
 ```bash
-cd /tmp/omo-research/packages/hashline-core && npm test -- hash-computation 2>/dev/null || \
+cd <omo-reference-clone>/packages/hashline-core && npm test -- hash-computation 2>/dev/null || \
   node -e "const {computeLineHash}=require('./dist/hash-computation'); console.log('1#'+computeLineHash(1,'  hello  '))"
 ```
 

@@ -329,7 +329,7 @@ tokio::select! {
         cleanup().await?;
         std::process::exit(130);  // standard exit code for SIGINT
     }
-    result = long_running_spawn_subagent => {
+    result = long_running_task() => {
         result
     }
 }

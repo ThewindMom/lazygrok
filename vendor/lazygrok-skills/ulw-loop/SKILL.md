@@ -8,6 +8,10 @@ metadata:
 
 # ulw-loop
 
+> **OmO-style goal ledger ultrawork** for Grok (LazyCodex port).
+> For Ralph promise+verifier only, see skill `ulw-ralph-loop`.
+> For host-goal + evidence CLI details, see skill `ulw-evidence`.
+
 ## Grok goal registration (host tools optional)
 
 Grok often does **not** inject `create_goal` / `update_goal` / `get_goal`
@@ -37,7 +41,7 @@ When OmO/Codex docs say "call get_goal / create_goal / update_goal", translate t
 - Use the ulw-loop CLI state under `.lazygrok/ulw-loop`; do not hand-edit goal state.
 - Register goals up front (`ulw create-goals` / `omo ulw-loop create-goals`, then host `create_goal` only if present — else `# Goal`) and mirror every atomic step into the live `todo_write` checklist: one ultra-granular step per action, exactly one in_progress, transitions marked the instant they happen.
 - After any compaction or context loss, re-read brief + goals + ledger FIRST plus `omo ulw-loop status --json`, then resume; never re-plan from scratch.
-- If `omo ulw-loop create-goals` says the existing aggregate is already complete, start unrelated new work with a fresh `--session-id <new-id>` instead of steering or forcing the completed default state. Use `--force` only to intentionally overwrite completed evidence.
+- Start with the exact literal in `Exact Grok hook session ID for this turn: "..."`; it is conversational hook context, not a shell environment variable. Never inspect environment variables, process trees, active-session files, `/tmp`, or filenames to derive it. If the literal is unavailable, omit `--session-id` so the CLI resolves the sole recent private hook binding and fails on ambiguity. Never invent a fallback. Only if `create-goals` explicitly says that session's aggregate is already complete, start unrelated new work with `--session-id <exact-hook-id>-<short-purpose>` instead of steering or forcing completed state. Use `--force` only to intentionally overwrite completed evidence.
 - Every success criterion needs observable evidence from a real surface: a channel (terminal/TUI via the xterm.js web terminal, HTTP, browser, computer-use) or, for CLI- or data-shaped criteria, an auxiliary surface (CLI stdout, DB diff, parsed config dump).
 - Evidence is bound to the tree it was captured at (`git rev-parse --short "HEAD^{tree}"`); it goes stale only when tracked content changes — a rebase or amend that keeps the tree identical keeps it valid. When the tree differs, re-run at the current HEAD and re-record, never relabel or regenerate. Record only after cleanup receipts exist.
 - Delegate code edits, test writes, fixes, and QA execution to right-sized Grok subagents when the workflow requires it.
@@ -67,6 +71,7 @@ When the user explicitly asks for team mode, load the `teammode` skill: on Grok 
 | Spawn a worker | `spawn_subagent({subagent_type:"lazygrok:<role>", prompt:"TASK: ...", background:true})` |
 | Wait for background result | `get_command_or_subagent_output({task_ids:[...]})` |
 | Stop a runaway | `kill_command_or_subagent({task_id:"..."})` |
+| Discovery / review (internal under `ulw`) | Auto `workflow` → `ulw-discover` / `ulw-review` — never ask user for `/workflow` |
 | Live checklist | `todo_write` |
 | Edit files | `search_replace` / `write` |
 | Shell | `run_terminal_command` |
@@ -78,5 +83,23 @@ When the user explicitly asks for team mode, load the `teammode` skill: on Grok 
 
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
 Prefer `subagent_type` from the installed LazyGrok agents list. Only call tools from this session's tool list (`rules/15-grok-tools-only.md`).
+
+### Skill paths + reviewer spawn payload (Grok)
+
+There is **no Skill tool**. LazyGrok skills live under `GROK_PLUGIN_ROOT`
+(or `$HOME/.grok/installed-plugins/lazygrok-*`), **not** workspace `skills/`.
+
+- Load skills with `read_file` on **absolute** catalog paths only.
+- A UI chip `Skill <name>` without a successful absolute `read_file` does not count.
+- Before spawning `lazygrok-code-reviewer` / `lazygrok-gate-reviewer` / QA
+  reviewers, the **parent** must:
+  1. Write the full base…HEAD diff to disk (`git diff … > /tmp/ulw-review.diff`).
+  2. Resolve `PLUGIN_ROOT` and paste absolute skill paths into the child prompt:
+     `$PLUGIN_ROOT/skills/remove-ai-slops/SKILL.md` and
+     `$PLUGIN_ROOT/vendor/lazygrok-skills/programming/SKILL.md`.
+  3. Pass goal, criteria, evidence paths, changed files, notepad path, and
+     report path under `.lazygrok/evidence/`.
+- Reviewer agents include `run_terminal_command` for read-only git fallback;
+  never tell them to use MCP `bash`/`Shell`.
 
 If an example uses a foreign tool name, use the Grok tools table above instead.

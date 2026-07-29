@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 const stateRelPath = ".lazygrok/ralph-loop.local.md"
@@ -55,7 +56,7 @@ func oracleSubagent() string {
 	if v := os.Getenv("RALPH_ORACLE_SUBAGENT"); v != "" {
 		return v
 	}
-	return "code-reviewer"
+	return "lazygrok:lazygrok-code-reviewer"
 }
 
 func ulwVerificationPromise() string {
@@ -90,7 +91,7 @@ func parseFrontmatter(text string) (map[string]string, string) {
 }
 
 func readState(path string) *state {
-	b, err := os.ReadFile(path)
+	b, err := safestate.ReadFile(path)
 	if err != nil {
 		return nil
 	}
@@ -131,7 +132,6 @@ func readState(path string) *state {
 }
 
 func writeState(path string, st *state) error {
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	var lines []string
 	lines = append(lines, "---",
 		fmt.Sprintf("active: %t", st.Active),
@@ -156,11 +156,11 @@ func writeState(path string, st *state) error {
 		lines = append(lines, fmt.Sprintf(`started_at: "%s"`, time.Now().UTC().Format(time.RFC3339)))
 	}
 	lines = append(lines, "---", strings.TrimSpace(st.Prompt), "")
-	return os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
+	return safestate.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 }
 
 func clearState(path string) {
-	_ = os.Remove(path)
+	_ = safestate.Remove(path)
 }
 
 // ClearState removes the ralph loop state file.
@@ -205,7 +205,8 @@ func buildULWVerification(st *state) string {
 		"[ULTRAWORK LOOP VERIFICATION %d/%d]\n"+
 			"You already emitted <promise>%s</promise>. That does NOT finish the loop.\n\n"+
 			"REQUIRED NOW:\n"+
-			"- Call task(subagent_type=\"%s\", load_skills=[], run_in_background=false, ...)\n"+
+			"- Call spawn_subagent({subagent_type: \"%s\", prompt: \"TASK: verify the original task skeptically; report gaps, regressions, and missing tests; end with Agent: oracle then <promise>VERIFIED</promise>\", background: true})\n"+
+			"- Wait for its returned task id with get_command_or_subagent_output\n"+
 			"- Ask the verifier to confirm the original task is actually complete\n"+
 			"- Tell them to review skeptically and look for gaps, regressions, or missing tests\n"+
 			"- The verifier must end with: Agent: oracle\\n<promise>VERIFIED</promise>\n"+
