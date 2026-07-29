@@ -17,6 +17,11 @@ from pathlib import Path
 
 # Order matters for some replacements.
 PORT_SOURCE_REPLACEMENTS_PRE: list[tuple[str, str]] = [
+    (
+        r"npx lazycodex-ai install",
+        r"grok plugin install github:ThewindMom/lazygrok --trust",
+    ),
+    (r"lazycodex-ai install", r"grok plugin update lazygrok"),
     (r"code-yeongyu/lazycodex", r"ThewindMom/lazygrok"),
     (r"openai/codex", r"xai-org/grok-build"),
     (r"LAZYCODEX_SOURCE_ROOT", r"LAZYGROK_SOURCE_ROOT"),
@@ -101,8 +106,6 @@ EXECUTABLE_REPLACEMENTS: list[tuple[str, str]] = [
 
 PORT_SOURCE_REPLACEMENTS_POST: list[tuple[str, str]] = [
     (r"\bulw-research\b", r"ulw-research"),  # keep name; we also alias ultraresearch
-    (r"npx lazycodex-ai install", r"grok plugin install/update (lazygrok)"),
-    (r"lazycodex-ai install", r"grok plugin update lazygrok"),
 ]
 
 REPLACEMENTS = (

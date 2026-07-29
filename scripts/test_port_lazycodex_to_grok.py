@@ -355,6 +355,15 @@ apply_patch(path="example")
         for legacy_tool in ("call_omo_agent", "spawn_agent", "apply_patch"):
             self.assertNotIn(legacy_tool, transformed)
 
+    def test_pristine_install_command_becomes_valid_grok_command(self) -> None:
+        transformed = PORT.transform_text("Install with npx lazycodex-ai install.")
+
+        self.assertEqual(
+            transformed,
+            "Install with grok plugin install github:ThewindMom/lazygrok --trust.",
+        )
+        self.assertNotIn("lazygrok-ai", transformed)
+
 
 class StartWorkRoutingTest(unittest.TestCase):
     def test_routes_start_work_to_the_single_top_level_catalog_entry(self) -> None:
