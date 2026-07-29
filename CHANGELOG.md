@@ -17,6 +17,39 @@ Releases are normally automated via [release-please](https://github.com/googleap
 * Keep vendored git-bash compatibility sources while explicitly leaving the unsupported `git_bash` MCP unregistered on Grok/Linux
 * Keep Codex config migration and version-only root hook status changes out of the Grok runtime
 
+## [0.4.5](https://github.com/ThewindMom/lazygrok/compare/v0.4.4...v0.4.5) (2026-07-29)
+
+
+### Features
+
+* **ultrawork:** sync LazyCodex 4.19.3 for Grok ([8ad2290](https://github.com/ThewindMom/lazygrok/commit/8ad22900ac513356ec4562ebf900426650cc1f53))
+* **ulw:** complete LazyCodex 4.19.3 parity for Grok ([8de70e1](https://github.com/ThewindMom/lazygrok/commit/8de70e116188046cba725c6d5ea4e3adc8c25f33))
+
+
+### Bug Fixes
+
+* **docs:** correct issue install source ([cd945fc](https://github.com/ThewindMom/lazygrok/commit/cd945fc20eb329f8df1f060a0d46e7a52413897c))
+* **docs:** use supported Grok install sources ([b0ae9e6](https://github.com/ThewindMom/lazygrok/commit/b0ae9e6e9eda72970f65600375fef3490ff3ced0))
+* **hooks:** drop Codex bootstrap on Grok ([6bb7e9a](https://github.com/ThewindMom/lazygrok/commit/6bb7e9a4f6e960f92d3dd3933cd07401f579bbf4))
+* **hooks:** heal persisted mirror on update ([69908f7](https://github.com/ThewindMom/lazygrok/commit/69908f765285d519d55a74cd144713d4e6b8e5fd))
+* **hooks:** keep mirror healing durable ([bcaf873](https://github.com/ThewindMom/lazygrok/commit/bcaf873833ebbc94a2524779b3dd69440881273c))
+* **port:** contain skill metadata rewrites ([ed41b37](https://github.com/ThewindMom/lazygrok/commit/ed41b372a2df93955847ce1eec522b103e34c4d5))
+* **port:** emit valid Grok install command ([7ebe499](https://github.com/ThewindMom/lazygrok/commit/7ebe49939ed6fc5fd09ff2333b6df3f2000d2294))
+* **port:** make source mode explicit ([d8c2d33](https://github.com/ThewindMom/lazygrok/commit/d8c2d3383fee5d110a5047473ea8e5b4ea387da7))
+* **port:** preserve generated Grok contracts ([9771f8e](https://github.com/ThewindMom/lazygrok/commit/9771f8e962ae28452ff9fc17a41c2ad5733a53ad))
+* **port:** remove upstream install guidance ([ef2e6b6](https://github.com/ThewindMom/lazygrok/commit/ef2e6b602ad38e5e9f0ac635454f501a03348834))
+* **port:** separate source and tool rewrites ([e121ec3](https://github.com/ThewindMom/lazygrok/commit/e121ec3627bd0f51b4c420288a83ba077b37ad3d))
+* **ralph:** fail closed on state mutation errors ([1915aff](https://github.com/ThewindMom/lazygrok/commit/1915aff7e4455a73650717e9c3ff29eec42cf08c))
+* **runtime:** bind loop mutations to owning sessions ([d2da373](https://github.com/ThewindMom/lazygrok/commit/d2da373576bd926bbeb46e5cd6fea48cd7ef0473))
+* **runtime:** enforce Grok workflow ownership ([6c60016](https://github.com/ThewindMom/lazygrok/commit/6c6001611047ce35751e24a0aeb2bd1d6b16e4f6))
+* **runtime:** fail closed on active workflow state ([925d121](https://github.com/ThewindMom/lazygrok/commit/925d1214727597229d8fa17896c70d6f5dee6d11))
+* **runtime:** reject malformed workflow metadata ([0d3d413](https://github.com/ThewindMom/lazygrok/commit/0d3d413581ebb884cdc97a458079072c08c7ee69))
+* **skills:** use Grok-native frontmatter keys ([84f5dc7](https://github.com/ThewindMom/lazygrok/commit/84f5dc7ed695660f69e0df12af551c6cccd9ca39))
+* **state:** prevent cross-session workflow mutations ([8f6b4b7](https://github.com/ThewindMom/lazygrok/commit/8f6b4b76b2c118a72c1728cdaf603fefb3b37cce))
+* **ulw:** bootstrap banner before skill read ([aa1f1cd](https://github.com/ThewindMom/lazygrok/commit/aa1f1cd9df8838ed5e8358281af2f92e5590fe72))
+* **ulw:** synchronize Grok skill surfaces ([2b341d7](https://github.com/ThewindMom/lazygrok/commit/2b341d73711325f714d523ca6ba112279b59dbd6))
+* **workflows:** enforce active ownership and Grok schemas ([55519dc](https://github.com/ThewindMom/lazygrok/commit/55519dcc0b2e2881da5fb80d78a7b52ae8e0e57d))
+
 ## [0.4.4] (2026-07-27)
 
 ### Docs / first principles

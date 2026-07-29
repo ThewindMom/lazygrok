@@ -1,7 +1,7 @@
 {
   "name": "lazygrok",
-  "version": "0.4.4",
-  "description": "LazyGrok \u2014 LazyCodex/OmO for Grok (lazycodex-ai@4.19.3) plus Grok-native workflow panels under one keyword: ulw. ULW loops, start-work/boulder, specialists, hashline, skill-gate, Ralph, hooks + MCP.",
+  "version": "0.4.5",
+  "description": "LazyGrok — LazyCodex/OmO for Grok (lazycodex-ai@4.19.3) plus Grok-native workflow panels under one keyword: ulw. ULW loops, start-work/boulder, specialists, hashline, skill-gate, Ralph, hooks + MCP.",
   "skills": [
     "./skills",
     "./vendor/lazygrok-skills",
