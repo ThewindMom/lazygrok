@@ -10,7 +10,9 @@ The worker acquires BOTH the bootstrap and auto-update locks under `PLUGIN_DATA`
 - `setup` (`src/setup.ts`): idempotent, degraded-not-fatal re-run of the installer surface: Git Bash preflight (win32), bundled agent TOML linking (staged under `PLUGIN_DATA`, never `PLUGIN_ROOT`), `config.toml` blocks + trusted-hook-hash re-stamp, `git_bash` MCP env stamp, version-aware component bin links plus the `omo` runtime wrapper.
 - `sg` (`src/provision.ts`): pinned ast-grep binary into `<CODEX_HOME>/runtime/ast-grep/<slug>/`; skipped when a preexisting binary resolves unless `OMO_BOOTSTRAP_FORCE_PROVISION=1`; a `--version` probe must match `SG_PINNED_VERSION` or the binary is deleted.
 
-Result is written to `state.json` (`completedForVersion`, `lastStatus: success|degraded`, degraded ledger) and JSONL log lines to `<PLUGIN_DATA>/bootstrap/bootstrap.log`. Runtime failures NEVER exit non-zero; the degraded ledger plus the `npx lazycodex-ai doctor` hint is the error channel.
+This upstream bootstrap is retained for source parity but is not registered in
+LazyGrok's Grok SessionStart hooks. Grok manages plugin provisioning directly;
+refresh with `grok plugin update lazygrok`.
 
 CLI: `hook session-start` | `worker [--codex-home <dir>] [--once] [--only <step>] [--manifest-dir <dir>]` | `download <manifest> <platform> <destination-dir>`.
 

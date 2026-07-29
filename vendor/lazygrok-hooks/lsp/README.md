@@ -115,18 +115,15 @@ Smoke-test the MCP server:
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node dist/cli.js mcp
 ```
 
-## Local Codex Installation
+## LazyGrok installation
 
 ```bash
 grok plugin install ThewindMom/lazygrok --trust
 ```
 
-The installer builds and copies the plugin into `~/.codex/plugins/cache/sisyphuslabs/omo/0.1.0`, registers the `sisyphuslabs` marketplace from the `lazycodex` Git repository, and enables:
-
-```toml
-[plugins."omo@sisyphuslabs"]
-enabled = true
-```
+Grok installs the plugin under its managed plugin directory. Confirm the
+registered LSP hooks and MCP tools with `grok inspect`; no Codex marketplace or
+`~/.codex` configuration is involved.
 
 ## Branch Rules and Releases
 

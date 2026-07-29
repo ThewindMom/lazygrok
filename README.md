@@ -230,6 +230,10 @@ grok plugin install https://github.com/ThewindMom/lazygrok --trust
 # grok plugin install ThewindMom/lazygrok --trust
 ```
 
+`--trust` skips Grok's confirmation prompt; omit it for interactive review.
+Pin a reviewed tag or full commit SHA for an immutable install. See
+[docs/installation.md](docs/installation.md) for the exact forms.
+
 Local clone:
 
 ```bash

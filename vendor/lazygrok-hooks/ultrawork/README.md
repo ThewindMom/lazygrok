@@ -23,7 +23,9 @@ The directive is currently 10,951 chars / 231 lines and follows the GPT-5.5 prom
 grok plugin install ThewindMom/lazygrok --trust
 ```
 
-The installer copies the plugin into `~/.codex/plugins/cache/sisyphuslabs/omo/0.1.0`, writes the Codex marketplace snapshot at `~/.codex/.tmp/marketplaces/sisyphuslabs/`, registers the `sisyphuslabs` marketplace from the `lazycodex` Git repository, enables `omo@sisyphuslabs` in `~/.codex/config.toml`, registers the `UserPromptSubmit` hook, and installs the bundled agent TOMLs as regular files under `~/.codex/agents/`. A `.installed-agents.json` manifest is written next to the bundled TOMLs' source root for clean uninstall tracking.
+Grok manages the plugin checkout and registers LazyGrok's `UserPromptSubmit`
+hook and bundled skills. Confirm them with `grok inspect`; LazyGrok does not
+install Codex marketplace state, `config.toml`, or agent TOMLs.
 
 ## How it works
 

@@ -24,16 +24,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" bootstrap session-start",
-            "timeout": 30,
-            "statusMessage": "(OmO) Checking Bootstrap Provisioning"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "node \"${GROK_PLUGIN_ROOT}/hooks/lazygrok-shim.mjs\" codegraph session-start",
             "timeout": 15,
             "statusMessage": "(OmO) Checking CodeGraph Bootstrap"

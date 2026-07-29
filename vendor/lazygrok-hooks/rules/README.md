@@ -44,24 +44,9 @@ Prefer strict TypeScript and keep runtime imports ESM-compatible.
 grok plugin install ThewindMom/lazygrok --trust
 ```
 
-The local installer builds the plugin and copies a clean cache entry to:
-
-```text
-~/.codex/plugins/cache/sisyphuslabs/omo/0.1.0
-```
-
-It also enables:
-
-```toml
-[features]
-plugins = true
-plugin_hooks = true
-multi_agent = true
-child_agents_md = true
-
-[plugins."omo@sisyphuslabs"]
-enabled = true
-```
+Grok manages the plugin checkout and hook registration. Use `grok inspect` to
+confirm the rules SessionStart hook; no Codex cache or `config.toml` entry is
+created.
 
 ## Configuration
 

@@ -40,6 +40,6 @@ After 3 blocked attempts (`MAX_ATTEMPTS`) the stop passes and state clears. Cont
 - `hooks/hooks.json` (component) and `../../hooks/subagent-stop-verifying-lazycodex-executor-evidence.json` (aggregate) are hand-maintained twins. Edit both or aggregate tests fail. Only the aggregate copy carries the Windows dispatch.
 - `dist/` is gitignored, but root `package.json` `files` ships `.../lazycodex-executor-verify/dist/cli.js` and the hook command targets `dist/cli.js`. Nothing works from a fresh clone until a build runs.
 - `directive.md` is read at runtime, not bundled: `dist/directive.js` resolves `../directive.md`, so the file must stay at component root (it is in `package.json` `files`).
-- `stop_hook_active: true` does NOT bypass the check; the directive says so explicitly. Only the attempt cap and context-pressure markers let a receipt-less stop through.
+- `stop_hook_active: true` does NOT bypass the check; the directive says so explicitly. Only the attempt cap lets a receipt-less stop through; context-pressure markers do not.
 - Blocking output is the stable Codex stop-hook contract: `decision: "block"` + `reason`, nothing else. A passing stop is empty stdout, exit 0. The only nonzero exit is a CLI usage error.
 - The receipt regex takes the first `EVIDENCE_RECORDED:` match and a single `\S+` token: no spaces in evidence paths.

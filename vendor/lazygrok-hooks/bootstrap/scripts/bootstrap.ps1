@@ -11,7 +11,7 @@ $ErrorActionPreference = "Continue"
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 $script:LogPath = $null
-$script:DoctorHint = "npx lazycodex-ai doctor"
+$script:DoctorHint = "grok plugin update lazygrok"
 $script:NonGitBashLauncherDirSegments = @("\windows\system32\", "\microsoft\windowsapps\")
 
 function Initialize-BootstrapLog {

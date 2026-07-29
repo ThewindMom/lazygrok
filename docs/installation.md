@@ -31,6 +31,10 @@ grok plugin install ThewindMom/lazygrok --trust
 grok plugin enable lazygrok
 ```
 
+`--trust` skips Grok's confirmation prompt. Omit it for interactive source
+review. For an immutable install, append a reviewed tag or full commit SHA
+(`ThewindMom/lazygrok@<full-commit-sha>`).
+
 ## Local development
 
 ```bash

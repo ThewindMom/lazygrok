@@ -52,22 +52,15 @@ npm pack --dry-run
 
 `npm test` runs Vitest, `npm run typecheck` runs `tsc --noEmit`, and `npm run check` runs typecheck, Biome, and the build.
 
-## Local Codex Installation
+## LazyGrok installation
 
 ```bash
 grok plugin install ThewindMom/lazygrok --trust
 ```
 
-The installer builds and copies the plugin into `~/.codex/plugins/cache/sisyphuslabs/omo/0.1.0`, registers the `sisyphuslabs` marketplace from the `lazycodex` Git repository, installs runtime dependencies there, and enables:
-
-```toml
-[features]
-plugins = true
-plugin_hooks = true
-
-[plugins."omo@sisyphuslabs"]
-enabled = true
-```
+Grok manages the plugin checkout, bundled runtime, and hook registration.
+Confirm the ULW loop skill and hooks with `grok inspect`; no Codex marketplace
+or `config.toml` entry is created.
 
 ## Privacy
 

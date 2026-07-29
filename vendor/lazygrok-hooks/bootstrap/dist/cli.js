@@ -2119,7 +2119,7 @@ function posixRuntimeWrapper(cliPath, codexHome, binDir, nodeCliPath) {
     "  exit 127",
     "fi",
     `if [ ! -f "${escapedCliPath}" ]; then`,
-    `  echo "omo: runtime target missing at ${escapedCliPath}; reinstall with: npx --yes lazycodex-ai@latest install --no-tui" >&2`,
+    `  echo "omo: runtime target missing at ${escapedCliPath}; refresh with: grok plugin update lazygrok" >&2`,
     "  exit 1",
     "fi",
     `exec "$BUN_BINARY" "${escapedCliPath}" "$@"`,
@@ -2154,7 +2154,7 @@ function windowsRuntimeWrapper(cliPath, codexHome, binDir, nodeCliPath) {
     "  exit /b 127",
     ")",
     `if not exist "${cliPath}" (`,
-    `  echo omo: runtime target missing at ${cliPath}; reinstall with: npx --yes lazycodex-ai@latest install --no-tui 1>&2`,
+    `  echo omo: runtime target missing at ${cliPath}; refresh with: grok plugin update lazygrok 1>&2`,
     "  exit /b 1",
     ")",
     `"%BUN_BINARY%" "${cliPath}" %*`,
@@ -3645,7 +3645,7 @@ async function linkRuntimeWrapperStep(options, binDir, degraded) {
       return;
     degraded.push({
       component: "omo-cli",
-      hint: "use npx lazycodex-ai for the omo CLI",
+      hint: "use the LazyGrok-bundled omo executable",
       reason: "marketplace payload has no dist/cli"
     });
     await appendBootstrapLog(options.pluginData, options.now ?? Date.now(), "omo-cli-degraded", {
@@ -3694,7 +3694,7 @@ function errorMessage(error) {
 }
 
 // components/bootstrap/src/worker.ts
-var BOOTSTRAP_DOCTOR_HINT = "npx lazycodex-ai doctor";
+var BOOTSTRAP_DOCTOR_HINT = "grok plugin update lazygrok";
 function parseWorkerFlags(argv) {
   let codexHome;
   let manifestDir;
