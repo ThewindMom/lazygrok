@@ -76,7 +76,9 @@ If you need to replace LazyGrok's user-hook bridge:
 bash scripts/remove-global-overlays.sh
 grok plugin install ThewindMom/lazygrok@v0.4.4 --trust
 grok plugin enable lazygrok
-node scripts/install-user-hooks.mjs
+PLUGIN="$(find "$HOME/.grok/installed-plugins" -maxdepth 1 -type d -name 'lazygrok-*' -print | sort | tail -1)"
+test -n "$PLUGIN"
+node "$PLUGIN/scripts/install-user-hooks.mjs"
 ```
 
 Removed files are archived under `~/.grok/archive/removed-global-lazygrok-<date>/`.
