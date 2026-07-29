@@ -371,11 +371,17 @@ func removeFileBelow(root, path string) error {
 
 func removeFileFromParent(parentFD int, leaf string, err error) error {
 	if err != nil {
+		if errors.Is(err, syscall.ENOENT) {
+			return nil
+		}
 		return err
 	}
 	defer closeFD(parentFD)
 	fd, err := syscall.Openat(parentFD, leaf, syscall.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	if err != nil {
+		if errors.Is(err, syscall.ENOENT) {
+			return nil
+		}
 		return fmt.Errorf("open state file for removal: %w", err)
 	}
 	if err := validateRegularFile(fd); err != nil {

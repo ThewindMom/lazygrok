@@ -159,13 +159,13 @@ func writeState(path string, st *state) error {
 	return safestate.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 }
 
-func clearState(path string) {
-	_ = safestate.Remove(path)
+func clearState(path string) error {
+	return safestate.Remove(path)
 }
 
 // ClearState removes the ralph loop state file.
-func ClearState(path string) {
-	clearState(path)
+func ClearState(path string) error {
+	return clearState(path)
 }
 
 func hasPromise(text, promise string) bool {
@@ -242,8 +242,24 @@ func shouldAllowRalphStop(ev hookenv.Event) bool {
 	return hookenv.ShouldAllowStopOnAbort(ev.StopReason, ev.StopHookActive, ev.BackgroundTasks)
 }
 
+type stateMutations struct {
+	write func(string, *state) error
+	clear func(string) error
+}
+
+func stateMutationBlocked(action string) (bool, string) {
+	return true, fmt.Sprintf(
+		"[RALPH LOOP STATE ERROR]\nCould not %s loop state. Automatic continuation is paused; do not continue the task or claim completion. Repair workspace state storage, then retry.",
+		action,
+	)
+}
+
 // EvaluateStop implements ralph/ultrawork stop continuation (first in stop chain).
 func EvaluateStop(ev hookenv.Event) (bool, string) {
+	return evaluateStop(ev, stateMutations{write: writeState, clear: clearState})
+}
+
+func evaluateStop(ev hookenv.Event, mutations stateMutations) (bool, string) {
 	ws := hookenv.Workspace(ev)
 	if ws == "" {
 		return false, ""
@@ -264,7 +280,9 @@ func EvaluateStop(ev hookenv.Event) (bool, string) {
 
 	if st.Ultrawork && st.VerificationPending {
 		if isOracleVerified(lastMsg) {
-			clearState(path)
+			if err := mutations.clear(path); err != nil {
+				return stateMutationBlocked("clear verified")
+			}
 			return false, ""
 		}
 		if hasPromise(lastMsg, st.CompletionPromise) {
@@ -278,24 +296,34 @@ func EvaluateStop(ev hookenv.Event) (bool, string) {
 		if st.InitialCompletionPromise == "" {
 			st.InitialCompletionPromise = st.CompletionPromise
 		}
-		_ = writeState(path, st)
+		if err := mutations.write(path, st); err != nil {
+			return stateMutationBlocked("persist verification")
+		}
 		return true, buildULWVerification(st)
 	}
 
 	if !st.Ultrawork && hasPromise(lastMsg, st.CompletionPromise) {
-		clearState(path)
+		if err := mutations.clear(path); err != nil {
+			return stateMutationBlocked("clear completed")
+		}
 		return false, ""
 	}
 
 	if st.Iteration >= st.MaxIterations {
-		clearState(path)
+		if err := mutations.clear(path); err != nil {
+			return stateMutationBlocked("clear exhausted")
+		}
 		return false, ""
 	}
 
 	st.Iteration++
-	_ = writeState(path, st)
+	if err := mutations.write(path, st); err != nil {
+		return stateMutationBlocked("persist progress")
+	}
 	if st.Iteration > st.MaxIterations {
-		clearState(path)
+		if err := mutations.clear(path); err != nil {
+			return stateMutationBlocked("clear exhausted")
+		}
 		return false, ""
 	}
 	return true, buildContinuation(st)

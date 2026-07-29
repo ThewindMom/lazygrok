@@ -28,7 +28,9 @@ func SetContinuationStopped(workspace, sessionID string) error {
 	}
 	root := hookenv.GrokHome()
 	flag := filepath.Join(root, "state", "stop-continuation", sessionID, "stopped")
-	_ = safestate.WriteFileBelow(root, flag, []byte(nowISO()+"\n"), 0o600)
+	if err := safestate.WriteFileBelow(root, flag, []byte(nowISO()+"\n"), 0o600); err != nil {
+		return err
+	}
 	if workspace == "" {
 		return nil
 	}
@@ -85,11 +87,11 @@ func ClearContinuationStopped(workspace, sessionID string) {
 }
 
 // ClearBoulder removes .lazygrok/boulder.json in workspace.
-func ClearBoulder(workspace string) {
+func ClearBoulder(workspace string) error {
 	if workspace == "" {
-		return
+		return nil
 	}
-	_ = safestate.Remove(boulderPath(workspace))
+	return safestate.Remove(boulderPath(workspace))
 }
 
 // CollectStopContinuation handles /stop-continuation and /resume-continuation.
@@ -102,11 +104,17 @@ func CollectStopContinuation(ev hookenv.Event) string {
 	sid := ev.SessionID
 
 	if stopContRE.MatchString(prompt) {
-		SetContinuationStopped(ws, sid)
 		if ws != "" {
-			ralph.ClearState(ralph.StatePath(ws))
+			if err := ralph.ClearState(ralph.StatePath(ws)); err != nil {
+				return "<STOP_CONTINUATION>Unable to stop safely: Ralph/ultrawork loop state could not be cleared. Repair workspace state storage, then retry.</STOP_CONTINUATION>"
+			}
+			if err := ClearBoulder(ws); err != nil {
+				return "<STOP_CONTINUATION>Unable to stop safely: boulder state could not be cleared. Repair workspace state storage, then retry.</STOP_CONTINUATION>"
+			}
 		}
-		ClearBoulder(ws)
+		if err := SetContinuationStopped(ws, sid); err != nil {
+			return "<STOP_CONTINUATION>Unable to persist the stop marker. Repair continuation state storage, then retry.</STOP_CONTINUATION>"
+		}
 		return "<STOP_CONTINUATION>Stopped: todo continuation, Ralph/ultrawork loop, and boulder.json cleared. Auto-continue resumes on SessionEnd or /resume-continuation.</STOP_CONTINUATION>"
 	}
 	if resumeContRE.MatchString(prompt) {
