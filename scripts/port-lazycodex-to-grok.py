@@ -101,6 +101,13 @@ REPLACEMENTS: list[tuple[str, str]] = [
     (r"lazycodex-ai install", r"grok plugin update lazygrok"),
 ]
 
+PORTED_TEXT_MARKERS = (
+    "ThewindMom/lazygrok",
+    "LazyGrok",
+    "lazygrok-",
+    ".lazygrok/",
+)
+
 # Blocks that need smarter rewrites after naive replace
 GOAL_PROTOCOL = """
 ## Grok goal registration (host tools optional)
@@ -481,8 +488,10 @@ def normalize_spawn_keyword_calls(text: str) -> str:
 
 def transform_text(text: str) -> str:
     out = text
-    for pat, repl in REPLACEMENTS:
-        out = re.sub(pat, repl, out)
+    already_ported = any(marker in text for marker in PORTED_TEXT_MARKERS)
+    if not already_ported:
+        for pat, repl in REPLACEMENTS:
+            out = re.sub(pat, repl, out)
     out = normalize_spawn_keyword_calls(out)
     out = normalize_spawn_object_fields(out)
 

@@ -325,6 +325,20 @@ Keep this section.
             self.assertEqual(PORT.find_unsupported_active_tool_routes(root), [])
 
 
+class GeneratedOutputIdempotenceTest(unittest.TestCase):
+    def test_real_generated_outputs_are_fixed_points(self) -> None:
+        generated_paths = (
+            "prompts/ultrawork/grok.md",
+            "vendor/lazygrok-hooks/ultrawork/skills/ultrawork/SKILL.md",
+            "skills/ulw-plan/SKILL.md",
+        )
+
+        for relative_path in generated_paths:
+            with self.subTest(path=relative_path):
+                generated = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+                self.assertEqual(PORT.transform_text(generated), generated)
+
+
 class StartWorkRoutingTest(unittest.TestCase):
     def test_routes_start_work_to_the_single_top_level_catalog_entry(self) -> None:
         vendor = Path("/plugin/vendor/lazygrok-skills")
