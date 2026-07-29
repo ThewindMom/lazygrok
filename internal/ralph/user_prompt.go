@@ -1,6 +1,7 @@
 package ralph
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -28,18 +29,15 @@ func CollectUserPrompt(ev hookenv.Event) string {
 	sid := ev.SessionID
 
 	if cancelRE.MatchString(prompt) {
-		st := readState(path)
-		if st == nil {
-			if err := clearState(path); err != nil {
-				return "<RALPH_LOOP>Unable to cancel safely: Ralph state could not be cleared and may remain active.</RALPH_LOOP>"
+		cleared, err := clearStateForSession(path, sid)
+		if err != nil {
+			if errors.Is(err, ErrSessionMismatch) {
+				return "<RALPH_LOOP>Cancellation ignored: the active Ralph loop belongs to another session.</RALPH_LOOP>"
 			}
-			return "<RALPH_LOOP>No active Ralph loop for this workspace.</RALPH_LOOP>"
-		}
-		if !sessionOwnsState(st, sid) {
-			return "<RALPH_LOOP>Cancellation ignored: the active Ralph loop belongs to another session.</RALPH_LOOP>"
-		}
-		if err := clearState(path); err != nil {
 			return "<RALPH_LOOP>Unable to cancel safely: Ralph state could not be cleared and remains active.</RALPH_LOOP>"
+		}
+		if !cleared {
+			return "<RALPH_LOOP>No active Ralph loop for this workspace.</RALPH_LOOP>"
 		}
 		return "<RALPH_LOOP>Canceled active Ralph loop. Cleared " + stateRelPath + ".</RALPH_LOOP>"
 	}
@@ -51,6 +49,9 @@ func CollectUserPrompt(ev hookenv.Event) string {
 /ralph-loop "fix bug"</RALPH_LOOP>`
 		}
 		return ""
+	}
+	if sid == "" {
+		return "<RALPH_LOOP>Unable to start safely: this event has no session ID.</RALPH_LOOP>"
 	}
 
 	st := &state{
@@ -65,7 +66,16 @@ func CollectUserPrompt(ev hookenv.Event) string {
 		Prompt:                   args.Task,
 		Ultrawork:                args.Ultrawork,
 	}
-	if err := writeState(path, st); err != nil {
+	if err := withStateLock(path, func() error {
+		existing, exists, err := stateForMutation(path)
+		if err != nil {
+			return err
+		}
+		if exists && !sessionOwnsState(existing, sid) {
+			return ErrSessionMismatch
+		}
+		return writeState(path, st)
+	}); err != nil {
 		return ""
 	}
 	skillName := "ralph-loop"

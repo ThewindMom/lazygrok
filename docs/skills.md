@@ -8,12 +8,12 @@ an active skill root.
 ## Skill gate flow
 
 1. **SessionStart** — build `all-skills.json` from `grok inspect`; inject catalog in `additionalContext`.
-2. **Each prompt** — reminder for unloaded skills (`user-prompt.sh`).
-3. **Before writes** — `pre-tool-mutate.sh` denies mutating tools until at least one catalog skill was Read.
-4. **After Read** — `post-tool-read.sh` records the skill id when path ends with `SKILL.md`.
+2. **Each prompt** — the Go `user-prompt` dispatcher reminds the model about unloaded skills.
+3. **Before writes** — the Go `pre-tool-use` dispatcher denies mutating tools until at least one catalog skill was Read.
+4. **After Read** — the Go `post-tool-read` dispatcher records the skill id when a path ends with `SKILL.md`.
 5. **Empty catalog** — fail-open; Read `agent-skill-gate` meta-skill once.
 
-Hooks: `hooks/pre-tool-mutate.sh`, `hooks/post-tool-read.sh`, `hooks/session-start.sh`. Rules: `rules/00-agent-skill-gate.md`.
+Hook registration lives in `hooks/hooks.json`; `hooks/run-hook.sh` selects the packaged Go dispatcher and `hooks/README.md` documents the event map. Rules live in `rules/00-agent-skill-gate.md`.
 
 | Skill | Slash / trigger | Purpose |
 |-------|-----------------|--------|
@@ -30,7 +30,7 @@ Hooks: `hooks/pre-tool-mutate.sh`, `hooks/post-tool-read.sh`, `hooks/session-sta
 
 | Prompt | Effect |
 |--------|--------|
-| `/stop-continuation` | Pause auto-continue; clears loop + boulder |
+| `/stop-continuation` | Pause auto-continue for this session and clear its Ralph loop; preserve shared boulder state |
 | `/resume-continuation` | Resume auto-continue |
 
 ## Custom skills in your project

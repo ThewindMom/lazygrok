@@ -244,6 +244,61 @@ func TestSessionMissingDoesNotAdvanceBoundLoop(t *testing.T) {
 	}
 }
 
+func TestStartLoopRejectsMissingAndForeignSessions(t *testing.T) {
+	ws := t.TempDir()
+	cfg := Defaults()
+
+	if err := StartLoop(ws, "ralph", "test", "DONE", "", cfg); err == nil {
+		t.Fatal("StartLoop accepted a missing session ID")
+	}
+	if err := StartLoop(ws, "ralph", "owner work", "DONE", "session1", cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := StartLoop(ws, "ralph", "foreign work", "DONE", "session2", cfg); err != ErrSessionMismatch {
+		t.Fatalf("foreign StartLoop error = %v, want ErrSessionMismatch", err)
+	}
+	var loopState LoopState
+	if err := state.ReadJSON(statePath(ws), &loopState); err != nil {
+		t.Fatal(err)
+	}
+	if loopState.SessionID != "session1" || loopState.Objective != "owner work" {
+		t.Fatalf("foreign start replaced owner state: %#v", loopState)
+	}
+}
+
+func TestStopAndResumeRejectForeignSession(t *testing.T) {
+	ws := t.TempDir()
+	gh := t.TempDir()
+	cfg := Defaults()
+
+	if err := StartLoop(ws, "ralph", "owner work", "DONE", "session1", cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := StopContinuation(ws, gh, "session2"); err != ErrSessionMismatch {
+		t.Fatalf("foreign stop error = %v, want ErrSessionMismatch", err)
+	}
+	var loopState LoopState
+	if err := state.ReadJSON(statePath(ws), &loopState); err != nil {
+		t.Fatal(err)
+	}
+	if loopState.Paused {
+		t.Fatal("foreign stop paused owner loop")
+	}
+
+	if err := StopContinuation(ws, gh, "session1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ResumeContinuation(gh, "session2", ws); err != ErrSessionMismatch {
+		t.Fatalf("foreign resume error = %v, want ErrSessionMismatch", err)
+	}
+	if err := state.ReadJSON(statePath(ws), &loopState); err != nil {
+		t.Fatal(err)
+	}
+	if !loopState.Paused {
+		t.Fatal("foreign resume unpaused owner loop")
+	}
+}
+
 func TestContinuationDisabled(t *testing.T) {
 	ws := t.TempDir()
 	gh := t.TempDir()

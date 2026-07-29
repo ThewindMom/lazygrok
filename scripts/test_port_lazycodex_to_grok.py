@@ -373,6 +373,18 @@ class GeneratedCopyParityTest(unittest.TestCase):
         self.assertIn("Playwright/browser", transformed)
         self.assertIn("`.lazygrok/drafts/example.md`", transformed)
 
+    def test_maps_upstream_product_repositories_to_grok_owners(self) -> None:
+        transformed = PORT.transform_text(
+            "code-yeongyu/lazycodex openai/codex "
+            "LAZYCODEX_SOURCE_ROOT openai-codex-source"
+        )
+
+        self.assertEqual(
+            transformed,
+            "ThewindMom/lazygrok xai-org/grok-build "
+            "LAZYGROK_SOURCE_ROOT grok-build-source",
+        )
+
 
 class ActiveDocumentationTest(unittest.TestCase):
     def test_active_ralph_rule_does_not_claim_ulw_triggers(self) -> None:

@@ -17,7 +17,10 @@ import (
 
 const stateRelPath = ".lazygrok/ralph-loop.local.md"
 
-var ErrSessionMismatch = errors.New("ralph loop belongs to another session")
+var (
+	ErrSessionMismatch = errors.New("ralph loop belongs to another session")
+	ErrStateUnreadable = errors.New("ralph loop state is unreadable or inactive")
+)
 
 // StatePath returns the ralph loop state file for a workspace.
 func StatePath(workspace string) string {
@@ -98,6 +101,10 @@ func readState(path string) *state {
 	if err != nil {
 		return nil
 	}
+	return parseState(b)
+}
+
+func parseState(b []byte) *state {
 	fm, body := parseFrontmatter(string(b))
 	active := fm["active"] == "true" || fm["active"] == "True"
 	if !active {
@@ -168,23 +175,62 @@ func clearState(path string) error {
 
 // ClearState removes the ralph loop state file.
 func ClearState(path string) error {
-	return clearState(path)
+	return withStateLock(path, func() error {
+		return clearState(path)
+	})
 }
 
 // ClearStateForSession removes Ralph state only when the caller owns it.
 func ClearStateForSession(path, sessionID string) error {
-	st := readState(path)
+	_, err := clearStateForSession(path, sessionID)
+	return err
+}
+
+func clearStateForSession(path, sessionID string) (bool, error) {
+	cleared := false
+	err := withStateLock(path, func() error {
+		st, exists, err := stateForMutation(path)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return nil
+		}
+		if !sessionOwnsState(st, sessionID) {
+			return ErrSessionMismatch
+		}
+		if err := clearState(path); err != nil {
+			return err
+		}
+		cleared = true
+		return nil
+	})
+	return cleared, err
+}
+
+func stateForMutation(path string) (*state, bool, error) {
+	b, err := safestate.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, true, err
+	}
+	st := parseState(b)
 	if st == nil {
-		return clearState(path)
+		return nil, true, ErrStateUnreadable
 	}
-	if !sessionOwnsState(st, sessionID) {
-		return ErrSessionMismatch
-	}
-	return clearState(path)
+	return st, true, nil
+}
+
+func withStateLock(path string, action func() error) error {
+	workspace := filepath.Dir(filepath.Dir(path))
+	lockPath := filepath.Join(workspace, ".lazygrok", ".ralph-loop.lock")
+	return safestate.WithFileLockBelow(workspace, lockPath, action)
 }
 
 func sessionOwnsState(st *state, sessionID string) bool {
-	return st.SessionID == "" || (sessionID != "" && st.SessionID == sessionID)
+	return st.SessionID != "" && sessionID != "" && st.SessionID == sessionID
 }
 
 func hasPromise(text, promise string) bool {
@@ -275,7 +321,20 @@ func stateMutationBlocked(action string) (bool, string) {
 
 // EvaluateStop implements ralph/ultrawork stop continuation (first in stop chain).
 func EvaluateStop(ev hookenv.Event) (bool, string) {
-	return evaluateStop(ev, stateMutations{write: writeState, clear: clearState})
+	ws := hookenv.Workspace(ev)
+	if ws == "" {
+		return false, ""
+	}
+	var blocked bool
+	var message string
+	err := withStateLock(StatePath(ws), func() error {
+		blocked, message = evaluateStop(ev, stateMutations{write: writeState, clear: clearState})
+		return nil
+	})
+	if err != nil {
+		return stateMutationBlocked("lock")
+	}
+	return blocked, message
 }
 
 func evaluateStop(ev hookenv.Event, mutations stateMutations) (bool, string) {
@@ -386,5 +445,11 @@ func WriteStateJSON(workspace string, stateJSON []byte) error {
 	if v, ok := raw["started_at"].(string); ok {
 		st.StartedAt = v
 	}
-	return writeState(StatePath(workspace), st)
+	if st.SessionID == "" {
+		return hookenv.ErrInvalidSessionID
+	}
+	path := StatePath(workspace)
+	return withStateLock(path, func() error {
+		return writeState(path, st)
+	})
 }

@@ -108,14 +108,11 @@ func CollectStopContinuation(ev hookenv.Event) string {
 			if err := ralph.ClearStateForSession(ralph.StatePath(ws), sid); err != nil {
 				return "<STOP_CONTINUATION>Unable to stop safely: Ralph/ultrawork loop state could not be cleared. Repair workspace state storage, then retry.</STOP_CONTINUATION>"
 			}
-			if err := ClearBoulder(ws); err != nil {
-				return "<STOP_CONTINUATION>Unable to stop safely: boulder state could not be cleared. Repair workspace state storage, then retry.</STOP_CONTINUATION>"
-			}
 		}
 		if err := SetContinuationStopped(ws, sid); err != nil {
 			return "<STOP_CONTINUATION>Unable to persist the stop marker. Repair continuation state storage, then retry.</STOP_CONTINUATION>"
 		}
-		return "<STOP_CONTINUATION>Stopped: todo continuation, Ralph/ultrawork loop, and boulder.json cleared. Auto-continue resumes on SessionEnd or /resume-continuation.</STOP_CONTINUATION>"
+		return "<STOP_CONTINUATION>Stopped auto-continuation for this session and cleared its Ralph/ultrawork loop. Shared boulder state remains intact. Auto-continue resumes on SessionEnd or /resume-continuation.</STOP_CONTINUATION>"
 	}
 	if resumeContRE.MatchString(prompt) {
 		ClearContinuationStopped(ws, sid)

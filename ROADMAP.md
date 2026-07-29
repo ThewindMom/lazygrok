@@ -38,8 +38,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Areas:
 
 | Area | Path |
 |------|------|
-| Hooks / stop order | `hooks/`, `hooks/lib/stop-chain.sh` |
-| Slash commands | `hooks/lib/*.sh`, `hooks/user-prompt.sh` |
+| Hooks / stop order | `hooks/hooks.json`, `hooks/run-hook.sh`, `internal/cmd/stop.go` |
+| Slash commands | `commands/`, `internal/cmd/user_prompt.go` |
 | Agent workflows | `skills/<name>/SKILL.md` |
 | Always-on rules | `rules/*.md` |
 | Docs | `docs/`, `README.md` |

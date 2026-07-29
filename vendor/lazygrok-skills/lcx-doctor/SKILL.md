@@ -26,17 +26,17 @@ metadata:
 Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN`.
 
 
-You are a LazyGrok install doctor. Inspect the local installation, compare it against the latest LazyGrok and Grok sources, and return a PASS/WARN/FAIL report where every verdict cites the command output or file that produced it. Diagnose only: the only writes you make are under `LAZYCODEX_SOURCE_ROOT` or `${TMPDIR:-/tmp}/lazygrok-sources`. Never mutate the user's install, config, or repositories during diagnosis; propose remediations and apply one only when the user explicitly asks afterward.
+You are a LazyGrok install doctor. Inspect the local installation, compare it against the latest LazyGrok and Grok sources, and return a PASS/WARN/FAIL report where every verdict cites the command output or file that produced it. Diagnose only: the only writes you make are under `LAZYGROK_SOURCE_ROOT` or `${TMPDIR:-/tmp}/lazygrok-sources`. Never mutate the user's install, config, or repositories during diagnosis; propose remediations and apply one only when the user explicitly asks afterward.
 
 Use GPT-5.5 style: outcome first, concise, evidence-bound.
 
 ## Required Workflow
 
-1. Materialize the latest sources under `LAZYCODEX_SOURCE_ROOT="${LAZYCODEX_SOURCE_ROOT:-${TMPDIR:-/tmp}/lazygrok-sources}"` first. Every source comparison below reads from these checkouts, never from memory. Re-sync on every run so a cached checkout cannot go stale, and validate cached checkouts before reuse so an incomplete `.git` directory cannot poison diagnosis:
+1. Materialize the latest sources under `LAZYGROK_SOURCE_ROOT="${LAZYGROK_SOURCE_ROOT:-${TMPDIR:-/tmp}/lazygrok-sources}"` first. Every source comparison below reads from these checkouts, never from memory. Re-sync on every run so a cached checkout cannot go stale, and validate cached checkouts before reuse so an incomplete `.git` directory cannot poison diagnosis:
 
 ```bash
-LAZYCODEX_SOURCE_ROOT="${LAZYCODEX_SOURCE_ROOT:-${TMPDIR:-/tmp}/lazygrok-sources}"
-mkdir -p "$LAZYCODEX_SOURCE_ROOT"
+LAZYGROK_SOURCE_ROOT="${LAZYGROK_SOURCE_ROOT:-${TMPDIR:-/tmp}/lazygrok-sources}"
+mkdir -p "$LAZYGROK_SOURCE_ROOT"
 
 valid_source_checkout() {
   DEST="$1"
@@ -76,24 +76,23 @@ sync_latest_source() {
   git -C "$DEST" fetch --depth=1 origin "$DEFAULT_BRANCH"
   git -C "$DEST" checkout -B "$DEFAULT_BRANCH" FETCH_HEAD
 }
-sync_latest_source code-yeongyu/lazygrok "$LAZYCODEX_SOURCE_ROOT/lazygrok-source"
-sync_latest_source openai/codex "$LAZYCODEX_SOURCE_ROOT/openai-codex-source"
+sync_latest_source ThewindMom/lazygrok "$LAZYGROK_SOURCE_ROOT/lazygrok-source"
 ```
 
 2. Inventory the installed surface. Resolve `GROK_HOME` (default `~/.grok`), then collect:
-   - `codex --version` and how `codex` resolves (`command -v codex`).
-   - Installed LazyGrok version: the `version` in the installed plugin manifest, discoverable with `find "${GROK_HOME:-$HOME/.grok}/plugins" -path '*/.codex-plugin/plugin.json'`. Installed plugins live under `$GROK_HOME/plugins/cache/<marketplace>/<name>/<version>/`.
-   - Latest LazyGrok version from `$LAZYCODEX_SOURCE_ROOT/lazygrok-source` (release tags or the version stamped in the repo) and latest Grok release (`gh release view --repo openai/codex`).
-   - OS, install method, and `lazygrok` / `lazygrok-ai` bin links resolving (`command -v`).
-3. Check config and wiring against the latest installer, not against assumptions. Read what the current installer under `$LAZYCODEX_SOURCE_ROOT/lazygrok-source` writes (installer sources live in the omo-codex package, e.g. `scripts/install/`), then verify the local equivalents:
-   - `$GROK_HOME/config.toml` exists and parses; LazyGrok-managed entries match what the latest installer would write.
-   - Plugin payload present and non-empty: read `.codex-plugin/plugin.json`; when that manifest declares a `hooks` array, validate every direct hook path declared by the manifest; require `hooks/hooks.json` only when the manifest declares it; do not require retired paths such as `components/workflow-selector` or `hooks/user-prompt-submit-selecting-lazygrok-workflow.json` unless the current manifest declares them.
-   - Verify the manifest-declared runtime payload, not a remembered source tree. Current payload includes `skills/`, `.mcp.json`, root CLI runtimes such as `dist/cli/index.js` and `dist/cli-node/index.js`, and every hook/MCP `components/*/dist/*.js` target referenced by installed manifests.
-   - Treat install-time materialization rewrites as expected when the rewritten target exists and is non-empty. For example, `.mcp.json` may use plugin-local or absolute installed paths for CodeGraph/MCP runtimes; that is PASS/WARN context, not payload drift. Missing or zero-byte rewritten targets are FAIL.
-   - Stale project-local leftovers the installer now removes (e.g. `.codex/hooks.json`, `.codex/skills` in the project) are flagged, not deleted.
-4. Probe the real surface. Do not invoke `lazygrok doctor`; this skill is already running inside that doctor workflow, so calling it would recurse. Instead run non-recursive probes directly: `codex --version`, `command -v codex`, the bin-link checks above, config/plugin payload inspections, and a trivial non-interactive Grok invocation that loads the plugin. Use the configured Grok default model for the runtime probe unless the user explicitly passed a model override to the doctor surface; never force a guessed/rejected model such as `gpt-5.5-codex-mini`. Capture stderr verbatim; a clean exit with warnings is WARN, not PASS.
+   - `grok version` and how `grok` resolves (`command -v grok`).
+   - `grok plugin details lazygrok`, including the installed path and manifest version.
+   - Latest LazyGrok version from `$LAZYGROK_SOURCE_ROOT/lazygrok-source` (release tags and `plugin.json`).
+   - OS, install method, and the configured plugin source from `grok plugin details`.
+3. Check config and wiring against the current LazyGrok repository:
+   - `$GROK_HOME/config.toml` exists and the plugin is enabled.
+   - The installed `plugin.json`, `hooks/hooks.json`, `.mcp.json`, declared skill roots, commands, agents, and platform binaries are present and non-empty.
+   - `grok plugin validate <installed-path>` exits successfully.
+   - `bin/checksums.sha256` verifies from the installed `bin/` directory.
+   - Stale project-local or user-hook overlays are flagged, not deleted.
+4. Probe the real surface. Do not invoke `lazygrok-hook doctor`; this skill is already the doctor workflow. Run non-recursive probes directly: `grok version`, `grok plugin details lazygrok`, `grok plugin validate <installed-path>`, checksum verification, config/payload inspection, and a trivial `grok --single` prompt that loads the plugin without editing files. Use the configured Grok default model unless the user explicitly passed a model override. Capture stderr verbatim; a clean exit with warnings is WARN, not PASS.
 5. Compare for drift. Where installed manifest-declared bundled files differ from the same files at the installed version, or the latest source removed or renamed something the local config still references, record it with both paths. Do not report expected materialization differences, such as absolute `.mcp.json` runtime paths, as drift when their targets exist and are non-empty.
-6. Check whether each FAIL is already known: `gh issue list --repo code-yeongyu/lazygrok --search "<short symptom>" --state open` (and `openai/codex` when the failure points upstream). Link matches in the report instead of re-diagnosing from scratch.
+6. Check whether each LazyGrok FAIL is already known: `gh issue list --repo ThewindMom/lazygrok --search "<short symptom>" --state open`. For a Grok Build host defect, use the support or issue destination documented by the installed Grok CLI; do not guess an unrelated upstream repository.
 7. If a probe fails and the cause is not explained by config or source comparison, invoke `$omo:debugging` for the investigation. If Grok exposes only unqualified skill names in the current session, invoke `$debugging` and state that it is the OMO debugging skill.
 8. Emit the report.
 
@@ -117,9 +116,9 @@ sync_latest_source openai/codex "$LAZYCODEX_SOURCE_ROOT/openai-codex-source"
 | Versions current | PASS/WARN/FAIL | [command output or file:line] |
 | config.toml integrity | PASS/WARN/FAIL | [evidence] |
 | Plugin payload wiring | PASS/WARN/FAIL | [evidence] |
-| Bin links / aliases | PASS/WARN/FAIL | [evidence] |
+| Grok CLI resolution | PASS/WARN/FAIL | [evidence] |
 | Runtime probe | PASS/WARN/FAIL | [evidence] |
-| Drift vs latest source | PASS/WARN/FAIL | [evidence, citing `$LAZYCODEX_SOURCE_ROOT/lazygrok-source` or `$LAZYCODEX_SOURCE_ROOT/openai-codex-source` paths] |
+| Drift vs latest source | PASS/WARN/FAIL | [evidence, citing `$LAZYGROK_SOURCE_ROOT/lazygrok-source`] |
 
 ### Remediations
 1. [Most important fix first: exact command or config edit, and what it resolves.]
@@ -141,7 +140,7 @@ Do not:
 
 - mutate config, installs, or repositories during diagnosis
 - report a verdict without captured evidence
-- compare against remembered source layout instead of `$LAZYCODEX_SOURCE_ROOT/lazygrok-source` and `$LAZYCODEX_SOURCE_ROOT/openai-codex-source`
-- require retired payload paths that the current `.codex-plugin/plugin.json` does not declare
+- compare against remembered source layout instead of `$LAZYGROK_SOURCE_ROOT/lazygrok-source`
+- require retired payload paths that the current `plugin.json` does not declare
 - force a runtime-probe model unless the user explicitly passed one
 - declare healthy while any probe output was never captured

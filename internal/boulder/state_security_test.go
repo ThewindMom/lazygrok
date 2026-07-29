@@ -3,13 +3,20 @@ package boulder
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"lazygrok/internal/hookenv"
 )
 
 func TestSetContinuationStopped_rejectsSymlinkMarkerDirectory(t *testing.T) {
 	// Given: the workspace continuation marker directory redirects outside.
 	root := t.TempDir()
-	t.Setenv("GROK_HOME", filepath.Join(root, "grok-home"))
+	grokHome := filepath.Join(root, "grok-home")
+	t.Setenv("GROK_HOME", grokHome)
+	if err := os.MkdirAll(grokHome, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	workspace := filepath.Join(root, "workspace")
 	outside := filepath.Join(root, "outside")
 	if err := os.MkdirAll(filepath.Join(workspace, ".lazygrok"), 0o755); err != nil {
@@ -65,5 +72,40 @@ func TestMirrorTodos_rejectsHardlinkTarget(t *testing.T) {
 	}
 	if string(got) != "sentinel" {
 		t.Fatalf("outside sentinel changed to %q", got)
+	}
+}
+
+func TestStopContinuationPreservesSharedBoulderState(t *testing.T) {
+	root := t.TempDir()
+	grokHome := filepath.Join(root, "grok-home")
+	t.Setenv("GROK_HOME", grokHome)
+	if err := os.MkdirAll(filepath.Join(grokHome, "state", "stop-continuation", "other-session"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	workspace := filepath.Join(root, "workspace")
+	if err := os.MkdirAll(filepath.Join(workspace, ".lazygrok", continuationMarkerDir), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if !writeBoulder(workspace, map[string]any{
+		"active_work_id": "work-1",
+		"session_ids":    []any{"owner-session"},
+		"works": map[string]any{
+			"work-1": map[string]any{"session_ids": []any{"owner-session"}},
+		},
+	}) {
+		t.Fatal("writeBoulder failed")
+	}
+
+	message := CollectStopContinuation(hookenv.Event{
+		WorkspaceRoot: workspace,
+		SessionID:     "other-session",
+		Prompt:        "/stop-continuation",
+	})
+
+	if !strings.Contains(message, "Shared boulder state remains intact") {
+		t.Fatalf("message = %q, want shared-state notice", message)
+	}
+	if state := readBoulder(workspace); state == nil {
+		t.Fatal("session-local stop removed shared boulder state")
 	}
 }

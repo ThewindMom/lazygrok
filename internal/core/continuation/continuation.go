@@ -17,7 +17,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,6 +32,8 @@ import (
 
 // StateVersion is the continuation state schema version.
 const StateVersion = 2
+
+var ErrSessionMismatch = errors.New("continuation loop belongs to another session")
 
 // LoopState represents the continuation loop state.
 type LoopState struct {
@@ -86,48 +90,73 @@ func StopContinuation(workspace, grokHome, sessionID string) error {
 	if stopMarkerPath(grokHome, sessionID) == "" {
 		return hookenv.ErrInvalidSessionID
 	}
-	// Write stop marker
-	markerPath := stopMarkerPath(grokHome, sessionID)
-	if err := safestate.WriteFileBelow(grokHome, markerPath, []byte(time.Now().UTC().Format(time.RFC3339)), 0o600); err != nil {
-		return err
-	}
-
-	// Pause active loops
-	if workspace != "" {
-		path := statePath(workspace)
-		var ls LoopState
-		if err := state.ReadJSON(path, &ls); err == nil && ls.Active {
-			ls.Paused = true
-			ls.PauseReason = "explicit stop by user"
-			if err := state.WriteJSON(path, ls); err != nil {
-				return err
+	pause := func() error {
+		if workspace != "" {
+			path := statePath(workspace)
+			var ls LoopState
+			if err := state.ReadJSON(path, &ls); err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					return err
+				}
+			} else if ls.Active {
+				if !sessionOwnsLoop(ls.SessionID, sessionID) {
+					return ErrSessionMismatch
+				}
+				ls.Paused = true
+				ls.PauseReason = "explicit stop by user"
+				if err := state.WriteJSON(path, ls); err != nil {
+					return err
+				}
 			}
 		}
+		return safestate.WriteFileBelow(grokHome, stopMarkerPath(grokHome, sessionID), []byte(time.Now().UTC().Format(time.RFC3339)), 0o600)
 	}
-	return nil
+	if workspace == "" {
+		return pause()
+	}
+	return safestate.WithFileLockBelow(workspace, filepath.Join(workspace, ".lazygrok", ".continuation.lock"), pause)
 }
 
 // ResumeContinuation clears the stop marker and resumes paused loops.
 func ResumeContinuation(grokHome, sessionID, workspace string) error {
-	if stopMarkerPath(grokHome, sessionID) != "" {
-		_ = safestate.RemoveBelow(grokHome, stopMarkerPath(grokHome, sessionID))
+	if stopMarkerPath(grokHome, sessionID) == "" {
+		return hookenv.ErrInvalidSessionID
 	}
-	// Clear paused state
-	if workspace != "" {
-		path := statePath(workspace)
-		var ls LoopState
-		if err := state.ReadJSON(path, &ls); err == nil && ls.Active && ls.Paused {
-			ls.Paused = false
-			ls.PauseReason = ""
-			ls.LastIterationAt = time.Now().UTC().Format(time.RFC3339)
-			return state.WriteJSON(path, ls)
+	resume := func() error {
+		if workspace != "" {
+			path := statePath(workspace)
+			var ls LoopState
+			if err := state.ReadJSON(path, &ls); err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					return err
+				}
+			} else if ls.Active {
+				if !sessionOwnsLoop(ls.SessionID, sessionID) {
+					return ErrSessionMismatch
+				}
+			}
+			if ls.Active && ls.Paused {
+				ls.Paused = false
+				ls.PauseReason = ""
+				ls.LastIterationAt = time.Now().UTC().Format(time.RFC3339)
+				if err := state.WriteJSON(path, ls); err != nil {
+					return err
+				}
+			}
 		}
+		return safestate.RemoveBelow(grokHome, stopMarkerPath(grokHome, sessionID))
 	}
-	return nil
+	if workspace == "" {
+		return resume()
+	}
+	return safestate.WithFileLockBelow(workspace, filepath.Join(workspace, ".lazygrok", ".continuation.lock"), resume)
 }
 
 // StartLoop initializes a new continuation loop.
 func StartLoop(workspace, loopType, objective, completionCriteria, sessionID string, cfg *config.Config) error {
+	if sessionID == "" {
+		return hookenv.ErrInvalidSessionID
+	}
 	maxIter := cfg.MaxContinuations
 	if loopType == "ralph" && maxIter > 100 {
 		maxIter = 100
@@ -149,7 +178,19 @@ func StartLoop(workspace, loopType, objective, completionCriteria, sessionID str
 		Paused:             false,
 	}
 
-	return state.WriteJSON(statePath(workspace), ls)
+	path := statePath(workspace)
+	lockPath := filepath.Join(workspace, ".lazygrok", ".continuation.lock")
+	return safestate.WithFileLockBelow(workspace, lockPath, func() error {
+		var existing LoopState
+		if err := state.ReadJSON(path, &existing); err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+		} else if existing.Active && !sessionOwnsLoop(existing.SessionID, sessionID) {
+			return ErrSessionMismatch
+		}
+		return state.WriteJSON(path, ls)
+	})
 }
 
 // EvaluateStop runs the stop pipeline and returns whether to continue.
@@ -191,7 +232,7 @@ func evaluateActiveLoop(path, sessionID string, cfg *config.Config) StopResult {
 	}
 
 	// Check session match
-	if ls.SessionID != "" && (sessionID == "" || ls.SessionID != sessionID) {
+	if !sessionOwnsLoop(ls.SessionID, sessionID) {
 		return StopResult{ShouldContinue: false, Reason: "session_mismatch"}
 	}
 
@@ -277,6 +318,10 @@ func evaluateActiveLoop(path, sessionID string, cfg *config.Config) StopResult {
 			strings.ToUpper(ls.Type), ls.Iteration, ls.MaxIterations, ls.Objective, ls.CompletionCriteria,
 		),
 	}
+}
+
+func sessionOwnsLoop(ownerSessionID, sessionID string) bool {
+	return ownerSessionID != "" && sessionID != "" && ownerSessionID == sessionID
 }
 
 func statePersistenceFailure() StopResult {

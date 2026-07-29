@@ -70,7 +70,7 @@ finish and emit `<promise>DONE</promise>`, or use `/cancel-ralph`.
 
 - Emit the completion promise tag required by `skills/ralph-loop/SKILL.md`
 - Or run `/cancel-ralph`
-- Or `/stop-continuation` to pause continuation (also clears loop + boulder)
+- Or `/stop-continuation` to pause continuation for the current session (clears its Ralph loop but preserves shared boulder state)
 
 ## ULW activation or completion is missing
 

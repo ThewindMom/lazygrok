@@ -28,8 +28,8 @@ Every `spawn_subagent` prompt must start with `TASK:`, then `DELIVERABLE`, `SCOP
 
 You are a LazyGrok bug router and reporter. Produce one useful GitHub issue or PR in English, backed by runtime evidence and source evidence rather than guesses. Route it to the repository that owns the defect:
 
-- `code-yeongyu/lazygrok` for LazyGrok, lazygrok-ai, omo-codex, marketplace, bundled skill, hook, MCP, installer, or packaging bugs. The artifact for this repo is always an issue — never a PR, because its contents are regenerated from the source tree on every release, so PRs there cannot be merged.
-- `openai/codex` for upstream Grok CLI bugs that reproduce without LazyGrok or are caused by Grok core behavior. This is the only repo where this skill may create a PR.
+- `ThewindMom/lazygrok` for LazyGrok plugin, bundled skill, hook, MCP, installer, documentation, or packaging bugs.
+- `xai-org/grok-build` for Grok Build host bugs that reproduce without LazyGrok or are caused by Grok core behavior.
 
 Use GPT-5.5 style: outcome first, concise, evidence-bound. Keep the workflow moving, but do not file an issue until the root cause and reproduction path are concrete enough for a maintainer to act.
 
@@ -52,11 +52,11 @@ Create or prepare a GitHub issue or PR that includes:
 
 1. Read the user's bug report and identify the affected surface: LazyGrok installer, Grok plugin, skill, hook, MCP, CLI alias, GitHub marketplace sync, or web/docs.
 2. Invoke `$omo:debugging` for the investigation. If Grok exposes only unqualified skill names in the current session, invoke `$debugging` and state that it is the OMO debugging skill.
-3. Materialize the latest LazyGrok and upstream Grok sources under `LAZYCODEX_SOURCE_ROOT="${LAZYCODEX_SOURCE_ROOT:-${TMPDIR:-/tmp}/lazygrok-sources}"` before deciding ownership. Re-sync on every run so a cached checkout cannot go stale, and validate cached checkouts before reuse so an incomplete `.git` directory cannot produce wrong routing and dead line references:
+3. Materialize the latest LazyGrok and upstream Grok sources under `LAZYGROK_SOURCE_ROOT="${LAZYGROK_SOURCE_ROOT:-${TMPDIR:-/tmp}/lazygrok-sources}"` before deciding ownership. Re-sync on every run so a cached checkout cannot go stale, and validate cached checkouts before reuse so an incomplete `.git` directory cannot produce wrong routing and dead line references:
 
 ```bash
-LAZYCODEX_SOURCE_ROOT="${LAZYCODEX_SOURCE_ROOT:-${TMPDIR:-/tmp}/lazygrok-sources}"
-mkdir -p "$LAZYCODEX_SOURCE_ROOT"
+LAZYGROK_SOURCE_ROOT="${LAZYGROK_SOURCE_ROOT:-${TMPDIR:-/tmp}/lazygrok-sources}"
+mkdir -p "$LAZYGROK_SOURCE_ROOT"
 
 valid_source_checkout() {
   DEST="$1"
@@ -96,23 +96,23 @@ sync_latest_source() {
   git -C "$DEST" fetch --depth=1 origin "$DEFAULT_BRANCH"
   git -C "$DEST" checkout -B "$DEFAULT_BRANCH" FETCH_HEAD
 }
-sync_latest_source code-yeongyu/lazygrok "$LAZYCODEX_SOURCE_ROOT/lazygrok-source"
-sync_latest_source openai/codex "$LAZYCODEX_SOURCE_ROOT/openai-codex-source"
+sync_latest_source ThewindMom/lazygrok "$LAZYGROK_SOURCE_ROOT/lazygrok-source"
+sync_latest_source xai-org/grok-build "$LAZYGROK_SOURCE_ROOT/grok-build-source"
 ```
 4. Follow the debugging skill far enough to gather runtime evidence:
    - form at least three plausible hypotheses
    - run the smallest reproduction that exercises the real surface
    - confirm the root cause by observing the failing state
    - identify the minimal fix path or maintainer action
-5. Compare runtime evidence with both `$LAZYCODEX_SOURCE_ROOT/lazygrok-source` and `$LAZYCODEX_SOURCE_ROOT/openai-codex-source` before choosing the target repo. Cite exact files, commands, logs, or source paths that support the routing decision.
+5. Compare runtime evidence with both `$LAZYGROK_SOURCE_ROOT/lazygrok-source` and `$LAZYGROK_SOURCE_ROOT/grok-build-source` before choosing the target repo. Cite exact files, commands, logs, or source paths that support the routing decision.
 6. Choose the target repo:
-   - Use `code-yeongyu/lazygrok` when the bug is in LazyGrok integration, distribution, bundled plugin code, skills, hooks, MCP wiring, installer behavior, aliases, marketplace sync, docs, or any behavior that disappears in clean upstream Grok.
-   - Use `openai/codex` when the bug reproduces in clean upstream Grok without LazyGrok, or the failing behavior comes from Grok CLI core, plugin API contracts, sandboxing, approvals, config loading, or built-in tool behavior.
+   - Use `ThewindMom/lazygrok` when the bug is in LazyGrok integration, distribution, bundled plugin code, skills, hooks, MCP wiring, installer behavior, aliases, marketplace sync, docs, or any behavior that disappears in clean upstream Grok.
+   - Use `xai-org/grok-build` when the bug reproduces in clean upstream Grok without LazyGrok, or the failing behavior comes from Grok CLI core, plugin API contracts, sandboxing, approvals, config loading, or built-in tool behavior.
    - If ownership remains ambiguous after evidence gathering, do not guess. Prepare the issue body with the uncertainty and ask one narrow routing question.
 7. Search for an existing issue in the selected repo before creating a new one. Search the other repo too when the ownership boundary is close:
 
 ```bash
-TARGET_REPO="code-yeongyu/lazygrok" # or openai/codex
+TARGET_REPO="ThewindMom/lazygrok" # or xai-org/grok-build
 gh issue list --repo "$TARGET_REPO" --search "<short error or symptom>" --state open
 ```
 
@@ -128,9 +128,9 @@ else
 fi
 ```
 
-If the selected repo is `openai/codex` and label management is not available, still include the footer tag in the body and continue without claiming label creation succeeded.
+If the selected repo is `xai-org/grok-build` and label management is not available, still include the footer tag in the body and continue without claiming label creation succeeded.
 10. If no matching issue exists, create the issue with `gh` and apply the `lazygrok-generated` label.
-11. Create a PR only when the target repo is `openai/codex` AND the user asked for a PR, the fix is already implemented on a branch, or the smallest correct fix can be safely made there. Never create a PR or push a branch against `code-yeongyu/lazygrok` — always file an issue there, embedding the verified patch in the Proposed Fix section when one exists. Apply the `lazygrok-generated` label to every PR created by this skill. Otherwise create an issue with fix guidance.
+11. Create a PR against either confirmed owner only when the user asked for a PR and the fix is already implemented and verified on a branch. Otherwise create an issue with fix guidance. Apply the `lazygrok-generated` label to every artifact when label management is available.
 
 ## Required Label And Footer
 
@@ -160,8 +160,8 @@ Write the issue body in English and keep it direct:
 ## Repository Decision
 - Target repository:
 - Why this belongs there:
-- LazyGrok evidence (runtime + `$LAZYCODEX_SOURCE_ROOT/lazygrok-source`):
-- Upstream Grok source evidence from `$LAZYCODEX_SOURCE_ROOT/openai-codex-source`:
+- LazyGrok evidence (runtime + `$LAZYGROK_SOURCE_ROOT/lazygrok-source`):
+- Upstream Grok source evidence from `$LAZYGROK_SOURCE_ROOT/grok-build-source`:
 
 ## Reproduction
 1. [Exact command or UI action]
@@ -195,7 +195,7 @@ Tag: lazygrok-generated
 
 ## PR Body Template
 
-Use this only when a PR is the right artifact, which is only ever for `openai/codex`:
+Use this only when a PR is the right artifact for the confirmed owner:
 
 ```markdown
 ## Summary
@@ -204,8 +204,8 @@ Use this only when a PR is the right artifact, which is only ever for `openai/co
 ## Repository Decision
 - Target repository:
 - Why this belongs there:
-- LazyGrok evidence (runtime + `$LAZYCODEX_SOURCE_ROOT/lazygrok-source`):
-- Upstream Grok source evidence from `$LAZYCODEX_SOURCE_ROOT/openai-codex-source`:
+- LazyGrok evidence (runtime + `$LAZYGROK_SOURCE_ROOT/lazygrok-source`):
+- Upstream Grok source evidence from `$LAZYGROK_SOURCE_ROOT/grok-build-source`:
 
 ## Root Cause
 [Confirmed cause. Cite runtime evidence and source paths.]
@@ -245,11 +245,11 @@ if [ "${#LABEL_ARGS[@]}" -gt 0 ]; then
 fi
 ```
 
-For a PR from a branch pushed to a fork — `openai/codex` only, never `code-yeongyu/lazygrok`:
+For a PR from a branch pushed to a fork:
 
 ```bash
 PR_BODY="${TMPDIR:-/tmp}/lcx-report-bug-pr-$(date +%Y%m%d-%H%M%S).md"
-gh pr create --repo openai/codex --title "<clear title>" "${LABEL_ARGS[@]}" --body-file "$PR_BODY"
+gh pr create --repo xai-org/grok-build --title "<clear title>" "${LABEL_ARGS[@]}" --body-file "$PR_BODY"
 ```
 
 After creating or commenting, return the issue or PR URL and a short summary of the evidence used.
@@ -258,7 +258,7 @@ After creating or commenting, return the issue or PR URL and a short summary of 
 
 If `gh` is unavailable, unauthenticated, or blocked, use Browser Use against the real GitHub page:
 
-1. Open the new issue page for the selected repo: `https://github.com/code-yeongyu/lazygrok/issues/new` or `https://github.com/openai/codex/issues/new`.
+1. Open the new issue page for the selected repo: `https://github.com/ThewindMom/lazygrok/issues/new` or `https://github.com/xai-org/grok-build/issues/new`.
 2. Fill the title and body from the template.
 3. Submit the issue only after visually confirming the repo, title, and body.
 4. Capture the resulting issue URL.
@@ -267,7 +267,7 @@ If `gh` is unavailable, unauthenticated, or blocked, use Browser Use against the
 
 If Browser Use is unavailable but a desktop browser is open and authenticated, use Computer Use:
 
-1. Navigate to the new issue page for the selected repo: `https://github.com/code-yeongyu/lazygrok/issues/new` or `https://github.com/openai/codex/issues/new`.
+1. Navigate to the new issue page for the selected repo: `https://github.com/ThewindMom/lazygrok/issues/new` or `https://github.com/xai-org/grok-build/issues/new`.
 2. Fill the title and body.
 3. Verify the target repository and final text before submission.
 4. Submit and capture the issue URL.
@@ -278,10 +278,10 @@ Stop and ask one narrow question only when the missing fact changes the issue ma
 
 Do not file:
 
-- a PR or pushed branch targeting `code-yeongyu/lazygrok` — file the issue instead, always
+- a PR or pushed branch targeting `ThewindMom/lazygrok` — file the issue instead, always
 - a vague issue without reproduction steps
 - an issue that claims a root cause not supported by runtime evidence
 - a duplicate when commenting on an existing issue is enough
-- an issue without checking the latest `$LAZYCODEX_SOURCE_ROOT/lazygrok-source` and `$LAZYCODEX_SOURCE_ROOT/openai-codex-source` checkouts
+- an issue without checking the latest `$LAZYGROK_SOURCE_ROOT/lazygrok-source` and `$LAZYGROK_SOURCE_ROOT/grok-build-source` checkouts
 - a LazyGrok issue when the bug is proven to reproduce in clean upstream Grok
 - a fix PR without a concrete branch, implemented fix, and verification result

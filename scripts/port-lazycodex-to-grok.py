@@ -17,6 +17,10 @@ from pathlib import Path
 
 # Order matters for some replacements.
 REPLACEMENTS: list[tuple[str, str]] = [
+    (r"code-yeongyu/lazycodex", r"ThewindMom/lazygrok"),
+    (r"openai/codex", r"xai-org/grok-build"),
+    (r"LAZYCODEX_SOURCE_ROOT", r"LAZYGROK_SOURCE_ROOT"),
+    (r"openai-codex-source", r"grok-build-source"),
     # State roots — prefer LazyGrok; keep .omo as accepted legacy mid-run root
     (r"\.omo/ulw-loop", r".lazygrok/ulw-loop"),
     (r"\.omo/evidence", r".lazygrok/evidence"),

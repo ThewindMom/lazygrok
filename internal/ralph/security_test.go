@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"lazygrok/internal/hookenv"
+	"lazygrok/internal/safestate"
 )
 
 func TestWriteStateJSON_rejectsIntermediateSymlink(t *testing.T) {
@@ -177,7 +178,7 @@ func TestEvaluateStop_doesNotClaimTerminalStateWhenClearFails(t *testing.T) {
 func TestClearState_reportsHardLinkedState(t *testing.T) {
 	workspace := t.TempDir()
 	path := StatePath(workspace)
-	if err := WriteStateJSON(workspace, []byte(`{"prompt":"work"}`)); err != nil {
+	if err := WriteStateJSON(workspace, []byte(`{"prompt":"work","session_id":"owner-session"}`)); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Link(path, filepath.Join(workspace, "ralph-state-alias")); err != nil {
@@ -310,5 +311,44 @@ func TestCancelRalph_ownerCanClearState(t *testing.T) {
 	}
 	if _, err := os.Stat(StatePath(workspace)); !os.IsNotExist(err) {
 		t.Fatalf("owner cancellation left state: %v", err)
+	}
+}
+
+func TestCancelRalphFailsClosedOnMalformedState(t *testing.T) {
+	workspace := t.TempDir()
+	path := StatePath(workspace)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := safestate.WriteFile(path, []byte("not valid Ralph state\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	message := CollectUserPrompt(hookenv.Event{
+		WorkspaceRoot: workspace,
+		SessionID:     "owner-session",
+		Prompt:        "/cancel-ralph",
+	})
+
+	if !strings.Contains(message, "Unable to cancel safely") {
+		t.Fatalf("message = %q, want guarded failure", message)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("malformed state was removed without ownership proof: %v", err)
+	}
+}
+
+func TestStartRalphRejectsMissingSession(t *testing.T) {
+	workspace := t.TempDir()
+	message := CollectUserPrompt(hookenv.Event{
+		WorkspaceRoot: workspace,
+		Prompt:        `/ralph-loop "owned work"`,
+	})
+
+	if !strings.Contains(message, "no session ID") {
+		t.Fatalf("message = %q, want missing-session rejection", message)
+	}
+	if _, err := os.Stat(StatePath(workspace)); !os.IsNotExist(err) {
+		t.Fatalf("sessionless start created state: %v", err)
 	}
 }

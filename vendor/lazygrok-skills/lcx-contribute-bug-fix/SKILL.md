@@ -1,6 +1,6 @@
 ---
 name: lcx-contribute-bug-fix
-description: "Contribute a verified bug fix for LazyGrok, lazygrok-ai, omo-codex, bundled Grok skills, or upstream Grok CLI bugs. Opens a fork PR only for upstream openai/codex; LazyGrok-owned defects become a verified-fix issue on code-yeongyu/lazygrok (never a PR — that repo is a generated distribution mirror). Use when the user asks to fix a bug, contribute a bug fix, contribute to fix bug, open a PR for a bug, or debug and PR a LazyGrok/Grok defect."
+description: "Contribute a verified bug fix for LazyGrok, bundled Grok skills, or upstream Grok Build bugs. Route LazyGrok fixes to ThewindMom/lazygrok and host fixes to xai-org/grok-build. Use when the user asks to fix a bug, contribute a bug fix, open a PR, or debug and deliver a LazyGrok/Grok defect."
 metadata:
   short-description: Contribute verified LazyGrok or Grok bug fixes
 ---
@@ -30,12 +30,12 @@ Use this skill to debug a concrete LazyGrok or Grok defect, implement the smalle
 
 Route ownership the same way as `$lcx-report-bug`, but the deliverable differs by target:
 
-- `code-yeongyu/lazygrok` for LazyGrok, lazygrok-ai, omo-codex, bundled skills, hooks, MCP wiring, installer behavior, marketplace sync, docs, or packaging. Deliverable: a verified-fix issue with the patch embedded. NEVER open a PR or push a branch against this repo — its contents are regenerated from the source tree on every release, so PRs there cannot be merged and will be closed.
-- `openai/codex` for upstream Grok CLI bugs that reproduce without LazyGrok or come from Grok core behavior. Deliverable: a PR from a fork.
+- `ThewindMom/lazygrok` for LazyGrok bundled skills, hooks, MCP wiring, installer behavior, docs, or packaging. Deliverable: a verified PR when the user requested code contribution; otherwise a verified-fix issue.
+- `xai-org/grok-build` for upstream Grok CLI bugs that reproduce without LazyGrok or come from Grok core behavior. Deliverable: a PR from a fork.
 
 ## Required Outcome
 
-For `openai/codex`, create a fork PR that includes:
+For `xai-org/grok-build`, create a fork PR that includes:
 
 - a focused branch from a fresh `${TMPDIR:-/tmp}` clone/worktree
 - reproduction logs from before the fix
@@ -45,7 +45,7 @@ For `openai/codex`, create a fork PR that includes:
 - the required LazyGrok footer tag `Tag: lazygrok-generated`
 - cleanup of temporary worktrees and clones
 
-For `code-yeongyu/lazygrok`, create an issue (never a PR) that includes:
+For `ThewindMom/lazygrok`, create the requested PR or issue with:
 
 - reproduction logs from before the fix
 - the root cause with source evidence
@@ -58,11 +58,11 @@ For `code-yeongyu/lazygrok`, create an issue (never a PR) that includes:
 
 1. Read the user's bug report and identify the affected surface.
 2. Invoke `$omo:debugging` for the investigation. If only unqualified skill names are exposed, invoke `$debugging` and state that it is the OMO debugging skill.
-3. Materialize the latest sources under `LAZYCODEX_SOURCE_ROOT="${LAZYCODEX_SOURCE_ROOT:-${TMPDIR:-/tmp}/lazygrok-sources}"`, then decide the target repository. Sync both checkouts on every run and compare them before choosing. Validate cached checkouts before reuse so an incomplete `.git` directory cannot route the fix to the wrong repo:
+3. Materialize the latest sources under `LAZYGROK_SOURCE_ROOT="${LAZYGROK_SOURCE_ROOT:-${TMPDIR:-/tmp}/lazygrok-sources}"`, then decide the target repository. Sync both checkouts on every run and compare them before choosing. Validate cached checkouts before reuse so an incomplete `.git` directory cannot route the fix to the wrong repo:
 
 ```bash
-LAZYCODEX_SOURCE_ROOT="${LAZYCODEX_SOURCE_ROOT:-${TMPDIR:-/tmp}/lazygrok-sources}"
-mkdir -p "$LAZYCODEX_SOURCE_ROOT"
+LAZYGROK_SOURCE_ROOT="${LAZYGROK_SOURCE_ROOT:-${TMPDIR:-/tmp}/lazygrok-sources}"
+mkdir -p "$LAZYGROK_SOURCE_ROOT"
 
 valid_source_checkout() {
   DEST="$1"
@@ -102,13 +102,13 @@ sync_latest_source() {
   git -C "$DEST" fetch --depth=1 origin "$DEFAULT_BRANCH"
   git -C "$DEST" checkout -B "$DEFAULT_BRANCH" FETCH_HEAD
 }
-sync_latest_source code-yeongyu/lazygrok "$LAZYCODEX_SOURCE_ROOT/lazygrok-source"
-sync_latest_source openai/codex "$LAZYCODEX_SOURCE_ROOT/openai-codex-source"
+sync_latest_source ThewindMom/lazygrok "$LAZYGROK_SOURCE_ROOT/lazygrok-source"
+sync_latest_source xai-org/grok-build "$LAZYGROK_SOURCE_ROOT/grok-build-source"
 ```
 4. Create a fresh temporary clone and branch under `${TMPDIR:-/tmp}`. Do not modify the user's current repository for the target fix unless the current repository is itself the requested target and the user explicitly asked for local edits.
 
 ```bash
-TARGET_REPO="code-yeongyu/lazygrok" # or openai/codex
+TARGET_REPO="ThewindMom/lazygrok" # or xai-org/grok-build
 WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/lazygrok-fix-XXXXXX")"
 gh repo clone "$TARGET_REPO" "$WORK_ROOT/repo" -- --depth=1
 cd "$WORK_ROOT/repo"
@@ -135,8 +135,8 @@ git log --oneline "origin/$BASE_BRANCH..HEAD"
 ```
 
 10. Build the delivery body for the target:
-   - `openai/codex`: generate the PR body with `scripts/create-pr-body.mjs`.
-   - `code-yeongyu/lazygrok`: export the verified patch and write the issue body from the Verified-Fix Issue Template below:
+   - `xai-org/grok-build`: generate the PR body with `scripts/create-pr-body.mjs`.
+   - `ThewindMom/lazygrok`: export the verified patch and write the issue body from the Verified-Fix Issue Template below:
 
 ```bash
 PATCH_FILE="${TMPDIR:-/tmp}/lazygrok-fix-<short-slug>.patch"
@@ -155,20 +155,20 @@ fi
 ```
 
 12. Deliver the fix.
-   - `code-yeongyu/lazygrok`: create the verified-fix issue. Never push a branch to this repo and never run `gh pr create` against it:
+   - `ThewindMom/lazygrok`: create the requested verified-fix issue, or push a fork branch and open a PR when the user requested a code contribution:
 
 ```bash
 ISSUE_BODY="${TMPDIR:-/tmp}/lazygrok-fix-<short-slug>-issue.md"
-gh issue create --repo code-yeongyu/lazygrok --title "<short fix title>" "${LABEL_ARGS[@]}" --body-file "$ISSUE_BODY"
+gh issue create --repo ThewindMom/lazygrok --title "<short fix title>" "${LABEL_ARGS[@]}" --body-file "$ISSUE_BODY"
 ```
 
-   - `openai/codex`: fork, push the branch to the fork, and create the PR:
+   - `xai-org/grok-build`: fork, push the branch to the fork, and create the PR:
 
 ```bash
-gh repo fork openai/codex --remote --remote-name fork
+gh repo fork xai-org/grok-build --remote --remote-name fork
 GH_USER="$(gh api user --jq .login)"
 git push -u fork "$BRANCH_NAME"
-gh pr create --repo openai/codex --base "$BASE_BRANCH" --head "$GH_USER:$BRANCH_NAME" --title "<short fix title>" "${LABEL_ARGS[@]}" --body-file "$PR_BODY"
+gh pr create --repo xai-org/grok-build --base "$BASE_BRANCH" --head "$GH_USER:$BRANCH_NAME" --title "<short fix title>" "${LABEL_ARGS[@]}" --body-file "$PR_BODY"
 ```
 
 13. Clean up:
@@ -182,7 +182,7 @@ rmdir "$WORK_ROOT"
 
 Return the PR or issue URL, the reproduction command, the verification command, and the cleanup receipt.
 
-## Verified-Fix Issue Template (code-yeongyu/lazygrok)
+## Verified-Fix Issue Template (ThewindMom/lazygrok)
 
 Write the issue body in English. Embed the patch verbatim so a maintainer can apply it to the source tree:
 
@@ -209,18 +209,18 @@ Write the issue body in English. Embed the patch verbatim so a maintainer can ap
 - [Manual QA command and result]
 
 ---
-This fix was debugged, implemented, and verified with [LazyGrok](https://github.com/code-yeongyu/lazygrok).
+This fix was debugged, implemented, and verified with [LazyGrok](https://github.com/ThewindMom/lazygrok).
 Tag: lazygrok-generated
 ````
 
-## PR Body Generator (openai/codex)
+## PR Body Generator (xai-org/grok-build)
 
 Use the bundled script to generate the PR body. Create a JSON file with this shape:
 
 ```json
 {
   "title": "Fix short user-visible failure",
-  "targetRepository": "openai/codex",
+  "targetRepository": "xai-org/grok-build",
   "problem": "What is broken for the user.",
   "reproductionLogs": "Exact failing command, log excerpt, or trace.",
   "approach": "What changed and why this is the smallest correct fix.",
@@ -239,7 +239,7 @@ PR_BODY="${TMPDIR:-/tmp}/lazygrok-fix-<short-slug>-pr.md"
 node "<skill-root>/scripts/create-pr-body.mjs" "$PR_INPUT" "$PR_BODY"
 ```
 
-## PR Body Template (openai/codex)
+## PR Body Template (xai-org/grok-build)
 
 The generated body must follow this structure:
 
@@ -268,7 +268,7 @@ The generated body must follow this structure:
 - [Manual QA command and result]
 
 ---
-This PR was debugged, implemented, and created with [LazyGrok](https://github.com/code-yeongyu/lazygrok).
+This PR was debugged, implemented, and created with [LazyGrok](https://github.com/ThewindMom/lazygrok).
 Tag: lazygrok-generated
 ```
 
@@ -283,7 +283,7 @@ Stop and ask one narrow question only when:
 
 Do not open:
 
-- a PR or pushed branch targeting `code-yeongyu/lazygrok` — deliver the verified-fix issue instead, always
+- a PR or pushed branch targeting `ThewindMom/lazygrok` — deliver the verified-fix issue instead, always
 - a PR or verified-fix issue without a failing-before and passing-after test
 - a PR or verified-fix issue without a real-surface QA command
 - a PR or issue without the `Tag: lazygrok-generated` footer
