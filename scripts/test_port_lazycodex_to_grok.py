@@ -584,12 +584,17 @@ class ActiveDocumentationTest(unittest.TestCase):
         installation = (REPO_ROOT / "docs/installation.md").read_text(
             encoding="utf-8"
         )
+        bug_report = (
+            REPO_ROOT / ".github/ISSUE_TEMPLATE/bug_report.yml"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("ThewindMom/lazygrok@v0.4.4", installation)
         self.assertIn("scripts/install-user-hooks.mjs", installation)
         self.assertIn("ulw-discover.rhai", installation)
         self.assertIn("ulw-review.rhai", installation)
         self.assertNotIn("github:ThewindMom", installation)
+        self.assertIn("ThewindMom/lazygrok", bug_report)
+        self.assertNotIn("github:ThewindMom", bug_report)
 
     def test_privacy_discloses_every_configured_mcp_and_network_surface(self) -> None:
         privacy = (REPO_ROOT / "docs/PRIVACY.md").read_text(encoding="utf-8")
