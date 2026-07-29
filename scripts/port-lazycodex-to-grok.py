@@ -16,7 +16,7 @@ import shutil
 from pathlib import Path
 
 # Order matters for some replacements.
-REPLACEMENTS: list[tuple[str, str]] = [
+PORT_SOURCE_REPLACEMENTS_PRE: list[tuple[str, str]] = [
     (r"code-yeongyu/lazycodex", r"ThewindMom/lazygrok"),
     (r"openai/codex", r"xai-org/grok-build"),
     (r"LAZYCODEX_SOURCE_ROOT", r"LAZYGROK_SOURCE_ROOT"),
@@ -47,7 +47,9 @@ REPLACEMENTS: list[tuple[str, str]] = [
     (r"\$HOME/\.codex", r"$HOME/.grok"),
     (r"~/\.codex", r"~/.grok"),
     (r"sisyphuslabs/omo", r"lazygrok"),
-    # Tools
+]
+
+EXECUTABLE_REPLACEMENTS: list[tuple[str, str]] = [
     (r"\bcall_omo_agent\s*\(", r"spawn_subagent("),
     (
         r"\b(?:Task|task)\s*\((?=\s*(?:subagent_type|category|description|prompt|load_skills)\s*=)",
@@ -95,11 +97,19 @@ REPLACEMENTS: list[tuple[str, str]] = [
         "and no rendered browser surface is available, return INCONCLUSIVE and "
         "request an inspectable attachment instead of claiming visual review.",
     ),
-    # Skill renames
+]
+
+PORT_SOURCE_REPLACEMENTS_POST: list[tuple[str, str]] = [
     (r"\bulw-research\b", r"ulw-research"),  # keep name; we also alias ultraresearch
     (r"npx lazycodex-ai install", r"grok plugin install/update (lazygrok)"),
     (r"lazycodex-ai install", r"grok plugin update lazygrok"),
 ]
+
+REPLACEMENTS = (
+    PORT_SOURCE_REPLACEMENTS_PRE
+    + EXECUTABLE_REPLACEMENTS
+    + PORT_SOURCE_REPLACEMENTS_POST
+)
 
 PORTED_TEXT_MARKERS = (
     "ThewindMom/lazygrok",
@@ -457,7 +467,7 @@ def normalize_spawn_keyword_calls(text: str) -> str:
             cursor = index + 1
             continue
         arguments = re.sub(
-            r'(?m)(^|,)(\s*)(subagent_type|background|description|prompt|capability_mode)\s*=',
+            r'(?m)(^|,)(\s*)(subagent_type|agent_type|background|description|prompt|capability_mode)\s*=',
             lambda match: f'{match.group(1)}{match.group(2)}"{match.group(3)}":',
             arguments,
         )
@@ -489,11 +499,13 @@ def normalize_spawn_keyword_calls(text: str) -> str:
 def transform_text(text: str) -> str:
     out = text
     already_ported = any(marker in text for marker in PORTED_TEXT_MARKERS)
-    if not already_ported:
-        for pat, repl in REPLACEMENTS:
-            out = re.sub(pat, repl, out)
+    replacements = EXECUTABLE_REPLACEMENTS if already_ported else REPLACEMENTS
+    for pat, repl in replacements:
+        out = re.sub(pat, repl, out)
     out = normalize_spawn_keyword_calls(out)
     out = normalize_spawn_object_fields(out)
+    if already_ported:
+        return out
 
     if "\nname: teammode\n" in out:
         return GROK_TEAMMODE_SKILL

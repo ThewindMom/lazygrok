@@ -326,17 +326,34 @@ Keep this section.
 
 
 class GeneratedOutputIdempotenceTest(unittest.TestCase):
-    def test_real_generated_outputs_are_fixed_points(self) -> None:
+    def test_active_generated_outputs_are_fixed_points(self) -> None:
         generated_paths = (
             "prompts/ultrawork/grok.md",
             "vendor/lazygrok-hooks/ultrawork/skills/ultrawork/SKILL.md",
             "skills/ulw-plan/SKILL.md",
+            "skills/ulw-loop/references/full-workflow.md",
+            "vendor/lazygrok-skills/ultraresearch/SKILL.md",
         )
 
         for relative_path in generated_paths:
             with self.subTest(path=relative_path):
                 generated = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
                 self.assertEqual(PORT.transform_text(generated), generated)
+
+    def test_mixed_ported_text_still_normalizes_executable_tools(self) -> None:
+        source = """LazyGrok keeps upstream provenance and legacy state.
+call_omo_agent(subagent_type="explore", run_in_background=True)
+spawn_agent(prompt="inspect", agent_type="explore")
+apply_patch(path="example")
+"""
+
+        transformed = PORT.transform_text(source)
+
+        self.assertIn("spawn_subagent({", transformed)
+        self.assertIn("search_replace/write(path=", transformed)
+        self.assertIn('"subagent_type":"explore"', transformed)
+        for legacy_tool in ("call_omo_agent", "spawn_agent", "apply_patch"):
+            self.assertNotIn(legacy_tool, transformed)
 
 
 class StartWorkRoutingTest(unittest.TestCase):
