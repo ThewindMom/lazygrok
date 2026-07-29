@@ -215,3 +215,24 @@ func TestAppendSessionToBoulderSerializesConcurrentUpdates(t *testing.T) {
 		}
 	}
 }
+
+func TestEvaluateBoulderStop_failsClosedOnMalformedState(t *testing.T) {
+	workspace := t.TempDir()
+	stateDir := filepath.Join(workspace, ".lazygrok")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "boulder.json"), []byte("{malformed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	block, message := EvaluateBoulderStop(hookenv.Event{
+		WorkspaceRoot: workspace,
+		SessionID:     "session-safe",
+		StopReason:    "end_turn",
+	})
+
+	if !block || !strings.Contains(message, "unreadable") {
+		t.Fatalf("block = %v, message = %q, want fail-closed unreadable state", block, message)
+	}
+}

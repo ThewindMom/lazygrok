@@ -155,11 +155,17 @@ fi
 ```
 
 12. Deliver the fix.
-   - `ThewindMom/lazygrok`: create the requested verified-fix issue, or push a fork branch and open a PR when the user requested a code contribution:
+   - `ThewindMom/lazygrok`: create the requested verified-fix issue, or fork,
+     push, and open a PR when the user requested a code contribution:
 
 ```bash
 ISSUE_BODY="${TMPDIR:-/tmp}/lazygrok-fix-<short-slug>-issue.md"
 gh issue create --repo ThewindMom/lazygrok --title "<short fix title>" "${LABEL_ARGS[@]}" --body-file "$ISSUE_BODY"
+
+gh repo fork ThewindMom/lazygrok --remote --remote-name fork
+GH_USER="$(gh api user --jq .login)"
+git push -u fork "$BRANCH_NAME"
+gh pr create --repo ThewindMom/lazygrok --base "$BASE_BRANCH" --head "$GH_USER:$BRANCH_NAME" --title "<short fix title>" "${LABEL_ARGS[@]}" --body-file "$PR_BODY"
 ```
 
    - `xai-org/grok-build`: fork, push the branch to the fork, and create the PR:

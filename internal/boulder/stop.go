@@ -107,8 +107,11 @@ func EvaluateBoulderStop(ev hookenv.Event) (bool, string) {
 	if AutoContinuePaused(ws, sid) {
 		return false, ""
 	}
-	state := readBoulder(ws)
-	if state == nil {
+	state, exists, err := readBoulderForMutation(ws)
+	if err != nil {
+		return true, "Boulder state is unreadable. Repair .lazygrok/boulder.json before retrying."
+	}
+	if !exists {
 		return false, ""
 	}
 	work := getWorkForSession(state, sid)

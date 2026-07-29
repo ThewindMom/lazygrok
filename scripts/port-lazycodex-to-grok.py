@@ -343,14 +343,16 @@ def transform_text(text: str) -> str:
     for pat, repl in REPLACEMENTS:
         out = re.sub(pat, repl, out)
     out = re.sub(
-        r'(spawn_subagent\(\{[^\n)]*?)"message"\s*:',
+        r'(spawn_subagent\(\{(?:(?!\}\)).)*?)"message"\s*:',
         r'\1"prompt":',
         out,
+        flags=re.DOTALL,
     )
     out = re.sub(
-        r'(spawn_subagent\(\{[^\n)]*?)"agent_type"\s*:',
+        r'(spawn_subagent\(\{(?:(?!\}\)).)*?)"agent_type"\s*:',
         r'\1"subagent_type":',
         out,
+        flags=re.DOTALL,
     )
 
     if "\nname: teammode\n" in out:

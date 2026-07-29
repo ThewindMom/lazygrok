@@ -249,7 +249,7 @@ For a PR from a branch pushed to a fork:
 
 ```bash
 PR_BODY="${TMPDIR:-/tmp}/lcx-report-bug-pr-$(date +%Y%m%d-%H%M%S).md"
-gh pr create --repo xai-org/grok-build --title "<clear title>" "${LABEL_ARGS[@]}" --body-file "$PR_BODY"
+gh pr create --repo "$TARGET_REPO" --base "$BASE_BRANCH" --head "$GH_USER:$BRANCH_NAME" --title "<clear title>" "${LABEL_ARGS[@]}" --body-file "$PR_BODY"
 ```
 
 After creating or commenting, return the issue or PR URL and a short summary of the evidence used.

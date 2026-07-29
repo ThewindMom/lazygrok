@@ -80,13 +80,31 @@ func StartWork(workspace, sessionID string, next map[string]any) error {
 			return err
 		}
 		if exists {
-			status := strings.ToLower(strings.TrimSpace(stringField(current, "status")))
-			if status != "completed" && status != "abandoned" && getWorkForSession(current, sessionID) == nil {
+			active := getActiveWork(current)
+			status := strings.ToLower(strings.TrimSpace(stringField(active, "status")))
+			if status != "completed" && status != "abandoned" && !workHasSession(active, sessionID) {
 				return ErrSessionMismatch
 			}
 		}
 		return writeBoulderState(workspace, next)
 	})
+}
+
+func getActiveWork(state map[string]any) map[string]any {
+	workID := stringField(state, "active_work_id")
+	if works, ok := state["works"].(map[string]any); ok && workID != "" {
+		if work, ok := works[workID].(map[string]any); ok {
+			return work
+		}
+	}
+	return state
+}
+
+func workHasSession(work map[string]any, sessionID string) bool {
+	if work == nil {
+		return false
+	}
+	return containsStr(stringSlice(work["session_ids"]), sessionID)
 }
 
 func getWorks(state map[string]any) []map[string]any {

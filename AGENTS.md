@@ -26,7 +26,7 @@ hooks/hooks.json          → SessionStart, UserPromptSubmit, Pre/PostToolUse, S
 hooks/run-hook.sh         → dispatches to bin/lazygrok-hook-<os>-<arch>
 cmd/lazygrok-hook + internal/  → all hook logic (see docs/superpowers/plans/2026-06-02-go-hooks-migration.md)
   cmd/user_prompt.go      → single merged additionalContext (do not split into multiple JSON hooks)
-  cmd/stop.go             → ralph → boulder → todo → lsp → plan.md (first block wins)
+  cmd/stop.go             → explicit stop → core loop/boulder → ULW/Ralph → legacy boulder/todo → LSP/plan (first block wins)
   internal/skillgate/     → catalog, PreTool gate, reminders
   internal/intentgate/    → keyword modes
   internal/prometheus/    → /plan, plan-mode PreTool guard

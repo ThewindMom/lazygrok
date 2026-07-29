@@ -20,9 +20,7 @@ Active work tracked at `.lazygrok/boulder.json` (schema v2, omo-compatible field
 
 ## Stop hook order
 
-See lazygrok `hooks/README.md`. Chain in `stop-hook.sh`:
-
-1. Ralph / ultrawork  
-2. Boulder plan (skipped when `/stop-continuation`)  
-3. Todo list  
-4. Root `plan.md` checkboxes (fallback)
+See LazyGrok `hooks/README.md`. The single chain in `internal/cmd/stop.go`
+allows an explicitly stopped session first, then evaluates core continuation,
+core Boulder, ULW/Ralph, legacy Boulder, todos, LSP diagnostics, and pending
+plan checkboxes. First block wins.

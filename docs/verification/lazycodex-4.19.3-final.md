@@ -1,6 +1,12 @@
-# LazyCodex 4.19.3 port verification
+# LazyCodex 4.19.3 port baseline verification
 
-Captured on 2026-07-29 from:
+This is the historical baseline captured on 2026-07-29. It does not certify
+the current branch or installed plugin. Exact-SHA release claims belong only
+to the sealed handoff bundle produced for that SHA, with source archive,
+validation logs, publication/install binding, Grok transcripts, and reviewer
+verdicts covered by the bundle checksum manifest.
+
+The baseline was captured from:
 
 - repository: `<plugin-root>`
 - base HEAD: `5377dad5a0246bd26c03f0c75d3cb24dbb8a7192`

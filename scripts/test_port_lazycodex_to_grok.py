@@ -137,6 +137,20 @@ background_output(task_id="worker-1")
         for unsupported_field in ("load_skills=", "category=", '"agent_type":'):
             self.assertNotIn(unsupported_field, transformed)
 
+    def test_normalizes_multiline_spawn_object_schema(self) -> None:
+        source = """spawn_subagent({
+  "message": "review",
+  "agent_type": "explore",
+  "background": true
+})"""
+
+        transformed = PORT.transform_text(source)
+
+        self.assertIn('"prompt": "review"', transformed)
+        self.assertIn('"subagent_type": "explore"', transformed)
+        self.assertNotIn('"message":', transformed)
+        self.assertNotIn('"agent_type":', transformed)
+
     def test_replaces_upstream_teammode_with_grok_fan_out(self) -> None:
         source = """---
 name: teammode

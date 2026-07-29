@@ -1,16 +1,5 @@
 // Package continuation implements the stop pipeline with bounded loops,
 // repeated-state detection, cooldowns, and failure counters.
-//
-// The stop pipeline evaluates continuation reasons in this order:
-//  1. explicit Ralph or Ultrawork loop
-//  2. active boulder plan
-//  3. incomplete todos
-//  4. active required subagents
-//  5. failed verification
-//  6. unresolved LSP errors when enforcement is enabled
-//  7. unchecked fallback plan tasks
-//
-// Explicit pause or cancellation state bypasses automatic continuation immediately.
 package continuation
 
 import (
@@ -34,6 +23,8 @@ import (
 const StateVersion = 2
 
 var ErrSessionMismatch = errors.New("continuation loop belongs to another session")
+
+var errInvalidLoopState = errors.New("continuation loop state is invalid")
 
 // LoopState represents the continuation loop state.
 type LoopState struct {
@@ -98,6 +89,8 @@ func StopContinuation(workspace, grokHome, sessionID string) error {
 				if !errors.Is(err, os.ErrNotExist) {
 					return err
 				}
+			} else if !validLoopState(ls) {
+				return errInvalidLoopState
 			} else if ls.Active {
 				if !sessionOwnsLoop(ls.SessionID, sessionID) {
 					return ErrSessionMismatch
@@ -130,6 +123,8 @@ func ResumeContinuation(grokHome, sessionID, workspace string) error {
 				if !errors.Is(err, os.ErrNotExist) {
 					return err
 				}
+			} else if !validLoopState(ls) {
+				return errInvalidLoopState
 			} else if ls.Active {
 				if !sessionOwnsLoop(ls.SessionID, sessionID) {
 					return ErrSessionMismatch
@@ -186,8 +181,13 @@ func StartLoop(workspace, loopType, objective, completionCriteria, sessionID str
 			if !errors.Is(err, os.ErrNotExist) {
 				return err
 			}
-		} else if existing.Active && !sessionOwnsLoop(existing.SessionID, sessionID) {
-			return ErrSessionMismatch
+		} else {
+			if !validLoopState(existing) {
+				return errInvalidLoopState
+			}
+			if existing.Active && !sessionOwnsLoop(existing.SessionID, sessionID) {
+				return ErrSessionMismatch
+			}
 		}
 		return state.WriteJSON(path, ls)
 	})
@@ -216,6 +216,9 @@ func EvaluateStop(workspace, grokHome, sessionID string, cfg *config.Config) Sto
 		}
 		return StopResult{ShouldContinue: false, Reason: "no_active_loop"}
 	}
+	if !validLoopState(ls) {
+		return statePersistenceFailure()
+	}
 	if !ls.Active || ls.Paused {
 		return StopResult{ShouldContinue: false, Reason: "no_active_loop"}
 	}
@@ -238,6 +241,9 @@ func evaluateActiveLoop(path, sessionID string, cfg *config.Config) StopResult {
 			return statePersistenceFailure()
 		}
 		return StopResult{ShouldContinue: false, Reason: "no_active_loop"}
+	}
+	if !validLoopState(ls) {
+		return statePersistenceFailure()
 	}
 	if !ls.Active || ls.Paused {
 		return StopResult{ShouldContinue: false, Reason: "no_active_loop"}
@@ -334,6 +340,13 @@ func evaluateActiveLoop(path, sessionID string, cfg *config.Config) StopResult {
 
 func sessionOwnsLoop(ownerSessionID, sessionID string) bool {
 	return ownerSessionID != "" && sessionID != "" && ownerSessionID == sessionID
+}
+
+func validLoopState(state LoopState) bool {
+	return state.SchemaVersion == StateVersion &&
+		(state.Type == "ralph" || state.Type == "ultrawork") &&
+		state.MaxIterations > 0 &&
+		state.SessionID != ""
 }
 
 func statePersistenceFailure() StopResult {

@@ -94,3 +94,51 @@ func TestHandleStartWork_preservesForeignActiveWork(t *testing.T) {
 		t.Fatal("foreign start-work replaced the active Boulder state")
 	}
 }
+
+func TestHandleStartWork_rejectsHistoricalOwnerOfDifferentActiveWork(t *testing.T) {
+	workspace := t.TempDir()
+	plans := filepath.Join(workspace, ".lazygrok", "plans")
+	if err := os.MkdirAll(plans, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(plans, "replacement.md"), []byte("# Replacement\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	boulder := `{
+  "active_work_id": "active-b",
+  "status": "active",
+  "works": {
+    "completed-a": {
+      "work_id": "completed-a",
+      "status": "completed",
+      "session_ids": ["session-a"]
+    },
+    "active-b": {
+      "work_id": "active-b",
+      "status": "active",
+      "session_ids": ["session-b"]
+    }
+  }
+}`
+	boulderPath := filepath.Join(workspace, ".lazygrok", "boulder.json")
+	if err := os.WriteFile(boulderPath, []byte(boulder), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(boulderPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response := handleStartWork(workspace, "session-a", "/start-work .lazygrok/plans/replacement.md")
+
+	if !strings.Contains(response, "another session") {
+		t.Fatalf("response = %q, want active-owner rejection", response)
+	}
+	after, err := os.ReadFile(boulderPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("historical owner replaced another session's active work")
+	}
+}

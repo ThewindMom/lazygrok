@@ -95,7 +95,7 @@ sequence:
 
 ```bash
 git worktree add --detach /absolute/task-worktree HEAD
-grok --cwd /absolute/task-worktree -p "ulw $start-work <plan-name> --worktree /absolute/task-worktree"
+grok --cwd /absolute/task-worktree -p "ulw /start-work <plan-name> --worktree /absolute/task-worktree"
 ```
 
 Never infer isolation from the launch flag. Before implementation, prove the
