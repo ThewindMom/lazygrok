@@ -41,7 +41,7 @@ Prefer strict TypeScript and keep runtime imports ESM-compatible.
 ## Install Locally
 
 ```bash
-npx lazycodex-ai install
+grok plugin install ThewindMom/lazygrok --trust
 ```
 
 The local installer builds the plugin and copies a clean cache entry to:

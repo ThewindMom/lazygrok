@@ -20,7 +20,7 @@ The directive is currently 10,951 chars / 231 lines and follows the GPT-5.5 prom
 ## Install (via this marketplace)
 
 ```bash
-npx lazycodex-ai install
+grok plugin install ThewindMom/lazygrok --trust
 ```
 
 The installer copies the plugin into `~/.codex/plugins/cache/sisyphuslabs/omo/0.1.0`, writes the Codex marketplace snapshot at `~/.codex/.tmp/marketplaces/sisyphuslabs/`, registers the `sisyphuslabs` marketplace from the `lazycodex` Git repository, enables `omo@sisyphuslabs` in `~/.codex/config.toml`, registers the `UserPromptSubmit` hook, and installs the bundled agent TOMLs as regular files under `~/.codex/agents/`. A `.installed-agents.json` manifest is written next to the bundled TOMLs' source root for clean uninstall tracking.
@@ -51,7 +51,7 @@ Expect `<ultrawork-mode>` ... bootstrap pointer naming `skills/ultrawork/SKILL.m
 
 ## Agent role smoke test
 
-Run `npx lazycodex-ai install`, then inspect `~/.codex/agents/`. On every platform you should see regular `.toml` files. Each TOML should declare a non-empty `name`, `description`, and `developer_instructions`.
+Run `grok plugin update lazygrok`, then inspect the registered LazyGrok skills and hooks with `grok inspect`.
 
 ## License
 

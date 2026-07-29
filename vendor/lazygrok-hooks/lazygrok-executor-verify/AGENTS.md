@@ -8,7 +8,7 @@ Codex `SubagentStop` hook component: the evidence gate for the ultrawork impleme
 
 Valid receipt: `last_assistant_message` contains `EVIDENCE_RECORDED: <path>` where `<path>` resolves to a non-empty regular file strictly inside `<cwd>/.omo/evidence/`. Symlinks and directories rejected; containment checked on realpaths (file inside evidence root inside cwd, traversal-safe). A valid receipt clears attempt state and exits silently.
 
-Escape hatches: after 3 blocked attempts (`MAX_ATTEMPTS`) the stop passes and state clears; a transcript containing a context-pressure marker ("context compacted", "context_length_exceeded", ...) passes immediately. Malformed stdin, unknown events, unrelated agents: silent exit 0 (fail-open).
+After 3 blocked attempts (`MAX_ATTEMPTS`) the stop passes and state clears. Context-pressure markers do not bypass receipt enforcement. Malformed stdin, unknown events, and unrelated agents exit silently with status 0 (fail-open).
 
 ## KEY FILES
 

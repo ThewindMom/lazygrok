@@ -596,6 +596,20 @@ class ActiveDocumentationTest(unittest.TestCase):
         self.assertIn("ThewindMom/lazygrok", bug_report)
         self.assertNotIn("github:ThewindMom", bug_report)
 
+    def test_registered_hook_components_do_not_advertise_upstream_installer(
+        self,
+    ) -> None:
+        hook_root = REPO_ROOT / "vendor/lazygrok-hooks"
+        stale = []
+        for path in hook_root.rglob("*"):
+            if path.is_file() and path.suffix in {".js", ".md"}:
+                if "npx lazycodex-ai install" in path.read_text(
+                    encoding="utf-8"
+                ):
+                    stale.append(path.relative_to(REPO_ROOT).as_posix())
+
+        self.assertEqual(stale, [])
+
     def test_privacy_discloses_every_configured_mcp_and_network_surface(self) -> None:
         privacy = (REPO_ROOT / "docs/PRIVACY.md").read_text(encoding="utf-8")
         configured = json.loads((REPO_ROOT / ".mcp.json").read_text(encoding="utf-8"))

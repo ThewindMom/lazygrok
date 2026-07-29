@@ -3476,7 +3476,7 @@ function toCodexResolution(resolution) {
       "Git Bash is required for native Windows Codex profile installs.",
       "Install it with: winget install --id Git.Git -e --source winget",
       `For a custom install, set ${GIT_BASH_ENV_KEY2}=C:\\path\\to\\bash.exe`,
-      "Then rerun `npx lazycodex-ai install`."
+      "Then rerun `grok plugin update lazygrok`."
     ].join(`
 `)
   };

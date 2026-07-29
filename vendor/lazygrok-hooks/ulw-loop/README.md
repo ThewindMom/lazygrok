@@ -55,7 +55,7 @@ npm pack --dry-run
 ## Local Codex Installation
 
 ```bash
-npx lazycodex-ai install
+grok plugin install ThewindMom/lazygrok --trust
 ```
 
 The installer builds and copies the plugin into `~/.codex/plugins/cache/sisyphuslabs/omo/0.1.0`, registers the `sisyphuslabs` marketplace from the `lazycodex` Git repository, installs runtime dependencies there, and enables:
