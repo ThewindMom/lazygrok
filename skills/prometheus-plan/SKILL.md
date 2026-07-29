@@ -24,13 +24,13 @@ Use `/plan` (or `/prometheus`) when you need a **work plan before implementation
 
 ### Step 2 — Research (parallel)
 
-- `spawn_subagent(subagent_type="explore", ...)` for codebase patterns, references, tests.
-- `spawn_subagent(subagent_type="librarian", ...)` for external docs when needed.
+- `spawn_subagent({"subagent_type":"explore", ...})` for codebase patterns, references, tests.
+- `spawn_subagent({"subagent_type":"librarian", ...})` for external docs when needed.
 - Do not duplicate the same search after delegating.
 
 ### Step 3 — Metis gap analysis
 
-- `spawn_subagent(subagent_type="lazygrok:metis", prompt="Review draft + requirements; list gaps and blocking questions.")`
+- `spawn_subagent({"subagent_type":"lazygrok:metis", "prompt":"Review draft + requirements; list gaps and blocking questions."})`
 - Resolve gaps with the user before writing the final plan.
 
 ### Step 4 — Write the plan
@@ -41,7 +41,7 @@ Use `/plan` (or `/prometheus`) when you need a **work plan before implementation
 
 ### Step 5 — Momus review (optional) → start work
 
-- `spawn_subagent(subagent_type="lazygrok:momus", prompt="Review .lazygrok/plans/<name>.md; verdict OKAY or NEEDS_REVISION.")`
+- `spawn_subagent({"subagent_type":"lazygrok:momus", "prompt":"Review .lazygrok/plans/<name>.md; verdict OKAY or NEEDS_REVISION."})`
 - Fix revisions until OKAY or user accepts risk.
 - User runs `/start-work .lazygrok/plans/<name>.md` to write `.lazygrok/boulder.json` and exit plan mode.
 

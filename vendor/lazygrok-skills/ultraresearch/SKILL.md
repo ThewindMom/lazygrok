@@ -189,11 +189,11 @@ Role protocols — embed the relevant one in each spawn message; every worker ge
 Example spawn (codebase axis; librarian, browsing, and repo-dive follow the same contract with their own protocol):
 
 ```
-spawn_subagent(subagent_type="explore", background=true, prompt="TASK: act as a codebase researcher. AXIS: <specific angle>.
+spawn_subagent({"subagent_type":"explore", "background":true, "prompt":"TASK: act as a codebase researcher. AXIS: <specific angle>.
 This is an explicit exhaustive-research assignment. Your default retrieval budget and stop-when-answered rules do not apply — run the full protocol below and report every lead.
 SCOPE: find everything in this codebase related to <angle>: <what complete looks like>.
 PROTOCOL: grep 3+ keyword variations; structural search; LSP references; globs; git history (-S and --grep). Cross-validate across tools. Report absolute paths and file:line patterns.
-End your reply with the ## EXPAND tail: '- LEAD: <discovery> — WHY: <why> — ANGLE: <search>' per lead, or 'none — <reason>'.")
+End your reply with the ## EXPAND tail: '- LEAD: <discovery> — WHY: <why> — ANGLE: <search>' per lead, or 'none — <reason>'."})
 ```
 
 ## Phase 2 — Expand until convergence
@@ -205,10 +205,10 @@ This loop is what makes the mode research rather than search. Collect returns as
 3. Spawn an expansion worker immediately for each new unchecked lead:
 
 ```
-spawn_subagent(subagent_type="librarian", background=true, prompt="TASK: expansion wave <N> — investigate: <lead>.
+spawn_subagent({"subagent_type":"librarian", "background":true, "prompt":"TASK: expansion wave <N> — investigate: <lead>.
 PARENT: <which return surfaced it>. This is an explicit exhaustive-research assignment; budgets do not apply.
 <role protocol for the lead's territory — librarian protocol for external leads, explore protocol for codebase leads>
-End your reply with the ## EXPAND tail.")
+End your reply with the ## EXPAND tail."})
 ```
 
 4. Record the wave in `expansion-log.md`: spawned, markers gained, leads opened/closed.
@@ -224,10 +224,10 @@ End your reply with the ## EXPAND tail.")
 Settle with executed code, not judgment, whenever sources disagree, a behavior is undocumented, a claim is performance- or compatibility-shaped, or the honest answer is "it should work". Spawn one verification worker per claim:
 
 ```
-spawn_subagent(subagent_type="general-purpose", background=true, prompt="TASK: verify by execution: <claim>.
+spawn_subagent({"subagent_type":"lazygrok:lazygrok-worker-high", "background":true, "prompt":"TASK: verify by execution: <claim>.
 SOURCE: <where it came from>; CONTRADICTION: <opposing source, if any>.
 Write a minimal self-contained script that tests the claim; run it (uv run --with <deps> python / bun / direct compile); capture full stdout+stderr; pin versions.
-Reply with: the exact code, the full output, environment (OS, runtime, dependency versions), and a verdict — CONFIRMED / REFUTED / PARTIAL — grounded in the output.")
+Reply with: the exact code, the full output, environment (OS, runtime, dependency versions), and a verdict — CONFIRMED / REFUTED / PARTIAL — grounded in the output."})
 ```
 
 Journal each verdict to `verify-<slug>.md`.
@@ -280,7 +280,7 @@ Default final materials to HTML/PDF unless the user explicitly asks for a differ
 
 Asset workers (background, parallel): actively use charts for quantitative findings (`uv run --with matplotlib --with plotly python`) saved by you to `$SESSION_DIR/assets/`; Mermaid graphs for process, architecture, argument, and evidence-flow structure; full-page screenshots of the top 5-10 sources (browsing skill); generated diagrams or editorial visuals with the imagegen skill when architecture, flows, or narrative framing benefit from bitmap assets.
 
-Assembly worker — `spawn_subagent(subagent_type="general-purpose", background=true, ...)`: before writing, read every available design and visualization skill and apply it — the report is a designed artifact, not a text dump. Run HTML/PDF output through the ULW loop with frontend and visual-qa, then repair until the reviewer says no broken parts and gives approval. Structure: executive summary → key findings by theme → detailed analysis (quotes under 20 words with attribution, charts, Mermaid graphs, generated visuals, SHA-pinned permalinks, verification results) → comparative analysis when options compete → numbered sources with access dates → methodology appendix (workers, waves, searches, verifications). Every claim cites `[Source N]`.
+Assembly worker — `spawn_subagent({"subagent_type":"lazygrok:lazygrok-worker-high", "background":true, ...})`: before writing, read every available design and visualization skill and apply it — the report is a designed artifact, not a text dump. Run HTML/PDF output through the ULW loop with frontend and visual-qa, then repair until the reviewer says no broken parts and gives approval. Structure: executive summary → key findings by theme → detailed analysis (quotes under 20 words with attribution, charts, Mermaid graphs, generated visuals, SHA-pinned permalinks, verification results) → comparative analysis when options compete → numbered sources with access dates → methodology appendix (workers, waves, searches, verifications). Every claim cites `[Source N]`.
 
 ## Search craft
 

@@ -115,23 +115,13 @@ func EvaluateBoulderStop(ev hookenv.Event) (bool, string) {
 		return false, ""
 	}
 	work := getWorkForSession(state, sid)
-	inSession := false
-	for _, id := range stringSlice(state["session_ids"]) {
-		if id == sid {
-			inSession = true
-			break
-		}
-	}
-	if work == nil && !inSession {
+	if work == nil {
 		return false, ""
 	}
 	if err := appendSessionToBoulder(ws, sid); err != nil {
 		return true, "Boulder state could not be reserved safely. Inspect .lazygrok/boulder.json before retrying."
 	}
 	target := work
-	if target == nil {
-		target = state
-	}
 	status := strings.ToLower(strings.TrimSpace(stringField(target, "status")))
 	if status == "paused" || status == "abandoned" {
 		return false, ""

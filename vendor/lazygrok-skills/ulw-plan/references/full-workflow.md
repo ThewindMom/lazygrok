@@ -212,7 +212,9 @@ The first action must open the literal workspace root as a directory descriptor,
 The draft must record the native Momus session/result, the independent Grok CLI review command/result, and the fix/retry summary. Immediately before handoff, repeat the same live canonical-path and SHA-256 validation and require it to match the approved round digest; drift invalidates both approvals and starts a fresh round. Do not say "high-accuracy review completed" unless both receipts exist, both final verdicts are unconditional approval, and the final live-plan validation passes.
 
 ## Delegation discipline (Grok-native)
-Every spawn starts with `TASK:`, then DELIVERABLE / SCOPE / VERIFY inside `message`; state the role inside `message` (agent_type is a routing hint, not a guaranteed TOML selection); use `background: true` unless full history is truly required:
+Every spawn starts with `TASK:`, then DELIVERABLE / SCOPE / VERIFY and the
+role inside `prompt`; pass the installed role as `subagent_type`; use
+`background: true` unless full history is truly required:
 
 ```
 spawn_subagent({"prompt":"TASK: act as an explorer. DELIVERABLE: ... SCOPE: ... VERIFY: ...","subagent_type":"explorer","background":false})

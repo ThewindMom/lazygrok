@@ -140,14 +140,10 @@ func BuildBoulderContext(workspace, sessionID string) string {
 		return ""
 	}
 	work := getWorkForSession(state, sessionID)
-	ids := stringSlice(state["session_ids"])
-	if work == nil && !containsStr(ids, sessionID) {
+	if work == nil {
 		return ""
 	}
-	subject := state
-	if work != nil {
-		subject = work
-	}
+	subject := work
 	status, _ := subject["status"].(string)
 	if status == "paused" || status == "abandoned" {
 		return ""

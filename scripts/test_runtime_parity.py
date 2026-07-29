@@ -1353,6 +1353,8 @@ class GeneratedRuntimeParityTest(unittest.TestCase):
             r"|\bload_skills="
             r'|\bcategory="'
             r'|"agent_type"\s*:'
+            r"|\bagent_type\b"
+            r"|^\s*spawn_subagent\((?!\s*\{)"
             r"|spawn_subagent\.(?:send_input|kill_command_or_subagent)"
             r"|\bteam_(?:create|task_create|status|list|delete|shutdown_request|"
             r"approve_shutdown|send_message)\b"

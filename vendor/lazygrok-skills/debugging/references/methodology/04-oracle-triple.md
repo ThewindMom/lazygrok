@@ -37,8 +37,8 @@ Spawn all three in parallel.
 ## The three prompts
 
 ```
-spawn_subagent(subagent_type="oracle", background=true,
-     prompt="[CONTEXT: bug description + evidence captured so far, verbatim, with file:line refs]
+spawn_subagent({"subagent_type":"lazygrok-code-reviewer", "background":true,
+     "prompt":"[CONTEXT: bug description + evidence captured so far, verbatim, with file:line refs]
 
      Framing A — OBVIOUS-BUT-MISSED.
      What is the most embarrassing, most obvious cause that a senior engineer would spot in 30 seconds and we've overlooked? Consider:
@@ -49,10 +49,10 @@ spawn_subagent(subagent_type="oracle", background=true,
      - test harness running different code than the app
      - editing src/ while running dist/
 
-     Give me exactly three candidate causes ranked by likelihood, with one sentence each explaining why our evidence is consistent with each.")
+     Give me exactly three candidate causes ranked by likelihood, with one sentence each explaining why our evidence is consistent with each."})
 
-spawn_subagent(subagent_type="oracle", background=true,
-     prompt="[CONTEXT: bug description + evidence captured so far]
+spawn_subagent({"subagent_type":"lazygrok-code-reviewer", "background":true,
+     "prompt":"[CONTEXT: bug description + evidence captured so far]
 
      Framing B — SYSTEM-BOUNDARY.
      What if the bug is NOT in the code we've been reading, but at a boundary? Consider:
@@ -65,10 +65,10 @@ spawn_subagent(subagent_type="oracle", background=true,
      - ABI difference (native addons, glibc versions, musl vs glibc)
      - wrong transport (HTTP/1.1 vs HTTP/2, TLS version negotiation)
 
-     Give me three candidate causes, each naming the specific boundary and the specific contract assumption that might be violated.")
+     Give me three candidate causes, each naming the specific boundary and the specific contract assumption that might be violated."})
 
-spawn_subagent(subagent_type="oracle", background=true,
-     prompt="[CONTEXT: bug description + evidence captured so far]
+spawn_subagent({"subagent_type":"lazygrok-code-reviewer", "background":true,
+     "prompt":"[CONTEXT: bug description + evidence captured so far]
 
      Framing C — INVARIANT-VIOLATION.
      Which invariants that we've been ASSUMING TRUE might actually be false?
@@ -76,7 +76,7 @@ spawn_subagent(subagent_type="oracle", background=true,
      - describe the smallest runtime query that would falsify it
      - predict what the observable would be if the invariant holds vs if it fails
 
-     We want at least one of these queries to be decisive.")
+     We want at least one of these queries to be decisive."})
 ```
 
 ---

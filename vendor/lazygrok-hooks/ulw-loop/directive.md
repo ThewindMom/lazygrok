@@ -84,7 +84,7 @@ Only this session's tools. Multi-agent: internal `workflow` panels and/or
 ## When fan-out is required (coding)
 | Situation | Same-turn action |
 | --- | --- |
-| Unfamiliar module / multi-file / unclear ownership | **MUST** run discovery **before** product edits: auto `ulw-discover` via `workflow` if available; else `spawn_subagent(… explore …)` |
+| Unfamiliar module / multi-file / unclear ownership | **MUST** run discovery **before** product edits: auto `ulw-discover` via `workflow` if available; else `spawn_subagent({… explore …})` |
 | Needs external docs/API/lib versions | **MUST** include librarian path: `need_external: true` on discover, or same-turn `lazygrok:librarian` |
 | Independent implementation slices | **MUST** one worker per slice (`lazygrok:lazygrok-worker-*` / `hephaestus`) via `spawn_subagent` — not a second user command |
 | HEAVY tier or user demanded rigorous review | **MUST** review after evidence: auto `ulw-review` via `workflow` if available; else code-reviewer spawn |

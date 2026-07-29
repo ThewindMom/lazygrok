@@ -72,12 +72,12 @@ Don't wait-these run async while main session works. **Equip every agent with th
 
 ```
 // Fire all at once, collect results later
-spawn_subagent(subagent_type="explore", description="Explore project structure", background=true, prompt="Project structure: map real layout via codegraph_explore/codegraph_files → REPORT deviations from standard patterns")
-spawn_subagent(subagent_type="explore", description="Find entry points", background=true, prompt="Entry points: FIND main files, trace reach via codegraph_callees + lsp_symbols → REPORT non-standard organization")
-spawn_subagent(subagent_type="explore", description="Find conventions", background=true, prompt="Conventions: FIND config files (.eslintrc, pyproject.toml, .editorconfig) → REPORT project-specific rules")
-spawn_subagent(subagent_type="explore", description="Find anti-patterns", background=true, prompt="Anti-patterns: FIND 'DO NOT', 'NEVER', 'ALWAYS', 'DEPRECATED' comments → LIST forbidden patterns")
-spawn_subagent(subagent_type="explore", description="Explore build/CI", background=true, prompt="Build/CI: FIND .github/workflows, Makefile → REPORT non-standard patterns")
-spawn_subagent(subagent_type="explore", description="Find test patterns", background=true, prompt="Test patterns: FIND test configs/structure; codegraph_callers on core modules to see what is covered → REPORT unique conventions")
+spawn_subagent({"subagent_type":"explore", "description":"Explore project structure", "background":true, "prompt":"Project structure: map real layout via codegraph_explore/codegraph_files → REPORT deviations from standard patterns"})
+spawn_subagent({"subagent_type":"explore", "description":"Find entry points", "background":true, "prompt":"Entry points: FIND main files, trace reach via codegraph_callees + lsp_symbols → REPORT non-standard organization"})
+spawn_subagent({"subagent_type":"explore", "description":"Find conventions", "background":true, "prompt":"Conventions: FIND config files (.eslintrc, pyproject.toml, .editorconfig) → REPORT project-specific rules"})
+spawn_subagent({"subagent_type":"explore", "description":"Find anti-patterns", "background":true, "prompt":"Anti-patterns: FIND 'DO NOT', 'NEVER', 'ALWAYS', 'DEPRECATED' comments → LIST forbidden patterns"})
+spawn_subagent({"subagent_type":"explore", "description":"Explore build/CI", "background":true, "prompt":"Build/CI: FIND .github/workflows, Makefile → REPORT non-standard patterns"})
+spawn_subagent({"subagent_type":"explore", "description":"Find test patterns", "background":true, "prompt":"Test patterns: FIND test configs/structure; codegraph_callers on core modules to see what is covered → REPORT unique conventions"})
 ```
 
 <dynamic-agents>
@@ -103,9 +103,9 @@ max_depth=$(find . -type d -not -path '*/node_modules/*' -not -path '*/.git/*' |
 Example spawning:
 ```
 // 500 files, 50k lines, depth 6, 15 large files → spawn 5+5+2+1 = 13 additional agents
-spawn_subagent(subagent_type="explore", description="Analyze large files", background=true, prompt="Large file analysis: FIND files >500 lines, REPORT complexity hotspots")
-spawn_subagent(subagent_type="explore", description="Explore deep modules", background=true, prompt="Deep modules at depth 4+: FIND hidden patterns, internal conventions")
-spawn_subagent(subagent_type="explore", description="Find shared utilities", background=true, prompt="Cross-cutting concerns: FIND shared utilities across directories")
+spawn_subagent({"subagent_type":"explore", "description":"Analyze large files", "background":true, "prompt":"Large file analysis: FIND files >500 lines, REPORT complexity hotspots"})
+spawn_subagent({"subagent_type":"explore", "description":"Explore deep modules", "background":true, "prompt":"Deep modules at depth 4+: FIND hidden patterns, internal conventions"})
+spawn_subagent({"subagent_type":"explore", "description":"Find shared utilities", "background":true, "prompt":"Cross-cutting concerns: FIND shared utilities across directories"})
 // ... more based on calculation
 ```
 </dynamic-agents>
@@ -267,13 +267,13 @@ Launch writing tasks for each location:
 
 ```
 for loc in AGENTS_LOCATIONS (except root):
-  spawn_subagent(subagent_type="general-purpose", background=false, description="Generate AGENTS.md", prompt=`
+  spawn_subagent({"subagent_type":"lazygrok:lazygrok-worker-high", "background":false, "description":"Generate AGENTS.md", "prompt":`
     Generate AGENTS.md for: ${loc.path}
     - Reason: ${loc.reason}
     - 30-80 lines max
     - NEVER repeat parent content
     - Sections: OVERVIEW (1 line), STRUCTURE (if >5 subdirs), WHERE TO LOOK, CONVENTIONS (if different), ANTI-PATTERNS
-  `)
+  `})
 ```
 
 **Wait for all. Mark "generate" as completed.**

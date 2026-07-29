@@ -126,7 +126,7 @@ Static screenshots miss what moves. For every interactive element and every anim
 
 This independent review is REQUIRED before any "done" claim. Do not self-review inside the main agent and call the UI verified - a self-graded pass is the failure mode this step exists to stop. Dispatch it yourself, every time, without waiting to be told. Give each reviewer the captures for every enumerated page from Step 2, not a sample, and tell it the page count so it can confirm none were skipped.
 
-Dispatch through your harness's own subagent tool. In OpenCode: `spawn_subagent(subagent_type="oracle", ...)`. In Grok: `spawn_subagent({"prompt": "...", "subagent_type": "lazygrok-gate-reviewer", "background": false})` (the code blocks below are written in OpenCode `spawn_subagent(...)` form; translate them to that `spawn_subagent` call, putting the full prompt in `message`).
+Dispatch through your harness's own subagent tool. In OpenCode: `spawn_subagent({"subagent_type":"lazygrok-code-reviewer", ...})`. In Grok: `spawn_subagent({"prompt": "...", "subagent_type": "lazygrok-gate-reviewer", "background": false})` (the code blocks below are written in OpenCode `spawn_subagent(...)` form; translate them to that Grok object call, putting the full assignment in `prompt`).
 
 Send BOTH calls in a single message so they run concurrently. Each oracle is read-only: it reviews and reports, it cannot modify files. Each returns PASS, REVISE, or FAIL with concrete, located findings. Pass A proves the surface is a real design-system implementation, not a mock-only or faked-image substitute. Pass B directly opens screenshots and inspects source/content for visual and CJK defects.
 
@@ -135,10 +135,10 @@ Paste evidence directly into each prompt: source code, the plain-text TUI captur
 ### Pass A - Design-system and functional integrity (deeper, strict)
 
 ```
-spawn_subagent(subagent_type="oracle",
-  background=true,
-  description="Visual QA pass A: design-system and functional integrity",
-  prompt="""
+spawn_subagent({"subagent_type":"lazygrok-code-reviewer",
+  "background":true,
+  "description":"Visual QA pass A: design-system and functional integrity",
+  "prompt":"""
 REVIEW TYPE: DESIGN-SYSTEM AND FUNCTIONAL INTEGRITY (read-only)
 TIER INTENT: Treat this as the deeper, stricter pass. Reason exhaustively before concluding. Assume a plausible-looking surface may be faked or mock-only until the source proves otherwise.
 
@@ -177,16 +177,16 @@ FINDINGS: for each, [product|evidence] [dimension] [severity] what is wrong, whe
 WHAT IS GOOD: correct aspects that must not regress
 BLOCKING: items that must be fixed; empty if PASS
 """
-)
+})
 ```
 
 ### Pass B - Visual fidelity and CJK precision (focused)
 
 ```
-spawn_subagent(subagent_type="oracle",
-  background=true,
-  description="Visual QA pass B: visual fidelity and CJK precision",
-  prompt="""
+spawn_subagent({"subagent_type":"lazygrok-code-reviewer",
+  "background":true,
+  "description":"Visual QA pass B: visual fidelity and CJK precision",
+  "prompt":"""
 REVIEW TYPE: VISUAL FIDELITY AND CJK PRECISION (read-only)
 TIER INTENT: Treat this as the focused visual pass. Inspect rendered web captures through Grok Build's Playwright/browser surface before judging. If a capture exists only as a local raster path and no rendered browser surface is available, return INCONCLUSIVE and request an inspectable attachment instead of claiming visual review. Anchor every claim to the script evidence, source code, and captures.
 
@@ -231,7 +231,7 @@ EVIDENCE TRACE: each hotspot or overflow line mapped to its visual cause
 FINDINGS: for each, [product|evidence] [severity] what is wrong, where (hotspot grid or capture line:col), and the concrete fix
 BLOCKING: items that must be fixed; empty if PASS
 """
-)
+})
 ```
 
 ## Step 4 - Synthesize one verdict
@@ -287,10 +287,10 @@ node "$SKILL_DIR/scripts/visual-qa.mjs" image-diff <reference.png> <actual.png>
    **OpenCode:**
 
    `````
-   spawn_subagent(subagent_type="oracle",
-     background=true,
-     description="Clone/design-system fidelity review",
-     prompt="""
+   spawn_subagent({"subagent_type":"lazygrok-code-reviewer",
+     "background":true,
+     "description":"Clone/design-system fidelity review",
+     "prompt":"""
    TASK: Act as a clone / design-system fidelity reviewer. Read-only.
 
    Be skeptical but fair. The executor may have overstated success and may have faked the design — inspect the diff, source code, and reference artifacts before approving.
@@ -310,7 +310,7 @@ node "$SKILL_DIR/scripts/visual-qa.mjs" image-diff <reference.png> <actual.png>
 
    Do NOT suggest or implement fixes.
    """
-   )
+   })
    `````
 
    **Grok:** `spawn_subagent({"prompt":"TASK: Act as a clone / design-system fidelity reviewer. ...","subagent_type":"lazygrok-clone-fidelity-reviewer","background":false})`

@@ -125,44 +125,44 @@ Fire ALL of these simultaneously using \`call_omo_agent\`:
 
 \`\`\`
 // Agent 1: Find the refactoring target
-spawn_subagent(
-  subagent_type="explore",
-  background=true,
-  prompt="Find all occurrences and definitions of [TARGET].
+spawn_subagent({
+  "subagent_type":"explore",
+  "background":true,
+  "prompt":"Find all occurrences and definitions of [TARGET].
   Report: file paths, line numbers, usage patterns."
-)
+})
 
 // Agent 2: Find related code
-spawn_subagent(
-  subagent_type="explore",
-  background=true,
-  prompt="Find all code that imports, uses, or depends on [TARGET].
+spawn_subagent({
+  "subagent_type":"explore",
+  "background":true,
+  "prompt":"Find all code that imports, uses, or depends on [TARGET].
   Report: dependency chains, import graphs."
-)
+})
 
 // Agent 3: Find similar patterns
-spawn_subagent(
-  subagent_type="explore",
-  background=true,
-  prompt="Find similar code patterns to [TARGET] in the codebase.
+spawn_subagent({
+  "subagent_type":"explore",
+  "background":true,
+  "prompt":"Find similar code patterns to [TARGET] in the codebase.
   Report: analogous implementations, established conventions."
-)
+})
 
 // Agent 4: Find tests
-spawn_subagent(
-  subagent_type="explore",
-  background=true,
-  prompt="Find all test files related to [TARGET].
+spawn_subagent({
+  "subagent_type":"explore",
+  "background":true,
+  "prompt":"Find all test files related to [TARGET].
   Report: test file paths, test case names, coverage indicators."
-)
+})
 
 // Agent 5: Architecture context
-spawn_subagent(
-  subagent_type="explore",
-  background=true,
-  prompt="Find architectural patterns and module organization around [TARGET].
+spawn_subagent({
+  "subagent_type":"explore",
+  "background":true,
+  "prompt":"Find architectural patterns and module organization around [TARGET].
   Report: module boundaries, layer structure, design patterns in use."
-)
+})
 \`\`\`
 
 ## 1.2: Direct Tool Exploration (WHILE AGENTS RUN)
@@ -289,16 +289,16 @@ ls -la *_test.go
 
 \`\`\`
 // Find all tests related to target
-spawn_subagent(
-  subagent_type="explore",
-  background=false,  // Need this synchronously
-  prompt="Analyze test coverage for [TARGET]:
+spawn_subagent({
+  "subagent_type":"explore",
+  "background":false,  // Need this synchronously
+  "prompt":"Analyze test coverage for [TARGET]:
   1. Which test files cover this code?
   2. What test cases exist?
   3. Are there integration tests?
   4. What edge cases are tested?
   5. Estimated coverage percentage?"
-)
+})
 \`\`\`
 
 ## 3.3: Determine Verification Strategy
@@ -360,9 +360,9 @@ After each refactoring step:
 ## 4.1: Invoke Plan Agent
 
 \`\`\`
-spawn_subagent(
-  subagent_type="plan",
-  prompt="Create a detailed refactoring plan:
+spawn_subagent({
+  "subagent_type":"lazygrok:prometheus",
+  "prompt":"Create a detailed refactoring plan:
 
   ## Refactoring Goal
   [User's original request]
@@ -385,7 +385,7 @@ spawn_subagent(
   4. Specify exact files and line ranges for each step
   5. Include rollback strategy for each step
   6. Define commit checkpoints"
-)
+})
 \`\`\`
 
 ## 4.2: Review and Validate Plan

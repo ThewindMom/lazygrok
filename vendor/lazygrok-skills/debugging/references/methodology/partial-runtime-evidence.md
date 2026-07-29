@@ -158,8 +158,8 @@ For tasks where the deliverable is an **artifact, not a bug fix** (reverse engin
 ### Pattern
 
 ```
-spawn_subagent(subagent_type="oracle", background=false,
-     prompt="""
+spawn_subagent({"subagent_type":"lazygrok-code-reviewer", "background":false,
+     "prompt":"""
 SKEPTICAL FINAL VERIFICATION — be critical, look for reasons the task is incomplete or wrong.
 
 ## Original task
@@ -180,7 +180,7 @@ SKEPTICAL FINAL VERIFICATION — be critical, look for reasons the task is incom
 3. Identify any unsubstantiated claims, missing pieces, or factual errors.
 4. End with PASS / FAIL / PARTIAL with specific gaps.
 Be skeptical. Don't rubber-stamp.
-""")
+"""})
 ```
 
 ### Why this differs from the Oracle Triple

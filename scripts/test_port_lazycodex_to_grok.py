@@ -131,7 +131,7 @@ background_output(task_id="worker-1")
 
         self.assertEqual(transformed.count("spawn_subagent("), 4)
         self.assertIn("get_command_or_subagent_output(", transformed)
-        self.assertIn("background=True", transformed)
+        self.assertIn('"background":true', transformed)
         for unsupported in ("call_omo_agent(", "Task(", "task(", "background_output("):
             self.assertNotIn(unsupported, transformed)
         for unsupported_field in ("load_skills=", "category=", '"agent_type":'):
@@ -167,6 +167,25 @@ background_output(task_id="worker-1")
         self.assertIn('"subagent_type": "explore"', transformed)
         self.assertIn('"message": "keep"', transformed)
         self.assertIn('"agent_type": "keep"', transformed)
+
+    def test_normalizes_keyword_spawn_call_schema(self) -> None:
+        source = '''spawn_subagent(
+  subagent_type="oracle",
+  background=true,
+  description="review",
+  prompt="""
+TASK: Review a function call such as f(x).
+"""
+)'''
+
+        transformed = PORT.transform_text(source)
+
+        self.assertIn("spawn_subagent({", transformed)
+        self.assertIn('"subagent_type":"lazygrok-code-reviewer"', transformed)
+        self.assertIn('"background":true', transformed)
+        self.assertIn('"prompt":"""', transformed)
+        self.assertIn("f(x)", transformed)
+        self.assertTrue(transformed.endswith("})"))
 
     def test_replaces_upstream_teammode_with_grok_fan_out(self) -> None:
         source = """---

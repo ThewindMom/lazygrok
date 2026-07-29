@@ -155,13 +155,17 @@ fi
 ```
 
 12. Deliver the fix.
-   - `ThewindMom/lazygrok`: create the requested verified-fix issue, or fork,
-     push, and open a PR when the user requested a code contribution:
+   - `ThewindMom/lazygrok`: choose exactly one user-authorized delivery path.
+     For a requested verified-fix issue:
 
 ```bash
 ISSUE_BODY="${TMPDIR:-/tmp}/lazygrok-fix-<short-slug>-issue.md"
 gh issue create --repo ThewindMom/lazygrok --title "<short fix title>" "${LABEL_ARGS[@]}" --body-file "$ISSUE_BODY"
+```
 
+     For a requested code-contribution PR:
+
+```bash
 PR_INPUT="${TMPDIR:-/tmp}/lazygrok-fix-<short-slug>-pr.json"
 PR_BODY="${TMPDIR:-/tmp}/lazygrok-fix-<short-slug>-pr.md"
 node "<skill-root>/scripts/create-pr-body.mjs" "$PR_INPUT" "$PR_BODY"
@@ -174,6 +178,9 @@ gh pr create --repo ThewindMom/lazygrok --base "$BASE_BRANCH" --head "$GH_USER:$
    - `xai-org/grok-build`: fork, push the branch to the fork, and create the PR:
 
 ```bash
+PR_INPUT="${TMPDIR:-/tmp}/lazygrok-fix-<short-slug>-pr.json"
+PR_BODY="${TMPDIR:-/tmp}/lazygrok-fix-<short-slug>-pr.md"
+node "<skill-root>/scripts/create-pr-body.mjs" "$PR_INPUT" "$PR_BODY"
 gh repo fork xai-org/grok-build --remote --remote-name fork
 GH_USER="$(gh api user --jq .login)"
 git push -u fork "$BRANCH_NAME"

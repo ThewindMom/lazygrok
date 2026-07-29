@@ -395,10 +395,95 @@ def normalize_spawn_object_fields(text: str) -> str:
     return out
 
 
+def normalize_spawn_keyword_calls(text: str) -> str:
+    marker = "spawn_subagent("
+    replacements: list[tuple[int, int, str]] = []
+    cursor = 0
+
+    while (call_start := text.find(marker, cursor)) != -1:
+        arguments_start = call_start + len(marker)
+        if text[arguments_start:].lstrip().startswith("{"):
+            cursor = arguments_start
+            continue
+
+        depth = 1
+        index = arguments_start
+        quote = ""
+        triple = False
+        while index < len(text):
+            if quote:
+                delimiter = quote * (3 if triple else 1)
+                if text.startswith(delimiter, index):
+                    quote = ""
+                    triple = False
+                    index += len(delimiter)
+                    continue
+                if text[index] == "\\" and not triple:
+                    index += 2
+                    continue
+                index += 1
+                continue
+
+            if text.startswith('"""', index) or text.startswith("'''", index):
+                quote = text[index]
+                triple = True
+                index += 3
+                continue
+            if text[index] in {'"', "'", "`"}:
+                quote = text[index]
+                index += 1
+                continue
+            if text[index] == "(":
+                depth += 1
+            elif text[index] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            index += 1
+
+        if depth != 0:
+            cursor = arguments_start
+            continue
+
+        arguments = text[arguments_start:index]
+        if arguments.strip() in {"...", "…"}:
+            cursor = index + 1
+            continue
+        arguments = re.sub(
+            r'(?m)(^|,)(\s*)(subagent_type|background|description|prompt|capability_mode)\s*=',
+            lambda match: f'{match.group(1)}{match.group(2)}"{match.group(3)}":',
+            arguments,
+        )
+        arguments = re.sub(r'("background":\s*)True\b', r"\1true", arguments)
+        arguments = re.sub(r'("background":\s*)False\b', r"\1false", arguments)
+        arguments = arguments.replace(
+            '"subagent_type":"oracle"', '"subagent_type":"lazygrok-code-reviewer"'
+        ).replace(
+            '"subagent_type": "oracle"', '"subagent_type": "lazygrok-code-reviewer"'
+        )
+        arguments = arguments.replace(
+            '"subagent_type":"general-purpose"',
+            '"subagent_type":"lazygrok:lazygrok-worker-high"',
+        ).replace(
+            '"subagent_type": "general-purpose"',
+            '"subagent_type": "lazygrok:lazygrok-worker-high"',
+        )
+        replacements.append(
+            (call_start, index + 1, f"spawn_subagent({{{arguments}}})")
+        )
+        cursor = index + 1
+
+    out = text
+    for start, end, replacement in reversed(replacements):
+        out = out[:start] + replacement + out[end:]
+    return out
+
+
 def transform_text(text: str) -> str:
     out = text
     for pat, repl in REPLACEMENTS:
         out = re.sub(pat, repl, out)
+    out = normalize_spawn_keyword_calls(out)
     out = normalize_spawn_object_fields(out)
 
     if "\nname: teammode\n" in out:

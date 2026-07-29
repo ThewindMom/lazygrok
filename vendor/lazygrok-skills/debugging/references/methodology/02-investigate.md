@@ -46,13 +46,13 @@ Branch depending on what's available.
 Grok has no durable `team_*` transport. Fan out async explore/deep subagents with `spawn_subagent`. Same rule: one hypothesis per subagent.
 
 ```
-spawn_subagent(subagent_type="explore", background=true,
-     prompt="[CONTEXT: bug summary + which hypothesis you own + what state to look at]
-     Runtime state investigation for hypothesis 1: ...")
-spawn_subagent(subagent_type="explore", background=true,
-     prompt="Log/timing investigation for hypothesis 2: ...")
-spawn_subagent(subagent_type="general-purpose", background=true,
-     prompt="Reproduction minimizer for hypothesis 3: ...")
+spawn_subagent({"subagent_type":"explore", "background":true,
+     "prompt":"[CONTEXT: bug summary + which hypothesis you own + what state to look at]
+     Runtime state investigation for hypothesis 1: ..."})
+spawn_subagent({"subagent_type":"explore", "background":true,
+     "prompt":"Log/timing investigation for hypothesis 2: ..."})
+spawn_subagent({"subagent_type":"lazygrok:lazygrok-worker-high", "background":true,
+     "prompt":"Reproduction minimizer for hypothesis 3: ..."})
 ```
 
 End your response, wait for completion notifications, then synthesize.

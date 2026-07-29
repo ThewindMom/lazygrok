@@ -11,7 +11,7 @@ Use the exact subagent tools exposed by the active Grok session. Spawn independe
 Every `spawn_subagent` message must be self-contained. Start with
 `TASK: <imperative assignment>`, then name `DELIVERABLE`, `SCOPE`, and
 `VERIFY`. State that it is an executable assignment, not a context
-handoff. Role or specialty instructions belong inside `message`.
+handoff. Role or specialty instructions belong inside `prompt`.
 Use `background: true` unless full history is truly
 required; paste only the review context that worker needs.
 
@@ -245,11 +245,11 @@ Launch ALL 5 in a single turn. Every agent uses `background=true`. No sequential
 This agent answers: "Did we build exactly what was asked, within the rules we were given?"
 
 ```
-spawn_subagent(
-  subagent_type="oracle",
-  background=true,
-  description="Verify implementation against original goal and constraints",
-  prompt="""
+spawn_subagent({
+  "subagent_type": "lazygrok-gate-reviewer",
+  "background": true,
+  "description": "Verify implementation against original goal and constraints",
+  "prompt": """
 <review_type>GOAL & CONSTRAINT VERIFICATION</review_type>
 
 <original_goal>
@@ -311,7 +311,7 @@ OUTPUT FORMAT:
   - Evidence: specific code or logic reference
 </findings>
 <blocking_issues>Issues that MUST be fixed. Empty if PASS.</blocking_issues>
-""")
+"""})
 ```
 
 ---
@@ -323,11 +323,11 @@ This agent answers: "Does it actually work when you run it?"
 The QA agent follows a structured process: brainstorm scenarios exhaustively first, then self-review and augment, then create a task list, then execute systematically.
 
 ```
-spawn_subagent(
-  subagent_type="general-purpose",
-  background=true,
-  description="QA by actually running and using the application",
-  prompt="""
+spawn_subagent({
+  "subagent_type": "lazygrok-qa-executor",
+  "background": true,
+  "description": "QA by actually running and using the application",
+  "prompt": """
 <review_type>QA - HANDS-ON APP EXECUTION</review_type>
 
 <original_goal>
@@ -424,7 +424,7 @@ OUTPUT FORMAT:
   - Evidence: Screenshot path or terminal output snippet (if FAIL)
 </test_results>
 <blocking_issues>P0 or P1 failures only. Empty if PASS.</blocking_issues>
-""")
+"""})
 ```
 
 ---
@@ -434,11 +434,11 @@ OUTPUT FORMAT:
 This agent answers: "Is the code well-written, maintainable, and consistent with the codebase?"
 
 ```
-spawn_subagent(
-  subagent_type="oracle",
-  background=true,
-  description="Review overall code quality, patterns, and architecture",
-  prompt="""
+spawn_subagent({
+  "subagent_type": "lazygrok-code-reviewer",
+  "background": true,
+  "description": "Review overall code quality, patterns, and architecture",
+  "prompt": """
 <review_type>CODE QUALITY REVIEW</review_type>
 
 <changed_files>
@@ -498,7 +498,7 @@ OUTPUT FORMAT:
   - Suggestion: how to improve
 </findings>
 <blocking_issues>CRITICAL and MAJOR items only. Empty if PASS.</blocking_issues>
-""")
+"""})
 ```
 
 ---
@@ -510,11 +510,11 @@ This agent answers: "Are there security vulnerabilities in these changes?"
 This is supplementary - it focuses exclusively on security. It does NOT comment on code style, architecture, or functionality unless those directly create a security risk.
 
 ```
-spawn_subagent(
-  subagent_type="oracle",
-  background=true,
-  description="Security-focused review of implementation changes",
-  prompt="""
+spawn_subagent({
+  "subagent_type": "lazygrok-code-reviewer",
+  "background": true,
+  "description": "Security-focused review of implementation changes",
+  "prompt": """
 <review_type>SECURITY REVIEW (supplementary)</review_type>
 
 <changed_files>
@@ -555,7 +555,7 @@ OUTPUT FORMAT:
   - Remediation: Specific fix
 </findings>
 <blocking_issues>CRITICAL and HIGH items only. Empty if PASS.</blocking_issues>
-""")
+"""})
 ```
 
 ---
@@ -565,11 +565,11 @@ OUTPUT FORMAT:
 This agent answers: "Did we miss any context that should have informed this implementation?"
 
 ```
-spawn_subagent(
-  subagent_type="general-purpose",
-  background=true,
-  description="Mine all accessible contexts for missed requirements or background knowledge",
-  prompt="""
+spawn_subagent({
+  "subagent_type": "explore",
+  "background": true,
+  "description": "Mine all accessible contexts for missed requirements or background knowledge",
+  "prompt": """
 <review_type>CONTEXT MINING - MISSED REQUIREMENTS & BACKGROUND</review_type>
 
 <original_goal>
@@ -641,7 +641,7 @@ OUTPUT FORMAT:
 </discovered_context>
 <missed_requirements>Requirements the implementation should address but doesn't. Empty if none.</missed_requirements>
 <blocking_issues>BLOCKING items only. Empty if PASS.</blocking_issues>
-""")
+"""})
 ```
 
 ---

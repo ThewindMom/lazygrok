@@ -127,13 +127,12 @@ func getWorks(state map[string]any) []map[string]any {
 }
 
 func getWorkForSession(state map[string]any, sessionID string) map[string]any {
-	for _, work := range getWorks(state) {
-		ids, _ := work["session_ids"].([]any)
-		for _, id := range ids {
-			if s, ok := id.(string); ok && s == sessionID {
-				return work
-			}
+	if _, hasWorks := state["works"]; hasWorks || stringField(state, "active_work_id") != "" {
+		active := getActiveWork(state)
+		if workHasSession(active, sessionID) {
+			return active
 		}
+		return nil
 	}
 	ids, _ := state["session_ids"].([]any)
 	for _, id := range ids {

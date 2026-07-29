@@ -275,3 +275,46 @@ func TestStartWork_failsClosedOnUnresolvedActiveWork(t *testing.T) {
 		t.Fatal("unresolved active work was replaced")
 	}
 }
+
+func TestEvaluateBoulderStop_doesNotPromoteHistoricalOwner(t *testing.T) {
+	workspace := t.TempDir()
+	current := map[string]any{
+		"active_work_id": "active-b",
+		"status":         "active",
+		"session_ids":    []any{"historical-a", "active-b-owner"},
+		"works": map[string]any{
+			"completed-a": map[string]any{
+				"status":      "completed",
+				"session_ids": []any{"historical-a"},
+			},
+			"active-b": map[string]any{
+				"status":      "active",
+				"session_ids": []any{"active-b-owner"},
+			},
+		},
+	}
+	if !writeBoulder(workspace, current) {
+		t.Fatal("writeBoulder failed")
+	}
+	before, err := os.ReadFile(boulderPath(workspace))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	block, message := EvaluateBoulderStop(hookenv.Event{
+		WorkspaceRoot: workspace,
+		SessionID:     "historical-a",
+		StopReason:    "end_turn",
+	})
+
+	if block || message != "" {
+		t.Fatalf("block = %v, message = %q, want unrelated historical session ignored", block, message)
+	}
+	after, err := os.ReadFile(boulderPath(workspace))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("historical owner was promoted into foreign active work")
+	}
+}

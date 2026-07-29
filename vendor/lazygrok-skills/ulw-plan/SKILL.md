@@ -121,7 +121,10 @@ When exploration is exhausted and the unknowns are answered, record the gate in 
 
 ## Delegation (Grok-native)
 
-Fan out read-only research before deciding. Every spawn names DELIVERABLE / SCOPE / VERIFY inside `message`, states the role inside `message` (and passes `agent_type` as a routing hint - do not assume it alone selected a TOML role), and uses `background: true` unless full parent history is truly required:
+Fan out read-only research before deciding. Every spawn names DELIVERABLE /
+SCOPE / VERIFY and the role inside `prompt`, passes the installed role as
+`subagent_type`, and uses `background: true` unless full parent history is
+truly required:
 
 ```
 spawn_subagent({"prompt":"TASK: act as an explorer. DELIVERABLE: ... SCOPE: ... VERIFY: ...","subagent_type":"explorer","background":false})

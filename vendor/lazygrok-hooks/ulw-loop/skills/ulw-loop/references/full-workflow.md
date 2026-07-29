@@ -48,7 +48,8 @@ Size each worker to the task. Put the intended role, rigor level, and specialty 
 
 For reviewer work, use a self-contained reviewer assignment, tight scope, and explicit verification in `message`. Never spawn a context-only child for review.
 
-Difficulty is orthogonal to LIGHT/HEAVY rigor. Tier roles bind via `agent_type` (v1); the deployed v2 spawn schema omits it — state the tier inside `message` there.
+Difficulty is orthogonal to LIGHT/HEAVY rigor. Bind installed tier roles with
+`subagent_type` and state the assignment inside `prompt`.
 
 Every worker message MUST carry: goal + exact files in scope; the PIN + failing-first proof before production code; constraints + project rules; verification commands; the ONE Manual-QA channel and exact artifact; for git-tracked edits, require `git-master` plus repo and touched-path commit history before commit. Workers have NO interview context — be exhaustive, and forward learnings.
 
