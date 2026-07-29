@@ -23,7 +23,9 @@ PLUGIN_ROOT="${GROK_PLUGIN_ROOT:-$ROOT}"
 # current plugin manifest on SessionStart so plugin updates can remove or add
 # hooks without requiring a separate reinstall command.
 if [ "$SUBCOMMAND" = "session-start" ] && [ -f "${PLUGIN_ROOT}/scripts/install-user-hooks.mjs" ]; then
-  node "${PLUGIN_ROOT}/scripts/install-user-hooks.mjs" --heal >/dev/null 2>&1 || true
+  if ! node "${PLUGIN_ROOT}/scripts/install-user-hooks.mjs" --heal >/dev/null 2>&1; then
+    echo "run-hook.sh: user-hook mirror heal failed; continuing without blocking" >&2
+  fi
 fi
 
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
