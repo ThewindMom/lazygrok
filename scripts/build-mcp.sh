@@ -20,7 +20,7 @@ for platform in "${PLATFORMS[@]}"; do
     output="${output}.exe"
   fi
   echo "Building $output..."
-  GOOS="$os" GOARCH="$arch" go build -o "$output" ./cmd/lazygrok-mcp/
+  CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -buildvcs=false -trimpath -mod=mod -ldflags="-s -w" -o "$output" ./cmd/lazygrok-mcp/
 done
 
 echo "Built bin/lazygrok-mcp-*"

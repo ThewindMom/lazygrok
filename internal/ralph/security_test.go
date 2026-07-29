@@ -201,3 +201,114 @@ func TestClearState_allowsMissingState(t *testing.T) {
 		t.Fatalf("ClearState(missing) = %v, want nil", err)
 	}
 }
+
+func TestEvaluateStop_rejectsMissingSessionForBoundLoop(t *testing.T) {
+	workspace := t.TempDir()
+	if err := WriteStateJSON(workspace, []byte(`{
+		"iteration": 1,
+		"max_iterations": 3,
+		"session_id": "owner-session",
+		"prompt": "owned work"
+	}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	blocked, message := EvaluateStop(hookenv.Event{WorkspaceRoot: workspace})
+
+	if blocked || message != "" {
+		t.Fatalf("sessionless event mutated a bound loop: blocked=%t message=%q", blocked, message)
+	}
+	data, err := os.ReadFile(StatePath(workspace))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "iteration: 1") {
+		t.Fatalf("sessionless event changed persisted state: %s", data)
+	}
+}
+
+func TestCancelRalph_requiresOwningSession(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		sessionID string
+	}{
+		{name: "different session", sessionID: "other-session"},
+		{name: "missing session"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			workspace := t.TempDir()
+			if err := WriteStateJSON(workspace, []byte(`{
+				"session_id": "owner-session",
+				"prompt": "owned work"
+			}`)); err != nil {
+				t.Fatal(err)
+			}
+
+			message := CollectUserPrompt(hookenv.Event{
+				WorkspaceRoot: workspace,
+				SessionID:     tc.sessionID,
+				Prompt:        "/cancel-ralph",
+			})
+
+			if !strings.Contains(message, "belongs to another session") {
+				t.Fatalf("message = %q, want ownership rejection", message)
+			}
+			if _, err := os.Stat(StatePath(workspace)); err != nil {
+				t.Fatalf("cross-session cancellation removed state: %v", err)
+			}
+		})
+	}
+}
+
+func TestCancelRalph_reportsGuardedRemoveFailure(t *testing.T) {
+	workspace := t.TempDir()
+	path := StatePath(workspace)
+	if err := WriteStateJSON(workspace, []byte(`{
+		"session_id": "owner-session",
+		"prompt": "owned work"
+	}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(path, filepath.Join(workspace, "ralph-state-alias")); err != nil {
+		t.Fatal(err)
+	}
+
+	message := CollectUserPrompt(hookenv.Event{
+		WorkspaceRoot: workspace,
+		SessionID:     "owner-session",
+		Prompt:        "/cancel-ralph",
+	})
+
+	if !strings.Contains(message, "Unable to cancel safely") {
+		t.Fatalf("message = %q, want guarded failure", message)
+	}
+	if strings.Contains(message, "Canceled active") {
+		t.Fatalf("cancellation falsely claimed success: %q", message)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("guarded cancellation removed state: %v", err)
+	}
+}
+
+func TestCancelRalph_ownerCanClearState(t *testing.T) {
+	workspace := t.TempDir()
+	if err := WriteStateJSON(workspace, []byte(`{
+		"session_id": "owner-session",
+		"prompt": "owned work"
+	}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	message := CollectUserPrompt(hookenv.Event{
+		WorkspaceRoot: workspace,
+		SessionID:     "owner-session",
+		Prompt:        "/cancel-ralph",
+	})
+
+	if !strings.Contains(message, "Canceled active") {
+		t.Fatalf("message = %q, want cancellation success", message)
+	}
+	if _, err := os.Stat(StatePath(workspace)); !os.IsNotExist(err) {
+		t.Fatalf("owner cancellation left state: %v", err)
+	}
+}

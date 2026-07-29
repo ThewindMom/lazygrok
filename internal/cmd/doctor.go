@@ -8,10 +8,10 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"lazygrok/internal/agents"
 	"lazygrok/internal/core/config"
 	"lazygrok/internal/hookenv"
-	"github.com/spf13/cobra"
 )
 
 // doctorCmd returns the doctor command.
@@ -29,13 +29,13 @@ func runDoctor() error {
 	report := map[string]any{}
 
 	// Plugin version
-	report["pluginVersion"] = "0.2.0"
+	report["pluginVersion"] = "0.4.4"
 
 	// Runtime info
 	report["runtime"] = map[string]any{
 		"goVersion": runtime.Version(),
-		"os":       runtime.GOOS,
-		"arch":     runtime.GOARCH,
+		"os":        runtime.GOOS,
+		"arch":      runtime.GOARCH,
 	}
 
 	// Grok home
@@ -70,8 +70,8 @@ func runDoctor() error {
 		if _, err := os.Stat(agentsDir); err == nil {
 			result := agents.ValidateDir(agentsDir)
 			report["agents"] = map[string]any{
-				"count":   len(result.Agents),
-				"errors":  result.Errors,
+				"count":    len(result.Agents),
+				"errors":   result.Errors,
 				"warnings": result.Warnings,
 			}
 		}

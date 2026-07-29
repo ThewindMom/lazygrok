@@ -105,7 +105,7 @@ func CollectStopContinuation(ev hookenv.Event) string {
 
 	if stopContRE.MatchString(prompt) {
 		if ws != "" {
-			if err := ralph.ClearState(ralph.StatePath(ws)); err != nil {
+			if err := ralph.ClearStateForSession(ralph.StatePath(ws), sid); err != nil {
 				return "<STOP_CONTINUATION>Unable to stop safely: Ralph/ultrawork loop state could not be cleared. Repair workspace state storage, then retry.</STOP_CONTINUATION>"
 			}
 			if err := ClearBoulder(ws); err != nil {

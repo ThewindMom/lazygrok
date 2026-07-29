@@ -219,6 +219,31 @@ func TestSessionMismatch(t *testing.T) {
 	}
 }
 
+func TestSessionMissingDoesNotAdvanceBoundLoop(t *testing.T) {
+	ws := t.TempDir()
+	gh := t.TempDir()
+	cfg := Defaults()
+
+	if err := StartLoop(ws, "ralph", "test", "DONE", "session1", cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	result := EvaluateStop(ws, gh, "", cfg)
+	if result.ShouldContinue {
+		t.Error("sessionless event should not continue a bound loop")
+	}
+	if result.Reason != "session_mismatch" {
+		t.Fatalf("reason = %s, want session_mismatch", result.Reason)
+	}
+	var loopState LoopState
+	if err := state.ReadJSON(statePath(ws), &loopState); err != nil {
+		t.Fatal(err)
+	}
+	if loopState.Iteration != 0 {
+		t.Fatalf("iteration = %d, want 0", loopState.Iteration)
+	}
+}
+
 func TestContinuationDisabled(t *testing.T) {
 	ws := t.TempDir()
 	gh := t.TempDir()

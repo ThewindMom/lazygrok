@@ -78,7 +78,7 @@ Do **not** bump `plugin.json` version on feature PRs — release-please updates 
 
 The script tags `HEAD`, pushes the tag, and creates/updates the GitHub Release from the CHANGELOG section.
 
-Current release: [v0.1.0](https://github.com/ThewindMom/lazygrok/releases/tag/v0.1.0).
+Current release: [v0.4.4](https://github.com/ThewindMom/lazygrok/releases/tag/v0.4.4).
 
 See [README.md](README.md).
 

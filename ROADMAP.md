@@ -19,7 +19,7 @@ lazygrok targets **Grok Build CLI** only. It **complements** [oh-my-openagent](h
 ## Near term
 
 - [x] **Coding multi-agent (LazyCodex feel)** — always-on rules + ultrawork hard fan-out block + Grok-real spawn APIs only (`spawn_subagent` waves; teammode n/a)
-- [x] Complete first GitHub Release via release-please Release PR
+- [ ] Complete first GitHub Release via release-please Release PR
 - [ ] Optional: `grok plugin validate` in CI when Grok CLI is available on runners
 - [x] Oracle / verifier subagent polish for `/ulw-loop` (documented defaults)
 - [x] Acceptance: scripted/manual `ulw` multi-file task shows ≥2 parallel subagents before implement

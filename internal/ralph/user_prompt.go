@@ -28,7 +28,19 @@ func CollectUserPrompt(ev hookenv.Event) string {
 	sid := ev.SessionID
 
 	if cancelRE.MatchString(prompt) {
-		clearState(path)
+		st := readState(path)
+		if st == nil {
+			if err := clearState(path); err != nil {
+				return "<RALPH_LOOP>Unable to cancel safely: Ralph state could not be cleared and may remain active.</RALPH_LOOP>"
+			}
+			return "<RALPH_LOOP>No active Ralph loop for this workspace.</RALPH_LOOP>"
+		}
+		if !sessionOwnsState(st, sid) {
+			return "<RALPH_LOOP>Cancellation ignored: the active Ralph loop belongs to another session.</RALPH_LOOP>"
+		}
+		if err := clearState(path); err != nil {
+			return "<RALPH_LOOP>Unable to cancel safely: Ralph state could not be cleared and remains active.</RALPH_LOOP>"
+		}
 		return "<RALPH_LOOP>Canceled active Ralph loop. Cleared " + stateRelPath + ".</RALPH_LOOP>"
 	}
 

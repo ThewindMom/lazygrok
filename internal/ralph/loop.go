@@ -2,6 +2,7 @@ package ralph
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,8 @@ import (
 )
 
 const stateRelPath = ".lazygrok/ralph-loop.local.md"
+
+var ErrSessionMismatch = errors.New("ralph loop belongs to another session")
 
 // StatePath returns the ralph loop state file for a workspace.
 func StatePath(workspace string) string {
@@ -168,6 +171,22 @@ func ClearState(path string) error {
 	return clearState(path)
 }
 
+// ClearStateForSession removes Ralph state only when the caller owns it.
+func ClearStateForSession(path, sessionID string) error {
+	st := readState(path)
+	if st == nil {
+		return clearState(path)
+	}
+	if !sessionOwnsState(st, sessionID) {
+		return ErrSessionMismatch
+	}
+	return clearState(path)
+}
+
+func sessionOwnsState(st *state, sessionID string) bool {
+	return st.SessionID == "" || (sessionID != "" && st.SessionID == sessionID)
+}
+
 func hasPromise(text, promise string) bool {
 	if text == "" || promise == "" {
 		return false
@@ -273,7 +292,7 @@ func evaluateStop(ev hookenv.Event, mutations stateMutations) (bool, string) {
 		return false, ""
 	}
 	sid := ev.SessionID
-	if st.SessionID != "" && sid != "" && st.SessionID != sid {
+	if !sessionOwnsState(st, sid) {
 		return false, ""
 	}
 	lastMsg := ev.LastAssistantMessage

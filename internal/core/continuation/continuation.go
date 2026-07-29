@@ -191,7 +191,7 @@ func evaluateActiveLoop(path, sessionID string, cfg *config.Config) StopResult {
 	}
 
 	// Check session match
-	if ls.SessionID != "" && sessionID != "" && ls.SessionID != sessionID {
+	if ls.SessionID != "" && (sessionID == "" || ls.SessionID != sessionID) {
 		return StopResult{ShouldContinue: false, Reason: "session_mismatch"}
 	}
 
